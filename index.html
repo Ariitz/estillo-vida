@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Master App & Estilo de Vida</title>
+  
+  <!-- Prevenir parpadeo de tema oscuro/claro (FOUC) -->
+  <meta name="color-scheme" content="light dark">
+  <script>
+    {
+      const savedTheme = localStorage.getItem("app-theme");
+      const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const useDark = savedTheme === "dark" || (!savedTheme && systemDark);
+      document.documentElement.classList.toggle("dark-mode", useDark);
+    }
+  </script>
+
+  <!-- Google Fonts: Outfit e Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+
+  <!-- MASTER APP CONTAINER -->
+  <div class="app-layout" id="appLayout">
+    
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="sidebar" id="appSidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <span class="brand-name">AURA Nexus</span>
+      </div>
+
+      <nav class="sidebar-menu">
+        <a href="#dashboard" class="menu-item active" data-target="sec-dashboard">
+          <span class="menu-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="9" rx="1"/>
+              <rect x="14" y="3" width="7" height="5" rx="1"/>
+              <rect x="14" y="12" width="7" height="9" rx="1"/>
+              <rect x="3" y="16" width="7" height="5" rx="1"/>
+            </svg>
+          </span>
+          <span class="menu-text">Inicio / Dashboard</span>
+        </a>
+        
+        <a href="#estilo-vida" class="menu-item" data-target="sec-estilo-vida">
+          <span class="menu-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a10 10 0 0 0-10 10c0 5.523 4.477 10 10 10s10-4.477 10-10A10 10 0 0 0 12 2z"/>
+              <path d="M12 6a6 6 0 0 0-6 6c0 3.314 2.686 6 6 6s6-2.686 6-6a6 6 0 0 0-6-6z"/>
+              <path d="M12 10a2 2 0 0 0-2 2c0 1.105.895 2 2 2s2-.895 2-2a2 2 0 0 0-2-2z"/>
+            </svg>
+          </span>
+          <span class="menu-text">Salud y Estilo de Vida</span>
+        </a>
+
+        <a href="#proyectos" class="menu-item" data-target="sec-proyectos">
+          <span class="menu-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              <line x1="12" y1="11" x2="12" y2="17"/>
+              <line x1="9" y1="14" x2="15" y2="14"/>
+            </svg>
+          </span>
+          <span class="menu-text">Proyectos y Tareas</span>
+        </a>
+
+        <a href="#rutinas-companeros" class="menu-item" data-target="sec-companeros">
+          <span class="menu-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </span>
+          <span class="menu-text">Compañeros y Rutinas</span>
+        </a>
+
+        <a href="#configuracion" class="menu-item" data-target="sec-configuracion">
+          <span class="menu-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </span>
+          <span class="menu-text">Configuración</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="toggle-sidebar-btn" id="toggleSidebar" aria-label="Colapsar barra lateral">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"/>
+            <polyline points="12 19 5 12 12 5"/>
+          </svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN BODY -->
+    <main class="main-content">
+      
+      <!-- TOP HEADER -->
+      <header class="app-header">
+        <div class="header-left">
+          <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Abrir menú">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
+          <div class="breadcrumbs">
+            <span class="current-section-title" id="currentSectionTitle">Inicio</span>
+          </div>
+        </div>
+
+        <!-- HEADER WIDGETS -->
+        <div class="header-right">
+          
+          <!-- Weather Widget (Simulado) -->
+          <div class="header-widget weather-widget" id="headerWeatherWidget">
+            <span class="widget-icon">☀️</span>
+            <span class="widget-label">Soleado, 24°C</span>
+          </div>
+
+          <!-- Environment Indicator -->
+          <div class="header-widget env-widget" id="headerEnvWidget">
+            <span class="widget-icon">🏠</span>
+            <span class="widget-label">Home Office</span>
+          </div>
+          
+          <!-- Theme Switcher -->
+          <button class="theme-toggle-btn" id="themeToggleBtn" aria-label="Alternar tema">
+            <svg class="sun-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/>
+              <line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/>
+              <line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <svg class="moon-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </button>
+
+          <!-- User Avatar -->
+          <div class="user-profile">
+            <div class="user-avatar">AN</div>
+          </div>
+        </div>
+      </header>
+
+      <!-- VIEWPORT FOR MODULES -->
+      <div class="view-container">
+        
+        <!-- MODULE: DASHBOARD -->
+        <section id="sec-dashboard" class="module-view active">
+          <div class="dashboard-grid">
+            
+            <!-- Quick Summary Card -->
+            <div class="dashboard-card main-hero-card">
+              <div class="card-content">
+                <span class="hero-welcome">¡Hola de nuevo! 👋</span>
+                <h2>Tu Resumen Diario de Estilo de Vida</h2>
+                <p>Aquí puedes ver el estado actual de tus rutinas, medicinas y metas prioritarias.</p>
+                <div class="hero-actions">
+                  <button class="btn btn-primary" onclick="openMorningCheckIn()">
+                    ⚡ Realizar Check-in Matutino (30s)
+                  </button>
+                </div>
+              </div>
+              <div class="hero-graphic">
+                <svg viewBox="0 0 200 200" width="120" height="120" fill="none">
+                  <circle cx="100" cy="100" r="80" stroke="currentColor" stroke-opacity="0.1" stroke-width="8"/>
+                  <circle cx="100" cy="100" r="80" stroke="var(--color-primary)" stroke-width="8" stroke-dasharray="502" stroke-dashoffset="150" stroke-linecap="round"/>
+                  <path d="M90 70l40 40-60 30 20-70z" fill="var(--color-accent)"/>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Suggestion Engine Card (Dynamic highlight) -->
+            <div class="dashboard-card suggestion-engine-card">
+              <div class="card-header">
+                <h3>💡 Recomendaciones Inteligentes de Hoy</h3>
+                <span class="badge badge-accent">Motor AURA</span>
+              </div>
+              <div class="card-body" id="dashboardSuggestionsList">
+                <!-- Se cargará mediante JS -->
+                <p class="text-muted">Realiza tu check-in matutino para generar recomendaciones contextuales.</p>
+              </div>
+            </div>
+
+            <!-- Mini Trackers -->
+            <div class="dashboard-card status-card">
+              <h3>🧼 Rutina de Higiene y Cuidado</h3>
+              <div class="progress-ring-container">
+                <svg width="120" height="120" viewBox="0 0 120 120" class="progress-ring">
+                  <circle class="progress-ring-circle-bg" stroke="currentColor" stroke-opacity="0.1" stroke-width="8" fill="transparent" r="50" cx="60" cy="60"/>
+                  <circle class="progress-ring-circle" id="hygieneProgressRing" stroke="var(--color-success)" stroke-width="8" stroke-linecap="round" fill="transparent" r="50" cx="60" cy="60" stroke-dasharray="314.16" stroke-dashoffset="314.16"/>
+                </svg>
+                <div class="progress-ring-text" id="hygieneProgressText">0%</div>
+              </div>
+              <p class="card-footer-text">Completado hoy</p>
+            </div>
+
+            <div class="dashboard-card status-card">
+              <h3>💧 Registro de Hidratación</h3>
+              <div class="water-tracker-visual">
+                <div class="glass-container">
+                  <div class="water-level" id="waterLevelVisual" style="height: 20%;"></div>
+                </div>
+                <div class="water-actions">
+                  <button class="btn-icon" onclick="addWaterGlass()" aria-label="Agregar vaso de agua">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                  </button>
+                  <span id="waterGlassCount">1 / 8 Vasos</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Reminders -->
+            <div class="dashboard-card reminders-card">
+              <h3>💊 Medicamentos Críticos</h3>
+              <ul class="reminder-list" id="dashboardMedList">
+                <!-- Se carga con JS -->
+              </ul>
+            </div>
+
+            <!-- Pet Summary -->
+            <div class="dashboard-card pet-summary-card">
+              <h3>🐾 Estado de Mascotas</h3>
+              <div class="pet-checklist" id="dashboardPetList">
+                <!-- Se carga con JS -->
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- MODULE: ESTILO DE VIDA (OBJECTIVE MODULE) -->
+        <section id="sec-estilo-vida" class="module-view">
+          
+          <!-- SUB-NAVIGATION FOR HEALTH MODULE -->
+          <div class="sub-nav-tabs">
+            <button class="sub-tab-btn active" data-sub="tab-higiene">🛁 Cuidado & Rutinas</button>
+            <button class="sub-tab-btn" data-sub="tab-armario">👕 Closet & Outfits</button>
+            <button class="sub-tab-btn" data-sub="tab-salud">💊 Salud & Meds</button>
+            <button class="sub-tab-btn" data-sub="tab-entorno">🏡 Entorno & Mascotas</button>
+            <button class="sub-tab-btn" data-sub="tab-asistente">🧠 Asistente AURA</button>
+          </div>
+
+          <!-- SUBMODULE 1: CUIDADO PERSONAL, HIGIENE Y RUTINAS -->
+          <div class="sub-module-content active" id="tab-higiene">
+            <div class="grid-2-cols">
+              
+              <!-- Checklists de Rutinas -->
+              <div class="card bg-glass">
+                <div class="card-header">
+                  <h2>Control de Higiene y Cuidado Facial</h2>
+                  <div class="routine-selector">
+                    <button class="btn btn-sm btn-outline active" onclick="switchRoutineTime('morning')">Mañana</button>
+                    <button class="btn btn-sm btn-outline" onclick="switchRoutineTime('afternoon')">Tarde</button>
+                    <button class="btn btn-sm btn-outline" onclick="switchRoutineTime('night')">Noche</button>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="routine-checklist-container" id="routineChecklist">
+                    <!-- Dinámico por JS -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Cuidado Capilar y Productos -->
+              <div class="flex-column gap-lg">
+                
+                <!-- Hair Style Picker -->
+                <div class="card bg-glass">
+                  <h2>Cuidado Capilar y Selector Contextual</h2>
+                  <p class="text-sm text-muted mb-md">Registra tu lavado y obtén recomendaciones de peinado según tu contexto.</p>
+                  
+                  <div class="hair-tracker-actions mb-md">
+                    <button class="btn btn-outline btn-full" id="btnRegisterWash" onclick="registerHairWash()">
+                      🧼 Marcar Cabello Lavado Hoy
+                    </button>
+                    <div class="text-xs text-muted mt-xs text-center" id="lastWashLabel">Último lavado: Ayer</div>
+                  </div>
+
+                  <div class="form-group">
+                    <label>¿Qué actividad realizarás hoy?</label>
+                    <select class="form-control" id="hairContextSelect" onchange="updateHairSuggestion()">
+                      <option value="home">En casa / Vehículo / Comiendo</option>
+                      <option value="public">En público / Eventos / Trabajo externo</option>
+                    </select>
+                  </div>
+
+                  <div class="alert alert-info mt-md" id="hairSuggestionBox">
+                    <strong>Sugerencia de Peinado:</strong> Recogido rápido con scrunchies de satén para proteger el cabello de roces.
+                  </div>
+                </div>
+
+                <!-- Products & Expirations Inventory -->
+                <div class="card bg-glass">
+                  <div class="card-header">
+                    <h2>Inventario de Cuidado Personal</h2>
+                    <button class="btn btn-sm btn-primary" onclick="openAddProductModal()">+ Añadir</button>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-container">
+                      <table class="table" id="productsTable">
+                        <thead>
+                          <tr>
+                            <th>Producto</th>
+                            <th>Categoría</th>
+                            <th>Vencimiento</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <!-- Dinámico por JS -->
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SUBMODULE 2: CONSULTORÍA DE IMAGEN, ARMARIO Y ESTILO -->
+          <div class="sub-module-content" id="tab-armario">
+            <div class="grid-closet">
+              
+              <!-- Closet Inventory Section -->
+              <div class="card bg-glass grid-col-span-2">
+                <div class="card-header-closet">
+                  <h2>Armario Digital</h2>
+                  <div class="closet-tabs" id="closetCategoryTabs">
+                    <button class="closet-tab active" data-cat="all">Todos</button>
+                    <button class="closet-tab" data-cat="tshirts">Camisetas (Anime/Series)</button>
+                    <button class="closet-tab" data-cat="hoodies">Sudaderas</button>
+                    <button class="closet-tab" data-cat="pants">Pantalones</button>
+                    <button class="closet-tab" data-cat="shoes">Calzado</button>
+                    <button class="closet-tab" data-cat="accessories">Accesorios</button>
+                    <button class="closet-tab" data-cat="travel">Viaje / Mochilas</button>
+                  </div>
+                  <button class="btn btn-sm btn-primary" onclick="openAddClosetModal()">+ Añadir Prenda</button>
+                </div>
+                
+                <div class="closet-grid" id="closetItemsGrid">
+                  <!-- Dinámico -->
+                </div>
+              </div>
+
+              <!-- Outfit Generator and Context Filters -->
+              <div class="card bg-glass flex-column">
+                <h2>Asistente de Outfits</h2>
+                <p class="text-sm text-muted mb-md">Genera outfits basados en tus reglas de estilo (casual, funcional y sin sobrecarga).</p>
+
+                <div class="form-group mb-md">
+                  <label for="outfitScenarioSelect">Escenario de Uso:</label>
+                  <select class="form-control" id="outfitScenarioSelect" onchange="generateOutfitRecommendation()">
+                    <option value="home-office">Trabajo remoto en casa (Cómodo)</option>
+                    <option value="casual-outing">Salida casual / Mandados</option>
+                    <option value="travel-cargo">Traslados / Viajes con carga</option>
+                    <option value="events-conventions">Eventos / Convenciones</option>
+                  </select>
+                </div>
+
+                <div class="outfit-recommendation-box" id="outfitRecommendationResult">
+                  <!-- JS Generates this -->
+                </div>
+
+                <div class="style-rules-card mt-md">
+                  <h4>Reglas de Estilo Aplicadas:</h4>
+                  <ul>
+                    <li>Prioridad en confort y ergonomía.</li>
+                    <li>Accesorios minimalistas (collares, scrunchies).</li>
+                    <li>Sin maquillaje recargado ni accesorios que estorben al cargar maletas.</li>
+                  </ul>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SUBMODULE 3: SALUD INTEGRAL, MEDICAMENTOS Y BIENESTAR -->
+          <div class="sub-module-content" id="tab-salud">
+            <div class="grid-2-cols">
+              
+              <!-- Medicaments Schedules -->
+              <div class="card bg-glass">
+                <div class="card-header">
+                  <h2>Medicaciones y Prescripciones</h2>
+                  <button class="btn btn-sm btn-primary" onclick="openAddMedicationModal()">+ Registrar Medicina</button>
+                </div>
+                <div class="card-body">
+                  <div class="medication-list" id="medicationsList">
+                    <!-- Dinámico -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Wellbeing Journal & Export -->
+              <div class="card bg-glass flex-column justify-between">
+                <div>
+                  <h2>Diario de Bienestar Vital</h2>
+                  <p class="text-sm text-muted mb-md">Registra tus métricas de salud diariamente para llevar un autocontrol de tu bienestar.</p>
+
+                  <form id="wellbeingForm" onsubmit="saveWellbeingDay(event)">
+                    <div class="form-group mb-md">
+                      <label>Nivel de Energía (1 - 10)</label>
+                      <div class="slider-container">
+                        <input type="range" min="1" max="10" value="7" class="slider" id="inputEnergy">
+                        <span class="slider-value" id="energyValue">7</span>
+                      </div>
+                    </div>
+
+                    <div class="form-group mb-md">
+                      <label>Horas de Sueño</label>
+                      <input type="number" min="0" max="24" step="0.5" value="7.5" class="form-control" id="inputSleep">
+                    </div>
+
+                    <div class="form-group mb-md">
+                      <label>Calidad del Sueño</label>
+                      <select class="form-control" id="inputSleepQuality">
+                        <option value="excelente">Excelente</option>
+                        <option value="buena" selected>Buena (Restaurador)</option>
+                        <option value="regular">Regular / Interrumpido</option>
+                        <option value="mala">Mala / Insomnio</option>
+                      </select>
+                    </div>
+
+                    <div class="form-group mb-md">
+                      <label>Malestares Físicos o Síntomas</label>
+                      <textarea class="form-control" rows="2" id="inputSymptoms" placeholder="Ej. Ninguno, leve tensión en cuello, dolor de cabeza..."></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-success btn-full">Guardar Registro del Día</button>
+                  </form>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SUBMODULE 4: ESTILO DE VIDA, ENTORNO Y LOGÍSTICA -->
+          <div class="sub-module-content" id="tab-entorno">
+            <div class="grid-2-cols">
+              
+              <!-- Environment Context Switcher -->
+              <div class="card bg-glass">
+                <div class="card-header">
+                  <h2>Modo de Entorno Activo</h2>
+                  <div class="toggle-switch-container">
+                    <span class="toggle-label text-sm" id="envModeLabel">Home Office</span>
+                    <button class="env-toggle-switch" id="btnToggleEnv" onclick="toggleEnvironmentMode()">
+                      <div class="toggle-handle"></div>
+                    </button>
+                  </div>
+                </div>
+                <div class="card-body">
+                  
+                  <!-- HO Context -->
+                  <div id="envPanelHomeOffice" class="env-panel active">
+                    <h3>💻 Entorno de Trabajo en Casa</h3>
+                    <p class="text-sm text-muted mb-md">Enfoque en salud postural, descanso visual y pausas activas.</p>
+                    
+                    <div class="ho-breaks-tracker">
+                      <div class="flex-row justify-between align-center mb-sm">
+                        <span>Pausas Activas del Día:</span>
+                        <strong id="hoBreaksText">1 / 4 Completadas</strong>
+                      </div>
+                      <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="hoBreaksProgress" style="width: 25%;"></div>
+                      </div>
+                      <button class="btn btn-outline btn-sm mt-md btn-full" onclick="completeActiveBreak()">
+                        🧘 Marcar Pausa Activa Completada
+                      </button>
+                    </div>
+
+                    <div class="posture-tips mt-lg">
+                      <h4>💡 Consejos Posturales del Día:</h4>
+                      <ul class="text-sm">
+                        <li>Alinea el borde superior de la pantalla con tus ojos.</li>
+                        <li>Mantén los pies apoyados y los codos en ángulo de 90°.</li>
+                        <li>Aplica la regla 20-20-20: mira a 6 metros por 20 segundos cada 20 minutos.</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <!-- Travel/Transit Context -->
+                  <div id="envPanelTravel" class="env-panel">
+                    <h3>✈️ Modo Traslado / Viaje</h3>
+                    <p class="text-sm text-muted mb-md">Checklist logístico para traslados frecuentes con carga pesada.</p>
+                    
+                    <div class="checklist-box" id="travelChecklistContainer">
+                      <!-- Dinámico -->
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- Hobbys, Microemprendimientos & Pets -->
+              <div class="flex-column gap-lg">
+                
+                <!-- Micro-business log -->
+                <div class="card bg-glass">
+                  <div class="card-header">
+                    <h2>Bitácora de Microemprendimientos</h2>
+                    <button class="btn btn-sm btn-outline" onclick="openAddMicroLogModal()">+ Nueva Bitácora</button>
+                  </div>
+                  <div class="card-body">
+                    <p class="text-xs text-muted mb-md">Control operativo y financiero simplificado para hobbys y ventas locales.</p>
+                    <div class="micro-log-list" id="microLogsList">
+                      <!-- Dinámico -->
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Pet Routine mapping -->
+                <div class="card bg-glass">
+                  <h2>Cuidado de Mascotas</h2>
+                  <p class="text-sm text-muted mb-md">Perrita Pastor Alemán (12 años). Manejo de displasia de cadera, hipotiroidismo, limitaciones visuales/auditivas y reactividad en calle.</p>
+
+                  <div class="pet-routine-section mb-md">
+                    <h4>Checklist de Rutina Diaria:</h4>
+                    <div class="checklist-box" id="petChecklistContainer">
+                      <!-- Dinámico -->
+                    </div>
+                  </div>
+
+                  <div class="pet-safety-box">
+                    <h4>⚠️ Protocolo de Seguridad (Reactividad y Movilidad):</h4>
+                    <ul class="text-xs text-muted">
+                      <li><strong>Anticipación visual:</strong> Al tener cataratas y escuchar menos, guíala de manera predecible para evitar que se asuste si aparece otro perro/gato de la nada.</li>
+                      <li><strong>Seguridad física:</strong> Correa corta y arnés de doble anclaje ajustados (Pastor Alemán reactivo en calle).</li>
+                      <li><strong>Cadera y Movilidad:</strong> Evita terrenos irregulares, pendientes empinadas o escaleras. Camina despacio en superficies planas.</li>
+                      <li><strong>Redirección:</strong> Lleva premios muy llamativos/olorosos para captar su atención si ve un animal a la distancia.</li>
+                      <li><strong>Comunicación:</strong> Usa señales manuales claras frente a ella y toques suaves para compensar la pérdida auditiva.</li>
+                    </ul>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SUBMODULE 5: ASISTENTE INTELIGENTE -->
+          <div class="sub-module-content" id="tab-asistente">
+            <div class="asistente-layout">
+              
+              <!-- Check-in Matutino Form -->
+              <div class="card bg-glass checkin-wizard-card">
+                <div class="card-header">
+                  <h2>Check-in Matutino (30 Segundos)</h2>
+                  <span class="badge badge-primary">Diario</span>
+                </div>
+                <div class="card-body">
+                  <div class="wizard-steps" id="checkinWizard">
+                    
+                    <!-- Step 1 -->
+                    <div class="wizard-step active" data-step="1">
+                      <h3>1. ¿Te quedarás en casa o saldrás hoy?</h3>
+                      <p class="text-sm text-muted mb-lg">Esto definirá el tipo de outfit y la logística necesaria.</p>
+                      <div class="wizard-options">
+                        <button class="wizard-opt-btn" onclick="selectCheckinOption('stayOrGo', 'stay')">
+                          <span class="opt-icon">💻</span>
+                          <span class="opt-text">Me quedo en casa (Home Office)</span>
+                        </button>
+                        <button class="wizard-opt-btn" onclick="selectCheckinOption('stayOrGo', 'go')">
+                          <span class="opt-icon">🚗</span>
+                          <span class="opt-text">Saldré / Traslados / Eventos</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="wizard-step" data-step="2">
+                      <h3>2. ¿Cuál es el pronóstico del clima?</h3>
+                      <p class="text-sm text-muted mb-lg">Esto ajusta el cuidado capilar, la hidratación de la piel y el outfit.</p>
+                      <div class="wizard-options">
+                        <button class="wizard-opt-btn" onclick="selectCheckinOption('weather', 'sunny')">
+                          <span class="opt-icon">☀️</span>
+                          <span class="opt-text">Caluroso / Soleado</span>
+                        </button>
+                        <button class="wizard-opt-btn" onclick="selectCheckinOption('weather', 'rainy')">
+                          <span class="opt-icon">🌧️</span>
+                          <span class="opt-text">Frío / Lluvioso / Húmedo</span>
+                        </button>
+                        <button class="wizard-opt-btn" onclick="selectCheckinOption('weather', 'mild')">
+                          <span class="opt-icon">⛅</span>
+                          <span class="opt-text">Templado / Nublado</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="wizard-step" data-step="3">
+                      <h3>3. ¿Cuál es tu nivel de energía inicial?</h3>
+                      <p class="text-sm text-muted mb-lg">Esto sugiere ritmos de trabajo y autocuidado.</p>
+                      <div class="wizard-options">
+                        <button class="wizard-opt-btn" onclick="selectCheckinOption('energy', 'high')">
+                          <span class="opt-icon">🔥</span>
+                          <span class="opt-text">Alto / Recargado</span>
+                        </button>
+                        <button class="wizard-opt-btn" onclick="selectCheckinOption('energy', 'medium')">
+                          <span class="opt-icon">🔋</span>
+                          <span class="opt-text">Moderado / Normal</span>
+                        </button>
+                        <button class="wizard-opt-btn" onclick="selectCheckinOption('energy', 'low')">
+                          <span class="opt-icon">💤</span>
+                          <span class="opt-text">Bajo / Agotado</span>
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+
+              <!-- Recommendation Result Panel -->
+              <div class="card bg-glass recommendation-result-card">
+                <div class="card-header">
+                  <h2>Directiva Diaria AURA</h2>
+                  <button class="btn btn-sm btn-outline" onclick="resetCheckin()">Reiniciar Check-in</button>
+                </div>
+                <div class="card-body" id="checkinSuggestionsContainer">
+                  <div class="empty-state">
+                    <div class="empty-icon">🧠</div>
+                    <h3>Esperando Check-in Matutino</h3>
+                    <p>Completa el cuestionario de la izquierda para generar las recomendaciones y listas personalizadas del día.</p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </section>
+
+        <!-- MODULE: PROYECTOS Y TAREAS -->
+        <section id="sec-proyectos" class="module-view">
+          <div class="grid-2-cols">
+            
+            <!-- Project List -->
+            <div class="card bg-glass">
+              <div class="card-header">
+                <h2>Mis Proyectos</h2>
+                <button class="btn btn-sm btn-primary" onclick="openAddProjectBaseModal()">+ Nuevo Proyecto</button>
+              </div>
+              <div class="card-body">
+                <div class="project-grid-cards" id="projectsBaseGrid">
+                  <!-- Dinámico -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Task Board -->
+            <div class="card bg-glass">
+              <div class="card-header">
+                <h2>Tareas del Proyecto Activo</h2>
+                <button class="btn btn-sm btn-primary" onclick="openAddTaskBaseModal()">+ Nueva Tarea</button>
+              </div>
+              <div class="card-body">
+                <div class="task-filter-bar mb-md">
+                  <select class="form-control" id="taskProjectFilter" onchange="filterTasksByProject()">
+                    <!-- JS fills this -->
+                  </select>
+                </div>
+                <div class="task-list-container" id="tasksBaseContainer">
+                  <!-- Dinámico -->
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- MODULE: COMPAÑEROS Y RUTINAS -->
+        <section id="sec-companeros" class="module-view">
+          <div class="card bg-glass">
+            <div class="card-header">
+              <h2>Mapeo de Rutinas y Gestión de Compañeros</h2>
+              <button class="btn btn-sm btn-primary" onclick="openAddCompaneroModal()">+ Añadir Integrante</button>
+            </div>
+            <div class="card-body">
+              <p class="text-sm text-muted mb-lg">Mapeo y coordinación diaria de rutinas con compañeros de trabajo, familiares o co-living.</p>
+              
+              <div class="companions-grid" id="companionsContainer">
+                <!-- Dinámico -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODULE: CONFIGURACIÓN -->
+        <section id="sec-configuracion" class="module-view">
+          <div class="grid-2-cols">
+            
+            <!-- Global preferences -->
+            <div class="card bg-glass">
+              <h2>Preferencias de la Plataforma</h2>
+              <p class="text-sm text-muted mb-lg">Ajusta el tema visual y gestiona los datos de almacenamiento local.</p>
+
+              <div class="settings-option mb-lg">
+                <div class="option-details">
+                  <h4>Tema Visual</h4>
+                  <p class="text-xs text-muted">Cambia la interfaz a modo oscuro o claro.</p>
+                </div>
+                <button class="btn btn-outline" id="settingsThemeToggle" onclick="toggleGlobalTheme()">
+                  Modo Oscuro: Activado
+                </button>
+              </div>
+
+              <div class="settings-option mb-lg">
+                <div class="option-details">
+                  <h4>Restaurar Datos</h4>
+                  <p class="text-xs text-muted">Devuelve todos los datos locales al estado de fábrica simulado.</p>
+                </div>
+                <button class="btn btn-danger" onclick="resetAllApplicationData()">
+                  ⚠️ Resetear Aplicación
+                </button>
+              </div>
+            </div>
+
+            <!-- Import / Export data -->
+            <div class="card bg-glass">
+              <h2>Respaldos e Importación</h2>
+              <p class="text-sm text-muted mb-lg">Exporta un archivo JSON con toda tu información registrada o impórtala desde un respaldo previo.</p>
+
+              <div class="flex-column gap-md">
+                <button class="btn btn-primary btn-full" onclick="exportDataJSON()">
+                  📥 Exportar Datos (respaldo.json)
+                </button>
+
+                <div class="import-area mt-md">
+                  <label for="importFile" class="btn btn-outline btn-full text-center" style="cursor: pointer;">
+                    📤 Seleccionar Archivo e Importar
+                  </label>
+                  <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importDataJSON(event)">
+                </div>
+
+                <div class="alert alert-warning text-xs mt-md">
+                  <strong>Nota:</strong> Al importar un archivo de respaldo, se sobrescribirá la información que esté guardada en este navegador de manera definitiva.
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+  </div>
+
+  <!-- POPUP MODALS CONTAINER -->
+  
+  <!-- Add Product Modal -->
+  <div class="modal-overlay" id="modalAddProduct" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Añadir Producto de Higiene / Cuidado</h3>
+        <button class="btn-close" onclick="closeModal('modalAddProduct')">&times;</button>
+      </div>
+      <form id="formAddProduct" onsubmit="saveNewProduct(event)">
+        <div class="modal-body">
+          <div class="form-group mb-sm">
+            <label>Nombre del Producto:</label>
+            <input type="text" class="form-control" id="prodName" required placeholder="Ej. Bloqueador FPS 50+">
+          </div>
+          <div class="form-group mb-sm">
+            <label>Categoría:</label>
+            <select class="form-control" id="prodCat">
+              <option value="Cutáneo">Cutáneo (Cremas/Bloqueadores)</option>
+              <option value="Capilar">Capilar (Shampoo/Hidratación)</option>
+              <option value="Higiene">Higiene Personal</option>
+              <option value="Medicamento">Medicamento</option>
+            </select>
+          </div>
+          <div class="form-group mb-sm">
+            <label>Fecha de Vencimiento:</label>
+            <input type="date" class="form-control" id="prodExpiration" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modalAddProduct')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Producto</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Closet Item Modal -->
+  <div class="modal-overlay" id="modalAddCloset" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Añadir Prenda a Closet</h3>
+        <button class="btn-close" onclick="closeModal('modalAddCloset')">&times;</button>
+      </div>
+      <form id="formAddCloset" onsubmit="saveNewClosetItem(event)">
+        <div class="modal-body">
+          <div class="form-group mb-sm">
+            <label>Nombre de la Prenda:</label>
+            <input type="text" class="form-control" id="closetItemName" required placeholder="Ej. Sudadera Oversize Negra">
+          </div>
+          <div class="form-group mb-sm">
+            <label>Categoría:</label>
+            <select class="form-control" id="closetItemCat">
+              <option value="tshirts">Camiseta (Anime/Series)</option>
+              <option value="hoodies">Sudadera</option>
+              <option value="pants">Pantalones cómodos</option>
+              <option value="shoes">Calzado</option>
+              <option value="accessories">Accesorio (Collar / Scrunchie)</option>
+              <option value="travel">Equipo de Viaje / Mochila</option>
+            </select>
+          </div>
+          <div class="form-group mb-sm">
+            <label>Detalles / Descripción (Opcional):</label>
+            <input type="text" class="form-control" id="closetItemDetail" placeholder="Ej. Algodón suave, estampada">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modalAddCloset')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Añadir Prenda</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Medication Modal -->
+  <div class="modal-overlay" id="modalAddMedication" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Registrar Medicamento Estricto</h3>
+        <button class="btn-close" onclick="closeModal('modalAddMedication')">&times;</button>
+      </div>
+      <form id="formAddMedication" onsubmit="saveNewMedication(event)">
+        <div class="modal-body">
+          <div class="form-group mb-sm">
+            <label>Nombre del Medicamento:</label>
+            <input type="text" class="form-control" id="medName" required placeholder="Ej. Levotiroxina">
+          </div>
+          <div class="form-group mb-sm">
+            <label>Dosis / Concentración:</label>
+            <input type="text" class="form-control" id="medDose" required placeholder="Ej. 100 mcg">
+          </div>
+          <div class="form-group mb-sm">
+            <label>Horario / Frecuencia:</label>
+            <input type="text" class="form-control" id="medFrequency" required placeholder="Ej. Cada 24 horas en ayunas">
+          </div>
+          <div class="form-group mb-sm">
+            <label>Fecha de Fin de Tratamiento:</label>
+            <input type="date" class="form-control" id="medEndDate" required>
+          </div>
+          <div class="form-group mb-sm">
+            <label>Efectos Secundarios Conocidos:</label>
+            <input type="text" class="form-control" id="medSideEffects" placeholder="Ej. Dolor de cabeza, náuseas">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modalAddMedication')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Micro Log Modal -->
+  <div class="modal-overlay" id="modalAddMicroLog" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Registrar Entrada de Microemprendimiento</h3>
+        <button class="btn-close" onclick="closeModal('modalAddMicroLog')">&times;</button>
+      </div>
+      <form id="formAddMicroLog" onsubmit="saveNewMicroLog(event)">
+        <div class="modal-body">
+          <div class="form-group mb-sm">
+            <label>Actividad / Hobby:</label>
+            <input type="text" class="form-control" id="microActName" required placeholder="Ej. Ventas en bazar local">
+          </div>
+          <div class="form-group mb-sm">
+            <label>Descripción / Insumos Vendidos:</label>
+            <input type="text" class="form-control" id="microDesc" required placeholder="Ej. 3 pines anime, 1 sudadera">
+          </div>
+          <div class="form-group mb-sm">
+            <label>Monto / Ingreso ($):</label>
+            <input type="number" step="0.01" class="form-control" id="microAmount" required placeholder="Ej. 450">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modalAddMicroLog')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Registrar Entrada</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Project Modal (Base) -->
+  <div class="modal-overlay" id="modalAddProjectBase" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Crear Nuevo Proyecto</h3>
+        <button class="btn-close" onclick="closeModal('modalAddProjectBase')">&times;</button>
+      </div>
+      <form id="formAddProjectBase" onsubmit="saveNewProjectBase(event)">
+        <div class="modal-body">
+          <div class="form-group mb-sm">
+            <label>Nombre del Proyecto:</label>
+            <input type="text" class="form-control" id="projBaseName" required placeholder="Ej. Rediseño del Closet">
+          </div>
+          <div class="form-group mb-sm">
+            <label>Descripción:</label>
+            <input type="text" class="form-control" id="projBaseDesc" placeholder="Ej. Organizar prendas y depurar accesorios">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modalAddProjectBase')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Crear</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Task Modal (Base) -->
+  <div class="modal-overlay" id="modalAddTaskBase" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Añadir Tarea</h3>
+        <button class="btn-close" onclick="closeModal('modalAddTaskBase')">&times;</button>
+      </div>
+      <form id="formAddTaskBase" onsubmit="saveNewTaskBase(event)">
+        <div class="modal-body">
+          <div class="form-group mb-sm">
+            <label>Proyecto:</label>
+            <select class="form-control" id="taskProjSelect" required>
+              <!-- JS fills this -->
+            </select>
+          </div>
+          <div class="form-group mb-sm">
+            <label>Descripción de la Tarea:</label>
+            <input type="text" class="form-control" id="taskBaseDesc" required placeholder="Ej. Comprar ganchos de satén">
+          </div>
+          <div class="form-group mb-sm">
+            <label>Prioridad:</label>
+            <select class="form-control" id="taskBasePriority">
+              <option value="alta">Alta</option>
+              <option value="media" selected>Media</option>
+              <option value="baja">Baja</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modalAddTaskBase')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Añadir</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Task Modal for Companeros -->
+  <div class="modal-overlay" id="modalAddCompanero" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Añadir Integrante / Compañero</h3>
+        <button class="btn-close" onclick="closeModal('modalAddCompanero')">&times;</button>
+      </div>
+      <form id="formAddCompanero" onsubmit="saveNewCompanero(event)">
+        <div class="modal-body">
+          <div class="form-group mb-sm">
+            <label>Nombre:</label>
+            <input type="text" class="form-control" id="companionName" required placeholder="Ej. Sofía (Co-living)">
+          </div>
+          <div class="form-group mb-sm">
+            <label>Rol / Relación:</label>
+            <input type="text" class="form-control" id="companionRole" placeholder="Ej. Roomie, Pareja, Mascota...">
+          </div>
+          <div class="form-group mb-sm">
+            <label>Rutina Principal:</label>
+            <input type="text" class="form-control" id="companionRoutine" required placeholder="Ej. Ejercicio (7 AM), Trabajo (9 AM), Cena (8 PM)">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('modalAddCompanero')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+
+  <script src="app.js"></script>
+</body>
+</html>
