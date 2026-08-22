@@ -1,0 +1,536 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Calendar, 
+  Tag, 
+  MapPin, 
+  Shirt, 
+  BookOpen, 
+  Clock, 
+  Menu, 
+  X, 
+  Droplet, 
+  CloudSun, 
+  Home, 
+  ChevronLeft, 
+  ChevronRight,
+  TrendingUp,
+  Award
+} from 'lucide-react';
+
+// Import modules
+import ScheduleModule from './components/ScheduleModule';
+import PriceComparatorModule from './components/PriceComparatorModule';
+import ExperiencesModule from './components/ExperiencesModule';
+import WardrobeModule from './components/WardrobeModule';
+import ManualsModule from './components/ManualsModule';
+import TimersModule from './components/TimersModule';
+import Toast from './components/Toast';
+
+// ==========================================
+// DEFAULT / MOCK DATASETS
+// ==========================================
+
+const initialSchedule = [
+  { id: 1, time: '06:00 AM', title: 'Estiramientos en cama', desc: 'Abrazo de rodillas (30s), Giro espinal supino (30s/lado), Gato-vaca.', category: 'morning', completed: false },
+  { id: 2, time: '06:15 AM', title: 'Higiene oral preventiva', desc: 'Cepillo suave a 45°, raspador lingual de cobre/acero, hilo dental.', category: 'morning', completed: false },
+  { id: 3, time: '06:20 AM', title: 'Hidratación primaria & Pesaje', desc: 'Tomar agua tibia sola o con limón. Pesarse en ayunas (peso objetivo).', category: 'morning', completed: false },
+  { id: 4, time: '07:00 AM', title: 'Entrenamiento matutino', desc: 'Lagartijas / push-ups para elevación de busto y fuerza postural.', category: 'morning', completed: false },
+  { id: 5, time: '07:45 AM', title: 'Ducha metodológica', desc: 'Shampoo de chile/romero, acondicionador de medios a puntas (5 min), jabón de arroz, limpiador facial CeraVe, enjuague frío.', category: 'morning', completed: false },
+  { id: 6, time: '08:15 AM', title: 'Secado y cuidado corporal', desc: 'Turbante de microfibra, crema de urea en codos/talones, crema hidratante con FPS 30+.', category: 'morning', completed: false },
+  { id: 7, time: '08:45 AM', title: 'Desayuno denso + Suplementación', desc: 'Multivitamínico, Omega-3, Calcio + D3, Biotina, Colágeno disuelto.', category: 'morning', completed: false },
+  { id: 8, time: '12:00 PM', title: 'Reaplicación de FPS (Mediodía)', desc: 'Matificar con papel de arroz y aplicar bruma de rosas + protector FPS.', category: 'afternoon', completed: false },
+  { id: 9, time: '04:00 PM', title: 'Reaplicación de FPS (Tarde)', desc: 'Brindarle frescura al rostro con bruma de rosas y protector FPS.', category: 'afternoon', completed: false },
+  { id: 10, time: '05:00 PM', title: 'Hora del Té', desc: 'Té verde o negro acompañado de sándwiches de pepino y requesón en triángulos sin corteza.', category: 'afternoon', completed: false },
+  { id: 11, time: '09:30 PM', title: 'Noche & Skincare rotativo', desc: 'Noches Retinol + CeraVe PM vs Noches Concha Nácar + Teatrical Aclaradora. Perspirex/Drysol (2 veces por semana).', category: 'night', completed: false },
+  { id: 12, time: '10:00 PM', title: 'Citrato de Magnesio & Relajación', desc: 'Tomar magnesio, elevar piernas a 90° por 10 min y descanso zen.', category: 'night', completed: false }
+];
+
+const initialHousehold = [
+  {
+    id: 'h-1',
+    name: 'Papel Higiénico Premium',
+    category: 'Higiene',
+    stores: [
+      { storeName: 'Costco', price: 450, quantity: 40, unitPrice: 450 / 40 },
+      { storeName: "Sam's Club", price: 420, quantity: 32, unitPrice: 420 / 32 },
+      { storeName: 'Tiendas 3B', price: 95, quantity: 8, unitPrice: 95 / 8 }
+    ],
+    preferredStore: "Sam's Club",
+    repurchaseVerdict: 'yes',
+    notes: 'El de Sam\'s es más suave aunque el de Costco sea marginalmente más barato por rollo.'
+  },
+  {
+    id: 'h-2',
+    name: 'Crema Hidratante Facial CeraVe',
+    category: 'Skincare',
+    stores: [
+      { storeName: 'Farmacias Guadalajara', price: 380, quantity: 1, unitPrice: 380 },
+      { storeName: 'Amazon', price: 320, quantity: 1, unitPrice: 320 }
+    ],
+    preferredStore: 'Amazon',
+    repurchaseVerdict: 'yes',
+    notes: 'Textura excelente, rinde varios meses.'
+  },
+  {
+    id: 'h-3',
+    name: 'Pasta Dental Preventiva',
+    category: 'Dental',
+    stores: [
+      { storeName: 'Bodega Aurrera', price: 65, quantity: 1, unitPrice: 65 },
+      { storeName: 'Tiendas 3B', price: 45, quantity: 1, unitPrice: 45 }
+    ],
+    preferredStore: 'Tiendas 3B',
+    repurchaseVerdict: 'yes',
+    notes: 'Limpieza dental profunda al mejor precio.'
+  }
+];
+
+const initialExperiences = [
+  {
+    id: 'exp-1',
+    name: 'Café Filtrado V60 (Chiapas)',
+    type: 'place',
+    category: 'Cafeterías',
+    status: 'completed',
+    rating: 5,
+    cost: '$$',
+    verdict: 'yes',
+    placeOrBrand: 'Cafetería de Especialidad Centro',
+    date: '2026-08-10',
+    notes: 'Excelente extracción balanceada, notas a frutos rojos y cacao.'
+  },
+  {
+    id: 'exp-2',
+    name: 'Crema Corporal Almendras',
+    type: 'product',
+    category: 'Cuidado Personal',
+    status: 'completed',
+    rating: 5,
+    cost: '$$$',
+    verdict: 'yes',
+    placeOrBrand: 'L\'Occitane',
+    date: '2026-08-15',
+    notes: 'Huele espectacular y repara talones agrietados. Vale cada peso.'
+  },
+  {
+    id: 'exp-3',
+    name: 'Perfume Árabe Yara',
+    type: 'product',
+    category: 'Tiendas Especializadas',
+    status: 'pending',
+    rating: 0,
+    cost: '$$',
+    verdict: 'maybe',
+    placeOrBrand: 'Lattafa / Armaf',
+    notes: 'Perfume frutal dulce muy recomendado en foros geek chic. Pendiente de probar.'
+  }
+];
+
+const initialWardrobe = [
+  { id: 'w-1', name: 'Playera de Evangelion Eva-01', category: 'tops', isClean: true, color: 'Negro con morado', tags: ['anime', 'geek', 'algodón'] },
+  { id: 'w-2', name: 'Playera Serial Experiments Lain', category: 'tops', isClean: true, color: 'Blanco', tags: ['anime', 'geek'] },
+  { id: 'w-3', name: 'Sudadera Oversize Gris con Forro Satén', category: 'outerwear', isClean: true, color: 'Gris', tags: ['satén', 'anti-frizz', 'cómodo'] },
+  { id: 'w-4', name: 'Pantalón Cargo Tiro Alto', category: 'bottoms', isClean: true, color: 'Negro', tags: ['cargo', 'bolsillos'] },
+  { id: 'w-5', name: 'Leggings de Compresión Gruesos', category: 'bottoms', isClean: true, color: 'Azul Marino', tags: ['compresión', 'gruesos'] },
+  { id: 'w-6', name: 'Blazer Estructurado Joya', category: 'outerwear', isClean: true, color: 'Rojo Vino', tags: ['joya', 'estructurado'] },
+  { id: 'w-7', name: 'Tenis Blancos Limpios', category: 'footwear', isClean: true, color: 'Blanco', tags: ['básicos', 'piel'] },
+  { id: 'w-8', name: 'Botas de Piel', category: 'footwear', isClean: true, color: 'Negro', tags: ['cuero', 'casual'] },
+  { id: 'w-9', name: 'Mochila Reforzada Doble Laptop', category: 'accessories', isClean: true, color: 'Negro', tags: ['viaje', 'trabajo'] },
+  { id: 'w-10', name: 'Scrunchie de Satén', category: 'accessories', isClean: true, color: 'Verde Salvia', tags: ['satén', 'anti-frizz'] }
+];
+
+export default function App() {
+  // Navigation & UI States
+  const [activeModule, setActiveModule] = useState('schedule');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [toasts, setToasts] = useState([]);
+
+  // Persistent States loaded from localStorage (with presets fallback)
+  const [weight, setWeight] = useState(() => {
+    const saved = localStorage.getItem('aura-weight');
+    return saved ? parseFloat(saved) : 92.0;
+  });
+  
+  const [height, setHeight] = useState(() => {
+    const saved = localStorage.getItem('aura-height');
+    return saved ? parseFloat(saved) : 1.60;
+  });
+
+  const [waterIntake, setWaterIntake] = useState(() => {
+    const saved = localStorage.getItem('aura-water');
+    return saved ? parseInt(saved) : 0;
+  });
+
+  const [schedule, setSchedule] = useState(() => {
+    const saved = localStorage.getItem('aura-schedule');
+    return saved ? JSON.parse(saved) : initialSchedule;
+  });
+
+  const [householdItems, setHouseholdItems] = useState(() => {
+    const saved = localStorage.getItem('aura-household');
+    return saved ? JSON.parse(saved) : initialHousehold;
+  });
+
+  const [experiences, setExperiences] = useState(() => {
+    const saved = localStorage.getItem('aura-experiences');
+    return saved ? JSON.parse(saved) : initialExperiences;
+  });
+
+  const [wardrobe, setWardrobe] = useState(() => {
+    const saved = localStorage.getItem('aura-wardrobe');
+    return saved ? JSON.parse(saved) : initialWardrobe;
+  });
+
+  const [customOutfits, setCustomOutfits] = useState(() => {
+    const saved = localStorage.getItem('aura-outfits');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [customManuals, setCustomManuals] = useState(() => {
+    const saved = localStorage.getItem('aura-manuals');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [customTimers, setCustomTimers] = useState(() => {
+    const saved = localStorage.getItem('aura-timers');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // ==========================================
+  // SYNC TO LOCAL STORAGE
+  // ==========================================
+  useEffect(() => {
+    localStorage.setItem('aura-weight', weight.toString());
+  }, [weight]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-height', height.toString());
+  }, [height]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-water', waterIntake.toString());
+  }, [waterIntake]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-schedule', JSON.stringify(schedule));
+  }, [schedule]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-household', JSON.stringify(householdItems));
+  }, [householdItems]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-experiences', JSON.stringify(experiences));
+  }, [experiences]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-wardrobe', JSON.stringify(wardrobe));
+  }, [wardrobe]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-outfits', JSON.stringify(customOutfits));
+  }, [customOutfits]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-manuals', JSON.stringify(customManuals));
+  }, [customManuals]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-timers', JSON.stringify(customTimers));
+  }, [customTimers]);
+
+  // ==========================================
+  // TOAST FEEDBACK HANDLERS
+  // ==========================================
+  const showToast = (type, title, message) => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, type, title, message }]);
+  };
+
+  const handleCloseToast = (id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Water goal & percent for Sidebar Widget
+  const waterGoal = Math.round(weight * 35);
+  const waterPercent = Math.min(100, Math.round((waterIntake / waterGoal) * 100));
+
+  // Breadcrumbs title mapper
+  const moduleTitles = {
+    schedule: 'Rutina Diaria & Cronograma',
+    comparator: 'Comparador de Precios & Alacena',
+    experiences: 'Bitácora de Experiencias',
+    wardrobe: 'Armario Virtual Geek Chic',
+    manuals: 'Biblioteca de Estilo de Vida',
+    timers: 'Temporizadores de Tratamientos'
+  };
+
+  // Menu items list
+  const menuItems = [
+    { id: 'schedule', label: 'Rutina Diaria', icon: <Calendar className="w-5 h-5" /> },
+    { id: 'comparator', label: 'Comparador de Precios', icon: <Tag className="w-5 h-5" /> },
+    { id: 'experiences', label: 'Bitácora & Reviews', icon: <MapPin className="w-5 h-5" /> },
+    { id: 'wardrobe', label: 'Armario Virtual', icon: <Shirt className="w-5 h-5" /> },
+    { id: 'manuals', label: 'Manuales de Estilo', icon: <BookOpen className="w-5 h-5" /> },
+    { id: 'timers', label: 'Temporizadores', icon: <Clock className="w-5 h-5" /> },
+  ];
+
+  return (
+    <div className="flex min-h-screen bg-[#0b0c10] text-slate-100 antialiased overflow-x-hidden font-sans">
+      
+      {/* SIDEBAR NAVIGATION */}
+      {/* Mobile Drawer Backdrop */}
+      {mobileOpen && (
+        <div 
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 bg-[#0b0c10]/80 z-30 lg:hidden backdrop-blur-sm transition-opacity"
+        />
+      )}
+
+      <aside className={`
+        fixed top-0 bottom-0 left-0 bg-[#11131a] border-r border-[#e0a96d]/15 z-40
+        flex flex-col justify-between transition-all duration-300
+        ${sidebarCollapsed ? 'w-20' : 'w-64'}
+        ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        
+        {/* Sidebar Header Brand */}
+        <div>
+          <div className="flex items-center justify-between p-5 border-b border-slate-800">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="w-9 h-9 rounded-lg bg-[#e0a96d]/10 border border-[#e0a96d]/30 flex items-center justify-center shrink-0">
+                <span className="text-[#e0a96d] font-black text-lg font-outfit tracking-tighter">AN</span>
+              </div>
+              {!sidebarCollapsed && (
+                <span className="font-outfit font-black text-md tracking-wider text-slate-100">
+                  AURA <span className="text-[#e0a96d]">Nexus</span>
+                </span>
+              )}
+            </div>
+
+            {/* Mobile close menu */}
+            <button 
+              onClick={() => setMobileOpen(false)} 
+              className="lg:hidden text-slate-400 hover:text-slate-200 cursor-pointer"
+              aria-label="Cerrar menú lateral"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Navigation Links */}
+          <nav className="p-3 space-y-1.5 mt-4">
+            {menuItems.map((item) => {
+              const isActive = activeModule === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveModule(item.id);
+                    setMobileOpen(false);
+                  }}
+                  className={`
+                    w-full flex items-center gap-3.5 py-3 px-4 rounded-xl text-sm font-semibold transition-all cursor-pointer group
+                    ${isActive 
+                      ? 'bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/20 font-bold' 
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#171a24] border border-transparent'}
+                  `}
+                  aria-label={item.label}
+                >
+                  <span className={`shrink-0 transition-colors ${isActive ? 'text-[#e0a96d]' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                    {item.icon}
+                  </span>
+                  {(!sidebarCollapsed) && (
+                    <span className="truncate">{item.label}</span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Sidebar Footer & Interactive Water Widget */}
+        <div className="p-4 border-t border-slate-800 space-y-4">
+          
+          {/* Hydration Sidebar Widget */}
+          {!sidebarCollapsed && (
+            <div className="p-3.5 bg-[#171a24] border border-[#e0a96d]/10 rounded-xl space-y-2">
+              <div className="flex justify-between items-center text-[10px] font-bold text-slate-400">
+                <span className="flex items-center gap-1 uppercase tracking-wider">
+                  <Droplet className="w-3.5 h-3.5 text-[#e0a96d]" /> H₂O Hoy
+                </span>
+                <span className="text-[#e0a96d]">{waterPercent}%</span>
+              </div>
+              
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-bold text-slate-200">{waterIntake} ml</span>
+                <span className="text-[9px] text-slate-500 font-semibold">Meta: {waterGoal}ml</span>
+              </div>
+
+              {/* Mini progress bar */}
+              <div className="w-full bg-[#0b0c10] h-1.5 rounded-full overflow-hidden border border-slate-900">
+                <div 
+                  className="bg-[#e0a96d] h-full progress-bar-transition rounded-full"
+                  style={{ width: `${waterPercent}%` }}
+                />
+              </div>
+
+              <div className="flex gap-1.5 pt-1">
+                <button
+                  onClick={() => {
+                    setWaterIntake(waterIntake + 250);
+                    showToast('info', 'Consumo de Agua', 'Consumo: +250 ml de agua');
+                  }}
+                  className="flex-1 bg-[#0b0c10] hover:bg-[#e0a96d]/5 border border-[#e0a96d]/15 text-[9px] font-bold py-1 px-1 rounded text-center transition-colors cursor-pointer text-slate-300"
+                >
+                  +250ml
+                </button>
+                <button
+                  onClick={() => {
+                    setWaterIntake(waterIntake + 500);
+                    showToast('info', 'Consumo de Agua', 'Consumo: +500 ml de agua');
+                  }}
+                  className="flex-1 bg-[#0b0c10] hover:bg-[#e0a96d]/5 border border-[#e0a96d]/15 text-[9px] font-bold py-1 px-1 rounded text-center transition-colors cursor-pointer text-slate-300"
+                >
+                  +500ml
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Collapse sidebar trigger */}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="hidden lg:flex items-center justify-center w-full py-2 bg-[#171a24] hover:bg-[#e0a96d]/5 border border-slate-800 hover:border-[#e0a96d]/20 rounded-lg text-slate-400 hover:text-slate-200 transition-all cursor-pointer"
+            aria-label={sidebarCollapsed ? 'Expandir barra' : 'Colapsar barra'}
+          >
+            {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </button>
+        </div>
+      </aside>
+
+      {/* MAIN VIEWPORT BODY */}
+      <main className={`
+        flex-1 min-h-screen flex flex-col transition-all duration-300
+        ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'}
+      `}>
+        
+        {/* HEADER */}
+        <header className="bg-[#11131a] border-b border-[#e0a96d]/15 px-6 py-4 flex items-center justify-between shrink-0 sticky top-0 z-20">
+          
+          <div className="flex items-center gap-3">
+            {/* Hamburger button for mobile */}
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="lg:hidden text-slate-300 hover:text-slate-100 p-1.5 rounded-lg hover:bg-slate-800 cursor-pointer"
+              aria-label="Abrir menú"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+
+            {/* Breadcrumb Module Title */}
+            <div className="breadcrumbs">
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">AURA Nexus</span>
+              <span className="text-base font-extrabold text-slate-100 font-outfit">
+                {moduleTitles[activeModule]}
+              </span>
+            </div>
+          </div>
+
+          {/* Simulated widgets in Header */}
+          <div className="flex items-center gap-4">
+            
+            {/* Weather Widget */}
+            <div className="hidden sm:flex items-center gap-2 bg-[#171a24] border border-[#e0a96d]/10 px-3 py-1.5 rounded-xl text-xs">
+              <CloudSun className="w-4 h-4 text-[#e0a96d] shrink-0" />
+              <span className="text-slate-300 font-medium">Soleado, 24°C</span>
+            </div>
+
+            {/* Environment Widget */}
+            <div className="hidden md:flex items-center gap-2 bg-[#171a24] border border-[#e0a96d]/10 px-3 py-1.5 rounded-xl text-xs">
+              <Home className="w-4 h-4 text-[#e0a96d] shrink-0" />
+              <span className="text-slate-300 font-medium">Home Office</span>
+            </div>
+
+            {/* User Profile Avatar */}
+            <div className="flex items-center gap-2.5 pl-3 border-l border-slate-800">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#e0a96d] to-[#f5d4af] text-[#0b0c10] font-bold text-xs flex items-center justify-center select-none shadow">
+                AN
+              </div>
+              <div className="hidden xl:block text-left">
+                <span className="text-xs font-semibold text-slate-200 block leading-tight">Arianna A.</span>
+                <span className="text-[9px] text-slate-500 block">Lead Engineer</span>
+              </div>
+            </div>
+
+          </div>
+        </header>
+
+        {/* PAGE CONTENT CONTAINER */}
+        <div className="flex-1 p-6 max-w-7xl w-full mx-auto">
+          {activeModule === 'schedule' && (
+            <ScheduleModule
+              weight={weight}
+              setWeight={setWeight}
+              height={height}
+              setHeight={setHeight}
+              waterIntake={waterIntake}
+              setWaterIntake={setWaterIntake}
+              schedule={schedule}
+              setSchedule={setSchedule}
+              showToast={showToast}
+            />
+          )}
+
+          {activeModule === 'comparator' && (
+            <PriceComparatorModule
+              householdItems={householdItems}
+              setHouseholdItems={setHouseholdItems}
+              showToast={showToast}
+            />
+          )}
+
+          {activeModule === 'experiences' && (
+            <ExperiencesModule
+              experiences={experiences}
+              setExperiences={setExperiences}
+              showToast={showToast}
+            />
+          )}
+
+          {activeModule === 'wardrobe' && (
+            <WardrobeModule
+              wardrobe={wardrobe}
+              setWardrobe={setWardrobe}
+              customOutfits={customOutfits}
+              setCustomOutfits={setCustomOutfits}
+              showToast={showToast}
+            />
+          )}
+
+          {activeModule === 'manuals' && (
+            <ManualsModule
+              customManuals={customManuals}
+              setCustomManuals={setCustomManuals}
+              showToast={showToast}
+            />
+          )}
+
+          {activeModule === 'timers' && (
+            <TimersModule
+              customTimers={customTimers}
+              setCustomTimers={setCustomTimers}
+              showToast={showToast}
+            />
+          )}
+        </div>
+
+        {/* TOAST SYSTEM */}
+        <Toast toasts={toasts} onClose={handleCloseToast} />
+        
+      </main>
+
+    </div>
+  );
+}

@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@theme {
+  --color-obsidian-bg: #0b0c10;
+  --color-obsidian-card: #171a24;
+  --color-obsidian-dark: #11131a;
+  --color-rose-gold: #e0a96d;
+  --color-rose-gold-hover: #d39a5e;
+  --color-rose-gold-light: #f5d4af;
+  --font-sans: 'Inter', 'Outfit', system-ui, sans-serif;
+}
+
+/* Custom Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0c10;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #171a24;
+  border: 1px solid rgba(224, 169, 109, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #e0a96d;
+}
+
+/* Base Body Overrides for Obsidian Theme */
+html, body {
+  background-color: #0b0c10;
+  color: #f1f5f9;
+  font-family: 'Inter', 'Outfit', sans-serif;
+  scroll-behavior: smooth;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: rgba(23, 26, 36, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(224, 169, 109, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+}
+
+.glass-panel-hover:hover {
+  border-color: rgba(224, 169, 109, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(224, 169, 109, 0.1);
+  transition: all 0.3s ease;
+}
+
+/* Glow Effect */
+.glow-rose-gold {
+  box-shadow: 0 0 15px rgba(224, 169, 109, 0.25);
+}
+
+/* Keyframe animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease forwards;
+}
+
+/* Progress bar transition */
+.progress-bar-transition {
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Micro-interactions */
+.btn-rose-gold {
+  background: linear-gradient(135deg, #e0a96d 0%, #c58f55 100%);
+  color: #0b0c10;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-rose-gold:hover {
+  background: linear-gradient(135deg, #f5d4af 0%, #e0a96d 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(224, 169, 109, 0.35);
+}
+
+.btn-rose-gold:active {
+  transform: translateY(1px);
+}
