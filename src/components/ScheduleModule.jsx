@@ -13,9 +13,10 @@ export default function ScheduleModule({
   showToast
 }) {
   const [newTitle, setNewTitle] = useState('');
-  const [newTime, setNewTime] = useState('08:00 AM');
+  const [newHour, setNewHour] = useState('08');
+  const [newMinute, setNewMinute] = useState('00');
+  const [newPeriod, setNewPeriod] = useState('AM');
   const [newDesc, setNewDesc] = useState('');
-  const [newCategory, setNewCategory] = useState('morning');
   const [isAdding, setIsAdding] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
@@ -33,16 +34,40 @@ export default function ScheduleModule({
   };
   const imcStatus = getImcStatus(parseFloat(imc));
 
+  const calculateCategory = (hour, minute, period) => {
+    let h = parseInt(hour, 10);
+    if (period === 'PM' && h !== 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+    
+    if (h >= 5 && h < 12) return 'morning';
+    if (h >= 12 && h < 19) return 'afternoon';
+    return 'night';
+  };
+
+  const getMinutesFromMidnight = (timeStr) => {
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!match) return 0;
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const period = match[3].toUpperCase();
+    if (period === 'PM' && h !== 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
   const handleAddActivity = (e) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
+    const timeStr = `${newHour}:${newMinute} ${newPeriod}`;
+    const cat = calculateCategory(newHour, newMinute, newPeriod);
+
     const newItem = {
       id: Date.now(),
-      time: newTime,
+      time: timeStr,
       title: newTitle,
       desc: newDesc,
-      category: newCategory,
+      category: cat,
       completed: false
     };
 
@@ -73,7 +98,21 @@ export default function ScheduleModule({
   };
 
   const handleEditClick = (item) => {
-    setEditingItem({ ...item });
+    const match = item.time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    let h = "08";
+    let m = "00";
+    let p = "AM";
+    if (match) {
+      h = match[1].padStart(2, '0');
+      m = match[2];
+      p = match[3].toUpperCase();
+    }
+    setEditingItem({ 
+      ...item, 
+      hour: h, 
+      minute: m, 
+      period: p 
+    });
   };
 
   const handleSaveEdit = () => {
@@ -83,11 +122,26 @@ export default function ScheduleModule({
     setEditingItem(null);
   };
 
-  // Group by category
+  // Group by category and sort chronologically
   const categories = {
-    morning: { label: 'Mañana (05:00 AM - 11:59 AM)', items: schedule.filter(i => i.category === 'morning' || i.category === 'hygiene') },
-    afternoon: { label: 'Tarde (12:00 PM - 06:59 PM)', items: schedule.filter(i => i.category === 'afternoon') },
-    night: { label: 'Noche (07:00 PM - 04:59 AM)', items: schedule.filter(i => i.category === 'night') }
+    morning: { 
+      label: 'Mañana (05:00 AM - 11:59 AM)', 
+      items: schedule
+        .filter(i => i.category === 'morning' || i.category === 'hygiene')
+        .sort((a, b) => getMinutesFromMidnight(a.time) - getMinutesFromMidnight(b.time))
+    },
+    afternoon: { 
+      label: 'Tarde (12:00 PM - 06:59 PM)', 
+      items: schedule
+        .filter(i => i.category === 'afternoon')
+        .sort((a, b) => getMinutesFromMidnight(a.time) - getMinutesFromMidnight(b.time))
+    },
+    night: { 
+      label: 'Noche (07:00 PM - 04:59 AM)', 
+      items: schedule
+        .filter(i => i.category === 'night')
+        .sort((a, b) => getMinutesFromMidnight(a.time) - getMinutesFromMidnight(b.time))
+    }
   };
 
   return (
@@ -251,14 +305,38 @@ export default function ScheduleModule({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Hora</label>
-                <input
-                  type="text"
-                  value={newTime}
-                  onChange={(e) => setNewTime(e.target.value)}
-                  placeholder="Ej. 06:00 AM"
-                  className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
-                  required
-                />
+                <div className="flex gap-1.5">
+                  <select
+                    value={newHour}
+                    onChange={(e) => setNewHour(e.target.value)}
+                    className="flex-1 bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-2 px-1 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  
+                  <span className="text-slate-400 self-center font-bold text-xs">:</span>
+
+                  <select
+                    value={newMinute}
+                    onChange={(e) => setNewMinute(e.target.value)}
+                    className="flex-1 bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-2 px-1 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                  >
+                    {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')).map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={newPeriod}
+                    onChange={(e) => setNewPeriod(e.target.value)}
+                    className="flex-1 bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-2 px-1 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </div>
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Título de la Actividad</label>
@@ -283,23 +361,13 @@ export default function ScheduleModule({
             </div>
             <div className="flex justify-between items-center">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Fase del Día</label>
-                <div className="flex gap-2">
-                  {['morning', 'afternoon', 'night'].map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setNewCategory(cat)}
-                      className={`text-[10px] font-bold px-3 py-1.5 rounded-full transition-all cursor-pointer border ${
-                        newCategory === cat 
-                          ? 'bg-[#e0a96d] text-[#0b0c10] border-[#e0a96d]' 
-                          : 'bg-[#171a24] border-slate-700 text-slate-400 hover:border-slate-600'
-                      }`}
-                    >
-                      {cat === 'morning' ? 'Mañana' : cat === 'afternoon' ? 'Tarde' : 'Noche'}
-                    </button>
-                  ))}
-                </div>
+                <span className="text-xs text-slate-400 font-semibold block mb-1">Fase Asignada (Auto)</span>
+                <span className="inline-block text-[10px] font-bold px-3 py-1.5 rounded-full bg-[#e0a96d]/10 border border-[#e0a96d]/30 text-[#e0a96d] uppercase tracking-wider">
+                  {(() => {
+                    const cat = calculateCategory(newHour, newMinute, newPeriod);
+                    return cat === 'morning' ? 'Mañana' : cat === 'afternoon' ? 'Tarde' : 'Noche';
+                  })()}
+                </span>
               </div>
               <div className="flex gap-2">
                 <button
@@ -416,13 +484,68 @@ export default function ScheduleModule({
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Hora</label>
-                <input
-                  type="text"
-                  value={editingItem.time}
-                  onChange={(e) => setEditingItem({ ...editingItem, time: e.target.value })}
-                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
-                  required
-                />
+                <div className="flex gap-1.5">
+                  <select
+                    value={editingItem.hour || "08"}
+                    onChange={(e) => {
+                      const h = e.target.value;
+                      const m = editingItem.minute || "00";
+                      const p = editingItem.period || "AM";
+                      setEditingItem({
+                        ...editingItem,
+                        hour: h,
+                        time: `${h}:${m} ${p}`,
+                        category: calculateCategory(h, m, p)
+                      });
+                    }}
+                    className="flex-1 bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-1 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  
+                  <span className="text-slate-400 self-center font-bold text-xs">:</span>
+
+                  <select
+                    value={editingItem.minute || "00"}
+                    onChange={(e) => {
+                      const h = editingItem.hour || "08";
+                      const m = e.target.value;
+                      const p = editingItem.period || "AM";
+                      setEditingItem({
+                        ...editingItem,
+                        minute: m,
+                        time: `${h}:${m} ${p}`,
+                        category: calculateCategory(h, m, p)
+                      });
+                    }}
+                    className="flex-1 bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-1 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                  >
+                    {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')).map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={editingItem.period || "AM"}
+                    onChange={(e) => {
+                      const h = editingItem.hour || "08";
+                      const m = editingItem.minute || "00";
+                      const p = e.target.value;
+                      setEditingItem({
+                        ...editingItem,
+                        period: p,
+                        time: `${h}:${m} ${p}`,
+                        category: calculateCategory(h, m, p)
+                      });
+                    }}
+                    className="flex-1 bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-1 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Título</label>
@@ -443,23 +566,10 @@ export default function ScheduleModule({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Fase del Día</label>
-                <div className="flex gap-2">
-                  {['morning', 'afternoon', 'night'].map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setEditingItem({ ...editingItem, category: cat })}
-                      className={`text-[10px] font-bold px-3 py-1.5 rounded-full transition-all cursor-pointer border ${
-                        editingItem.category === cat 
-                          ? 'bg-[#e0a96d] text-[#0b0c10] border-[#e0a96d]' 
-                          : 'bg-[#0b0c10] border-slate-700 text-slate-400 hover:border-slate-600'
-                      }`}
-                    >
-                      {cat === 'morning' ? 'Mañana' : cat === 'afternoon' ? 'Tarde' : 'Noche'}
-                    </button>
-                  ))}
-                </div>
+                <span className="text-xs text-slate-400 font-semibold block mb-1">Fase Asignada (Auto)</span>
+                <span className="inline-block text-[10px] font-bold px-3 py-1.5 rounded-full bg-[#e0a96d]/10 border border-[#e0a96d]/30 text-[#e0a96d] uppercase tracking-wider">
+                  {editingItem.category === 'morning' ? 'Mañana' : editingItem.category === 'afternoon' ? 'Tarde' : 'Noche'}
+                </span>
               </div>
             </div>
 
