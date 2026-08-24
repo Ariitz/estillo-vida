@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, Filter, Heart, MapPin, ShoppingBag, Eye, Trash2, Calendar, Plus, HelpCircle, X } from 'lucide-react';
+import { Star, Filter, Heart, MapPin, ShoppingBag, Eye, Trash2, Calendar, Plus, HelpCircle, X, Search } from 'lucide-react';
 
 export default function ExperiencesModule({
   experiences,
