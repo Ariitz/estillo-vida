@@ -162,40 +162,45 @@ export default function App() {
     return saved ? parseInt(saved) : 0;
   });
 
-  const [schedule, setSchedule] = useState(() => {
-    const saved = localStorage.getItem('aura-schedule');
-    return saved ? JSON.parse(saved) : initialSchedule;
-  });
+  const getSavedArray = (key, fallback) => {
+    const saved = localStorage.getItem(key);
+    if (!saved) return fallback;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {
+      console.warn(`Error parsing localStorage key "${key}":`, e);
+    }
+    return fallback;
+  };
 
-  const [householdItems, setHouseholdItems] = useState(() => {
-    const saved = localStorage.getItem('aura-household');
-    return saved ? JSON.parse(saved) : initialHousehold;
-  });
+  const [schedule, setSchedule] = useState(() => 
+    getSavedArray('aura-schedule', initialSchedule)
+  );
 
-  const [experiences, setExperiences] = useState(() => {
-    const saved = localStorage.getItem('aura-experiences');
-    return saved ? JSON.parse(saved) : initialExperiences;
-  });
+  const [householdItems, setHouseholdItems] = useState(() => 
+    getSavedArray('aura-household', initialHousehold)
+  );
 
-  const [wardrobe, setWardrobe] = useState(() => {
-    const saved = localStorage.getItem('aura-wardrobe');
-    return saved ? JSON.parse(saved) : initialWardrobe;
-  });
+  const [experiences, setExperiences] = useState(() => 
+    getSavedArray('aura-experiences', initialExperiences)
+  );
 
-  const [customOutfits, setCustomOutfits] = useState(() => {
-    const saved = localStorage.getItem('aura-outfits');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [wardrobe, setWardrobe] = useState(() => 
+    getSavedArray('aura-wardrobe', initialWardrobe)
+  );
 
-  const [customManuals, setCustomManuals] = useState(() => {
-    const saved = localStorage.getItem('aura-manuals');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [customOutfits, setCustomOutfits] = useState(() => 
+    getSavedArray('aura-outfits', [])
+  );
 
-  const [customTimers, setCustomTimers] = useState(() => {
-    const saved = localStorage.getItem('aura-timers');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [customManuals, setCustomManuals] = useState(() => 
+    getSavedArray('aura-manuals', [])
+  );
+
+  const [customTimers, setCustomTimers] = useState(() => 
+    getSavedArray('aura-timers', [])
+  );
 
   // ==========================================
   // SYNC TO LOCAL STORAGE

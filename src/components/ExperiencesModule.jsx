@@ -106,18 +106,24 @@ export default function ExperiencesModule({
     }));
   };
 
-  // Filter logic
-  const filtered = experiences.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      item.placeOrBrand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.notes.toLowerCase().includes(searchTerm.toLowerCase());
+  // Filter logic with safety guards for undefined/legacy properties
+  const filtered = Array.isArray(experiences) ? experiences.filter(item => {
+    if (!item) return false;
+    const nameStr = item.name || '';
+    const placeOrBrandStr = item.placeOrBrand || '';
+    const notesStr = item.notes || '';
+
+    const matchesSearch = nameStr.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      placeOrBrandStr.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      notesStr.toLowerCase().includes(searchTerm.toLowerCase());
+    
     const matchesType = typeFilter === 'all' || item.type === typeFilter;
     const matchesCat = catFilter === 'all' || item.category === catFilter;
     const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
     const matchesVerdict = verdictFilter === 'all' || item.verdict === verdictFilter;
 
     return matchesSearch && matchesType && matchesCat && matchesStatus && matchesVerdict;
-  });
+  }) : [];
 
   return (
     <div className="space-y-6 animate-fade-in">
