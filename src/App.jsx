@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Calendar, 
-  Tag, 
-  MapPin, 
-  Shirt, 
-  BookOpen, 
-  Clock, 
-  Menu, 
-  X, 
-  Droplet, 
-  CloudSun, 
-  Home, 
-  ChevronLeft, 
+import {
+  Calendar,
+  Tag,
+  MapPin,
+  Shirt,
+  BookOpen,
+  Clock,
+  Menu,
+  X,
+  Droplet,
+  CloudSun,
+  Home,
+  ChevronLeft,
   ChevronRight,
   TrendingUp,
   Award
@@ -151,7 +151,7 @@ export default function App() {
     const saved = localStorage.getItem('aura-weight');
     return saved ? parseFloat(saved) : 92.0;
   });
-  
+
   const [height, setHeight] = useState(() => {
     const saved = localStorage.getItem('aura-height');
     return saved ? parseFloat(saved) : 1.60;
@@ -174,31 +174,31 @@ export default function App() {
     return fallback;
   };
 
-  const [schedule, setSchedule] = useState(() => 
+  const [schedule, setSchedule] = useState(() =>
     getSavedArray('aura-schedule', initialSchedule)
   );
 
-  const [householdItems, setHouseholdItems] = useState(() => 
+  const [householdItems, setHouseholdItems] = useState(() =>
     getSavedArray('aura-household', initialHousehold)
   );
 
-  const [experiences, setExperiences] = useState(() => 
+  const [experiences, setExperiences] = useState(() =>
     getSavedArray('aura-experiences', initialExperiences)
   );
 
-  const [wardrobe, setWardrobe] = useState(() => 
+  const [wardrobe, setWardrobe] = useState(() =>
     getSavedArray('aura-wardrobe', initialWardrobe)
   );
 
-  const [customOutfits, setCustomOutfits] = useState(() => 
+  const [customOutfits, setCustomOutfits] = useState(() =>
     getSavedArray('aura-outfits', [])
   );
 
-  const [customManuals, setCustomManuals] = useState(() => 
+  const [customManuals, setCustomManuals] = useState(() =>
     getSavedArray('aura-manuals', [])
   );
 
-  const [customTimers, setCustomTimers] = useState(() => 
+  const [customTimers, setCustomTimers] = useState(() =>
     getSavedArray('aura-timers', [])
   );
 
@@ -263,7 +263,7 @@ export default function App() {
 
   // Breadcrumbs title mapper
   const moduleTitles = {
-    schedule: 'Rutina Diaria & Cronograma',
+    schedule: 'Rutina Diaria & Cronograma Pruebas',
     comparator: 'Comparador de Precios & Alacena',
     experiences: 'Bitácora de Experiencias',
     wardrobe: 'Armario Virtual Geek Chic',
@@ -283,11 +283,11 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen bg-[#0b0c10] text-slate-100 antialiased overflow-x-hidden font-sans">
-      
+
       {/* SIDEBAR NAVIGATION */}
       {/* Mobile Drawer Backdrop */}
       {mobileOpen && (
-        <div 
+        <div
           onClick={() => setMobileOpen(false)}
           className="fixed inset-0 bg-[#0b0c10]/80 z-30 lg:hidden backdrop-blur-sm transition-opacity"
         />
@@ -299,7 +299,7 @@ export default function App() {
         ${sidebarCollapsed ? 'w-20' : 'w-64'}
         ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        
+
         {/* Sidebar Header Brand */}
         <div>
           <div className="flex items-center justify-between p-5 border-b border-slate-800">
@@ -315,8 +315,8 @@ export default function App() {
             </div>
 
             {/* Mobile close menu */}
-            <button 
-              onClick={() => setMobileOpen(false)} 
+            <button
+              onClick={() => setMobileOpen(false)}
               className="lg:hidden text-slate-400 hover:text-slate-200 cursor-pointer"
               aria-label="Cerrar menú lateral"
             >
@@ -337,8 +337,8 @@ export default function App() {
                   }}
                   className={`
                     w-full flex items-center gap-3.5 py-3 px-4 rounded-xl text-sm font-semibold transition-all cursor-pointer group
-                    ${isActive 
-                      ? 'bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/20 font-bold' 
+                    ${isActive
+                      ? 'bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/20 font-bold'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-[#171a24] border border-transparent'}
                   `}
                   aria-label={item.label}
@@ -357,7 +357,7 @@ export default function App() {
 
         {/* Sidebar Footer & Interactive Water Widget */}
         <div className="p-4 border-t border-slate-800 space-y-4">
-          
+
           {/* Hydration Sidebar Widget */}
           {!sidebarCollapsed && (
             <div className="p-3.5 bg-[#171a24] border border-[#e0a96d]/10 rounded-xl space-y-2">
@@ -367,7 +367,7 @@ export default function App() {
                 </span>
                 <span className="text-[#e0a96d]">{waterPercent}%</span>
               </div>
-              
+
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-bold text-slate-200">{waterIntake} ml</span>
                 <span className="text-[9px] text-slate-500 font-semibold">Meta: {waterGoal}ml</span>
@@ -375,7 +375,7 @@ export default function App() {
 
               {/* Mini progress bar */}
               <div className="w-full bg-[#0b0c10] h-1.5 rounded-full overflow-hidden border border-slate-900">
-                <div 
+                <div
                   className="bg-[#e0a96d] h-full progress-bar-transition rounded-full"
                   style={{ width: `${waterPercent}%` }}
                 />
@@ -420,10 +420,10 @@ export default function App() {
         flex-1 min-h-screen flex flex-col transition-all duration-300
         ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'}
       `}>
-        
+
         {/* HEADER */}
         <header className="bg-[#11131a] border-b border-[#e0a96d]/15 px-6 py-4 flex items-center justify-between shrink-0 sticky top-0 z-20">
-          
+
           <div className="flex items-center gap-3">
             {/* Hamburger button for mobile */}
             <button
@@ -445,7 +445,7 @@ export default function App() {
 
           {/* Simulated widgets in Header */}
           <div className="flex items-center gap-4">
-            
+
             {/* Weather Widget */}
             <div className="hidden sm:flex items-center gap-2 bg-[#171a24] border border-[#e0a96d]/10 px-3 py-1.5 rounded-xl text-xs">
               <CloudSun className="w-4 h-4 text-[#e0a96d] shrink-0" />
@@ -533,7 +533,7 @@ export default function App() {
 
         {/* TOAST SYSTEM */}
         <Toast toasts={toasts} onClose={handleCloseToast} />
-        
+
       </main>
 
     </div>
