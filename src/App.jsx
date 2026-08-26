@@ -263,7 +263,7 @@ export default function App() {
 
   // Breadcrumbs title mapper
   const moduleTitles = {
-    schedule: 'Rutina Diaria & Cronograma Pruebas',
+    schedule: 'Rutina Diaria & Cronograma',
     comparator: 'Comparador de Precios & Alacena',
     experiences: 'Bitácora de Experiencias',
     wardrobe: 'Armario Virtual Geek Chic',
