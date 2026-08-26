@@ -14,8 +14,13 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
-  Award
+  Award,
+  Cloud
 } from 'lucide-react';
+
+// Firebase Client SDK
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 // Import modules
 import ScheduleModule from './components/ScheduleModule';
@@ -24,6 +29,7 @@ import ExperiencesModule from './components/ExperiencesModule';
 import WardrobeModule from './components/WardrobeModule';
 import ManualsModule from './components/ManualsModule';
 import TimersModule from './components/TimersModule';
+import SyncModule from './components/SyncModule';
 import Toast from './components/Toast';
 
 // ==========================================
@@ -203,6 +209,222 @@ export default function App() {
   );
 
   // ==========================================
+  // CLOUD SYNC STATE DECLARATIONS
+  // ==========================================
+  const [firebaseConfig, setFirebaseConfig] = useState(() => {
+    const saved = localStorage.getItem('aura-firebase-config');
+    return saved ? JSON.parse(saved) : {
+      apiKey: '',
+      projectId: '',
+      authDomain: '',
+      storageBucket: '',
+      messagingSenderId: '',
+      appId: '',
+      syncKey: ''
+    };
+  });
+
+  const [isSyncActive, setIsSyncActive] = useState(() => {
+    return localStorage.getItem('aura-sync-active') === 'true';
+  });
+
+  const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(() => {
+    const saved = localStorage.getItem('aura-sync-auto');
+    return saved ? saved === 'true' : true;
+  });
+
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(() => {
+    return localStorage.getItem('aura-last-sync-time') || '';
+  });
+
+  const [db, setDb] = useState(null);
+
+  // Sync state to localStorage
+  useEffect(() => {
+    localStorage.setItem('aura-firebase-config', JSON.stringify(firebaseConfig));
+  }, [firebaseConfig]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-sync-active', isSyncActive.toString());
+  }, [isSyncActive]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-sync-auto', isAutoSyncEnabled.toString());
+  }, [isAutoSyncEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-last-sync-time', lastSyncTime);
+  }, [lastSyncTime]);
+
+  // Dynamic Firebase Initialization
+  useEffect(() => {
+    if (!isSyncActive) {
+      setDb(null);
+      return;
+    }
+
+    const { apiKey, projectId, syncKey } = firebaseConfig;
+    if (!apiKey || !projectId || !syncKey) {
+      setIsSyncActive(false);
+      return;
+    }
+
+    try {
+      const appName = 'aura-nexus-sync';
+      const app = getApps().find(a => a.name === appName) 
+        ? getApp(appName) 
+        : initializeApp(firebaseConfig, appName);
+      
+      const firestoreInstance = getFirestore(app);
+      setDb(firestoreInstance);
+      showToast('success', 'Nube Conectada', 'Estableciendo comunicación con Cloud Firestore.');
+    } catch (error) {
+      console.error("Firebase init error:", error);
+      showToast('error', 'Error de Conexión', 'No se pudo conectar a Firebase. Verifica la configuración.');
+      setIsSyncActive(false);
+    }
+  }, [isSyncActive, firebaseConfig]);
+
+  // Helper pack/unpack methods
+  const getSyncData = () => {
+    return {
+      weight,
+      height,
+      waterIntake,
+      schedule,
+      householdItems,
+      experiences,
+      wardrobe,
+      customOutfits,
+      customManuals,
+      customTimers,
+      lastUpdated: Date.now()
+    };
+  };
+
+  const setAllStatesFromData = (data) => {
+    if (!data) return;
+    if (data.weight !== undefined) {
+      setWeight(data.weight);
+      localStorage.setItem('aura-weight', data.weight.toString());
+    }
+    if (data.height !== undefined) {
+      setHeight(data.height);
+      localStorage.setItem('aura-height', data.height.toString());
+    }
+    if (data.waterIntake !== undefined) {
+      setWaterIntake(data.waterIntake);
+      localStorage.setItem('aura-water', data.waterIntake.toString());
+    }
+    if (Array.isArray(data.schedule)) {
+      setSchedule(data.schedule);
+      localStorage.setItem('aura-schedule', JSON.stringify(data.schedule));
+    }
+    if (Array.isArray(data.householdItems)) {
+      setHouseholdItems(data.householdItems);
+      localStorage.setItem('aura-household', JSON.stringify(data.householdItems));
+    }
+    if (Array.isArray(data.experiences)) {
+      setExperiences(data.experiences);
+      localStorage.setItem('aura-experiences', JSON.stringify(data.experiences));
+    }
+    if (Array.isArray(data.wardrobe)) {
+      setWardrobe(data.wardrobe);
+      localStorage.setItem('aura-wardrobe', JSON.stringify(data.wardrobe));
+    }
+    if (Array.isArray(data.customOutfits)) {
+      setCustomOutfits(data.customOutfits);
+      localStorage.setItem('aura-outfits', JSON.stringify(data.customOutfits));
+    }
+    if (Array.isArray(data.customManuals)) {
+      setCustomManuals(data.customManuals);
+      localStorage.setItem('aura-manuals', JSON.stringify(data.customManuals));
+    }
+    if (Array.isArray(data.customTimers)) {
+      setCustomTimers(data.customTimers);
+      localStorage.setItem('aura-timers', JSON.stringify(data.customTimers));
+    }
+  };
+
+  const handlePull = async () => {
+    if (!db || !firebaseConfig.syncKey) {
+      showToast('error', 'Error', 'La base de datos no está inicializada o falta la clave.');
+      return;
+    }
+    setSyncLoading(true);
+    try {
+      const docRef = doc(db, 'users', firebaseConfig.syncKey);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const cloudData = docSnap.data();
+        setAllStatesFromData(cloudData);
+        const timeStr = new Date().toLocaleTimeString();
+        setLastSyncTime(timeStr);
+        showToast('success', 'Sincronizado', 'Datos descargados de la nube con éxito.');
+      } else {
+        showToast('warning', 'Sin Registro', 'No hay datos guardados para esta clave en la nube.');
+      }
+    } catch (error) {
+      console.error("Pull error:", error);
+      showToast('error', 'Fallo de Descarga', 'No se pudo descargar de la nube: ' + error.message);
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
+  const handlePush = async () => {
+    if (!db || !firebaseConfig.syncKey) {
+      showToast('error', 'Error', 'La base de datos no está inicializada o falta la clave.');
+      return;
+    }
+    setSyncLoading(true);
+    try {
+      const docRef = doc(db, 'users', firebaseConfig.syncKey);
+      await setDoc(docRef, getSyncData());
+      const timeStr = new Date().toLocaleTimeString();
+      setLastSyncTime(timeStr);
+      showToast('success', 'Sincronizado', 'Datos subidos a la nube con éxito.');
+    } catch (error) {
+      console.error("Push error:", error);
+      showToast('error', 'Fallo de Subida', 'No se pudo subir a la nube: ' + error.message);
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
+  // Debounced Auto-Sync on change
+  useEffect(() => {
+    if (!db || !isSyncActive || !isAutoSyncEnabled || !firebaseConfig.syncKey) return;
+    
+    const handler = setTimeout(async () => {
+      try {
+        const docRef = doc(db, 'users', firebaseConfig.syncKey);
+        await setDoc(docRef, getSyncData());
+        setLastSyncTime(new Date().toLocaleTimeString());
+      } catch (error) {
+        console.error("Autosync write error:", error);
+      }
+    }, 1500);
+    
+    return () => clearTimeout(handler);
+  }, [
+    db,
+    isSyncActive,
+    isAutoSyncEnabled,
+    weight,
+    height,
+    waterIntake,
+    schedule,
+    householdItems,
+    experiences,
+    wardrobe,
+    customOutfits,
+    customManuals,
+    customTimers
+  ]);
+
+  // ==========================================
   // SYNC TO LOCAL STORAGE
   // ==========================================
   useEffect(() => {
@@ -268,7 +490,8 @@ export default function App() {
     experiences: 'Bitácora de Experiencias',
     wardrobe: 'Armario Virtual Geek Chic',
     manuals: 'Biblioteca de Estilo de Vida',
-    timers: 'Temporizadores de Tratamientos'
+    timers: 'Temporizadores de Tratamientos',
+    sync: 'Sincronización en la Nube'
   };
 
   // Menu items list
@@ -279,6 +502,7 @@ export default function App() {
     { id: 'wardrobe', label: 'Armario Virtual', icon: <Shirt className="w-5 h-5" /> },
     { id: 'manuals', label: 'Manuales de Estilo', icon: <BookOpen className="w-5 h-5" /> },
     { id: 'timers', label: 'Temporizadores', icon: <Clock className="w-5 h-5" /> },
+    { id: 'sync', label: 'Sincronizar Nube', icon: <Cloud className="w-5 h-5" /> },
   ];
 
   return (
@@ -527,6 +751,22 @@ export default function App() {
               customTimers={customTimers}
               setCustomTimers={setCustomTimers}
               showToast={showToast}
+            />
+          )}
+
+          {activeModule === 'sync' && (
+            <SyncModule
+              firebaseConfig={firebaseConfig}
+              setFirebaseConfig={setFirebaseConfig}
+              isSyncActive={isSyncActive}
+              setIsSyncActive={setIsSyncActive}
+              onPull={handlePull}
+              onPush={handlePush}
+              showToast={showToast}
+              syncLoading={syncLoading}
+              lastSyncTime={lastSyncTime}
+              isAutoSyncEnabled={isAutoSyncEnabled}
+              setIsAutoSyncEnabled={setIsAutoSyncEnabled}
             />
           )}
         </div>
