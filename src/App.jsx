@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Calendar,
   Tag,
@@ -20,7 +20,7 @@ import {
 
 // Firebase Client SDK
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 
 // Import modules
 import ScheduleModule from './components/ScheduleModule';
@@ -240,6 +240,11 @@ export default function App() {
 
   const [db, setDb] = useState(null);
 
+  // Sync control refs to prevent race conditions and unwanted auto-overwrites
+  const isInitialMountRef = useRef(true);
+  const isRemoteUpdateRef = useRef(false);
+  const lastLocalUpdateRef = useRef(parseInt(localStorage.getItem('aura-last-updated') || '0', 10));
+
   // Sync state to localStorage
   useEffect(() => {
     localStorage.setItem('aura-firebase-config', JSON.stringify(firebaseConfig));
@@ -358,6 +363,11 @@ export default function App() {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const cloudData = docSnap.data();
+        isRemoteUpdateRef.current = true;
+        const cloudTimestamp = cloudData.lastUpdated || Date.now();
+        lastLocalUpdateRef.current = cloudTimestamp;
+        localStorage.setItem('aura-last-updated', cloudTimestamp.toString());
+        
         setAllStatesFromData(cloudData);
         const timeStr = new Date().toLocaleTimeString();
         setLastSyncTime(timeStr);
@@ -380,8 +390,15 @@ export default function App() {
     }
     setSyncLoading(true);
     try {
+      const now = Date.now();
+      lastLocalUpdateRef.current = now;
+      localStorage.setItem('aura-last-updated', now.toString());
+
       const docRef = doc(db, 'users', firebaseConfig.syncKey);
-      await setDoc(docRef, getSyncData());
+      await setDoc(docRef, {
+        ...getSyncData(),
+        lastUpdated: now
+      });
       const timeStr = new Date().toLocaleTimeString();
       setLastSyncTime(timeStr);
       showToast('success', 'Sincronizado', 'Datos subidos a la nube con éxito.');
@@ -393,20 +410,68 @@ export default function App() {
     }
   };
 
-  // Debounced Auto-Sync on change
+  // Real-time Cloud Listener & Safe Auto-Pull on connect
   useEffect(() => {
+    if (!db || !isSyncActive || !firebaseConfig.syncKey) return;
+
+    const docRef = doc(db, 'users', firebaseConfig.syncKey);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      // Ignore our own local pending write
+      if (docSnap.metadata?.hasPendingWrites) return;
+
+      if (docSnap.exists()) {
+        const cloudData = docSnap.data();
+        const cloudTimestamp = cloudData.lastUpdated || 0;
+
+        // If cloud data is newer than what we currently have loaded, update state
+        if (cloudTimestamp > lastLocalUpdateRef.current) {
+          isRemoteUpdateRef.current = true;
+          lastLocalUpdateRef.current = cloudTimestamp;
+          localStorage.setItem('aura-last-updated', cloudTimestamp.toString());
+          setAllStatesFromData(cloudData);
+          setLastSyncTime(new Date().toLocaleTimeString());
+        }
+      }
+    }, (error) => {
+      console.error("Firestore real-time listener error:", error);
+    });
+
+    return () => unsubscribe();
+  }, [db, isSyncActive, firebaseConfig.syncKey]);
+
+  // Debounced Auto-Sync on change (Protects against pushing unedited defaults)
+  useEffect(() => {
+    // Avoid auto-sync on initial component mount
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
+
+    // Avoid pushing back data that was just downloaded from cloud
+    if (isRemoteUpdateRef.current) {
+      isRemoteUpdateRef.current = false;
+      return;
+    }
+
     if (!db || !isSyncActive || !isAutoSyncEnabled || !firebaseConfig.syncKey) return;
-    
+
+    const now = Date.now();
+    lastLocalUpdateRef.current = now;
+    localStorage.setItem('aura-last-updated', now.toString());
+
     const handler = setTimeout(async () => {
       try {
         const docRef = doc(db, 'users', firebaseConfig.syncKey);
-        await setDoc(docRef, getSyncData());
+        await setDoc(docRef, {
+          ...getSyncData(),
+          lastUpdated: now
+        });
         setLastSyncTime(new Date().toLocaleTimeString());
       } catch (error) {
         console.error("Autosync write error:", error);
       }
     }, 1500);
-    
+
     return () => clearTimeout(handler);
   }, [
     db,
