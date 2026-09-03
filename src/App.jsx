@@ -245,7 +245,15 @@ export default function App() {
   const isRemoteUpdateRef = useRef(false);
   const lastLocalUpdateRef = useRef(parseInt(localStorage.getItem('aura-last-updated') || '0', 10));
 
+  const [geminiApiKey, setGeminiApiKey] = useState(() => {
+    return localStorage.getItem('aura-gemini-key') || '';
+  });
+
   // Sync state to localStorage
+  useEffect(() => {
+    localStorage.setItem('aura-gemini-key', geminiApiKey);
+  }, [geminiApiKey]);
+
   useEffect(() => {
     localStorage.setItem('aura-firebase-config', JSON.stringify(firebaseConfig));
   }, [firebaseConfig]);
@@ -800,6 +808,8 @@ export default function App() {
               customOutfits={customOutfits}
               setCustomOutfits={setCustomOutfits}
               showToast={showToast}
+              geminiApiKey={geminiApiKey}
+              setGeminiApiKey={setGeminiApiKey}
             />
           )}
 
@@ -832,6 +842,8 @@ export default function App() {
               lastSyncTime={lastSyncTime}
               isAutoSyncEnabled={isAutoSyncEnabled}
               setIsAutoSyncEnabled={setIsAutoSyncEnabled}
+              geminiApiKey={geminiApiKey}
+              setGeminiApiKey={setGeminiApiKey}
             />
           )}
         </div>

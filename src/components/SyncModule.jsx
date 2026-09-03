@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cloud, CloudLightning, Wifi, WifiOff, RefreshCw, Download, Upload, Copy, Check, Info, HelpCircle, Key, Eye, EyeOff } from 'lucide-react';
+import { Cloud, CloudLightning, Wifi, WifiOff, RefreshCw, Download, Upload, Copy, Check, Info, HelpCircle, Key, Eye, EyeOff, Sparkles } from 'lucide-react';
 
 export default function SyncModule({
   firebaseConfig,
@@ -12,10 +12,13 @@ export default function SyncModule({
   syncLoading,
   lastSyncTime,
   isAutoSyncEnabled,
-  setIsAutoSyncEnabled
+  setIsAutoSyncEnabled,
+  geminiApiKey,
+  setGeminiApiKey
 }) {
   const [showConfig, setShowConfig] = useState(true);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleInputChange = (field, value) => {
@@ -251,6 +254,77 @@ export default function SyncModule({
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Gemini AI Configuration Card */}
+          <div className="bg-[#171a24] border border-[#e0a96d]/15 p-6 rounded-xl space-y-4 shadow-lg">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h4 className="text-base font-bold text-slate-100 font-outfit flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#e0a96d]" />
+                <span>Inteligencia Artificial (Google Gemini)</span>
+              </h4>
+              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                geminiApiKey?.trim() 
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+              }`}>
+                {geminiApiKey?.trim() ? 'IA Conectada' : 'Pendiente'}
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Potencia el **Armario Virtual Inteligente** con visión computacional para reconocer prendas por foto y autollenar su categoría, corte, color y etiquetas.
+            </p>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-400 flex items-center justify-between">
+                <span>Gemini API Key</span>
+                <button
+                  type="button"
+                  onClick={() => setShowGeminiKey(!showGeminiKey)}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1 cursor-pointer"
+                >
+                  {showGeminiKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  <span>{showGeminiKey ? 'Ocultar' : 'Ver'}</span>
+                </button>
+              </label>
+
+              <div className="flex gap-2">
+                <input
+                  type={showGeminiKey ? 'text' : 'password'}
+                  placeholder="AIzaSy..."
+                  value={geminiApiKey || ''}
+                  onChange={(e) => {
+                    setGeminiApiKey(e.target.value);
+                  }}
+                  className="flex-1 bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs font-mono focus:outline-none focus:border-[#e0a96d]"
+                />
+                {geminiApiKey && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGeminiApiKey('');
+                      showToast('warning', 'Clave eliminada', 'Se removió la Gemini API Key local.');
+                    }}
+                    className="bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 text-xs font-bold px-3 py-2 rounded-lg border border-slate-700 cursor-pointer transition-colors"
+                  >
+                    Borrar
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+                <span>* Tu clave se guarda exclusivamente en tu navegador (localStorage).</span>
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#e0a96d] hover:underline font-bold flex items-center gap-1"
+                >
+                  Obtener API Key gratis &rarr;
+                </a>
+              </div>
+            </div>
           </div>
 
           {/* Sync Operations Card (Visible only when configured) */}

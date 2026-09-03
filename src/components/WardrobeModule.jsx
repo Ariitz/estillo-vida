@@ -1,12 +1,33 @@
 import React, { useState } from 'react';
-import { Shirt, Check, AlertTriangle, Plus, Trash2, Heart, Award, RefreshCw, X, Sparkles } from 'lucide-react';
+import { 
+  Shirt, 
+  Check, 
+  AlertTriangle, 
+  Plus, 
+  Trash2, 
+  Heart, 
+  Award, 
+  RefreshCw, 
+  X, 
+  Sparkles,
+  Camera,
+  UploadCloud,
+  Loader2,
+  Image as ImageIcon,
+  Key,
+  Eye,
+  EyeOff
+} from 'lucide-react';
+import { compressImage, analyzeClothingImage } from '../utils/geminiService';
 
 export default function WardrobeModule({
   wardrobe,
   setWardrobe,
   customOutfits,
   setCustomOutfits,
-  showToast
+  showToast,
+  geminiApiKey,
+  setGeminiApiKey
 }) {
   const [activeTab, setActiveTab] = useState('closet'); // 'closet' | 'outfits'
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -17,6 +38,13 @@ export default function WardrobeModule({
   const [gCategory, setGCategory] = useState('tops');
   const [gColor, setGColor] = useState('');
   const [gTags, setGTags] = useState('');
+  const [gImage, setGImage] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Gemini API Key inline modal
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [tempApiKey, setTempApiKey] = useState('');
+  const [showTempKey, setShowTempKey] = useState(false);
   
   // Add custom outfit form
   const [isAddingOutfit, setIsAddingOutfit] = useState(false);
@@ -79,6 +107,58 @@ export default function WardrobeModule({
     }
   ];
 
+  // AI Image analysis handler
+  const runAiAnalysis = async (base64, mimeType) => {
+    if (!geminiApiKey?.trim()) {
+      setShowApiKeyModal(true);
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const result = await analyzeClothingImage(base64, mimeType, geminiApiKey);
+      if (result.name) setGName(result.name);
+      if (result.category) setGCategory(result.category);
+      if (result.color) setGColor(result.color);
+      if (result.tags?.length > 0) setGTags(result.tags.join(', '));
+      showToast('success', 'Prenda Reconocida con IA', `Gemini clasificó: "${result.name}"`);
+    } catch (err) {
+      console.error('AI analysis error:', err);
+      showToast('error', 'Fallo de Análisis IA', err.message);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      showToast('info', 'Procesando Foto', 'Comprimiendo imagen...');
+      const { dataUrl, base64, mimeType } = await compressImage(file);
+      setGImage(dataUrl);
+
+      if (geminiApiKey?.trim()) {
+        await runAiAnalysis(base64, mimeType);
+      } else {
+        showToast('info', 'Foto Cargada', 'Configura tu Gemini API Key para autollenar detalles automáticamente con IA.');
+      }
+    } catch (err) {
+      console.error('Image compression error:', err);
+      showToast('error', 'Error de Imagen', err.message);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleReanalyze = async () => {
+    if (!gImage) return;
+    const base64 = gImage.split(',')[1];
+    const mimeType = gImage.split(';')[0].replace('data:', '') || 'image/jpeg';
+    await runAiAnalysis(base64, mimeType);
+  };
+
   const handleAddGarment = (e) => {
     e.preventDefault();
     if (!gName.trim()) return;
@@ -90,13 +170,15 @@ export default function WardrobeModule({
       category: gCategory,
       isClean: true,
       color: gColor || 'Varios',
-      tags: tagsArr
+      tags: tagsArr,
+      image: gImage || null
     };
 
     setWardrobe([...wardrobe, newGarment]);
     setGName('');
     setGColor('');
     setGTags('');
+    setGImage('');
     setIsAddingGarment(false);
     showToast('success', 'Prenda Registrada', `Se añadió "${gName}" a tu Armario.`);
   };
@@ -240,13 +322,36 @@ export default function WardrobeModule({
               </div>
             </div>
             
-            <button
-              onClick={() => setIsAddingGarment(!isAddingGarment)}
-              className="w-full btn-rose-gold text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Registrar Prenda</span>
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={() => setIsAddingGarment(!isAddingGarment)}
+                className="w-full btn-rose-gold text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Registrar Prenda</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTempApiKey(geminiApiKey || '');
+                  setShowApiKeyModal(true);
+                }}
+                className="w-full bg-[#0b0c10] hover:bg-slate-800 border border-[#e0a96d]/20 text-slate-300 text-xs font-semibold py-2 px-3 rounded-xl flex items-center justify-between cursor-pointer transition-all"
+              >
+                <span className="flex items-center gap-1.5 text-xs text-[#e0a96d]">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>IA Gemini</span>
+                </span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                  geminiApiKey?.trim()
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                }`}>
+                  {geminiApiKey?.trim() ? 'Activa' : 'Configurar'}
+                </span>
+              </button>
+            </div>
           </div>
 
           {/* Garments Display (Right Side) */}
@@ -280,7 +385,136 @@ export default function WardrobeModule({
 
             {/* Add Garment Form */}
             {isAddingGarment && (
-              <form onSubmit={handleAddGarment} className="bg-[#171a24] border border-[#e0a96d]/20 p-5 rounded-xl grid grid-cols-1 md:grid-cols-4 gap-4 animate-fade-in">
+              <form onSubmit={handleAddGarment} className="bg-[#171a24] border border-[#e0a96d]/20 p-5 rounded-xl grid grid-cols-1 md:grid-cols-4 gap-4 animate-fade-in shadow-xl">
+                
+                {/* Header & AI Quick Switch */}
+                <div className="md:col-span-4 flex items-center justify-between pb-2 border-b border-slate-800">
+                  <h4 className="text-sm font-bold text-slate-100 font-outfit flex items-center gap-2">
+                    <Shirt className="w-4 h-4 text-[#e0a96d]" />
+                    <span>Nueva Prenda en el Armario</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempApiKey(geminiApiKey || '');
+                      setShowApiKeyModal(true);
+                    }}
+                    className="text-[11px] text-[#e0a96d] hover:underline flex items-center gap-1 cursor-pointer font-semibold"
+                  >
+                    <Key className="w-3 h-3" />
+                    <span>{geminiApiKey?.trim() ? 'API Key configurada' : 'Configurar Gemini API Key'}</span>
+                  </button>
+                </div>
+
+                {/* Photo Upload & AI Scanner Area */}
+                <div className="md:col-span-4 bg-[#0b0c10] border border-[#e0a96d]/15 rounded-xl p-4">
+                  {gImage ? (
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <div className="relative w-28 h-28 shrink-0 rounded-lg overflow-hidden border border-[#e0a96d]/30 bg-slate-900 shadow-md">
+                        <img src={gImage} alt="Vista previa de la prenda" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setGImage('')}
+                          className="absolute top-1 right-1 bg-rose-500/80 hover:bg-rose-600 text-white p-1 rounded-full shadow cursor-pointer transition-colors"
+                          title="Eliminar foto"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      <div className="flex-1 text-center sm:text-left space-y-2">
+                        {isAnalyzing ? (
+                          <div className="space-y-1">
+                            <span className="flex items-center gap-2 text-xs font-bold text-[#e0a96d] animate-pulse justify-center sm:justify-start">
+                              <Loader2 className="w-4 h-4 animate-spin text-[#e0a96d]" />
+                              <span>Gemini está analizando la prenda...</span>
+                            </span>
+                            <p className="text-[11px] text-slate-400">
+                              Detectando silueta, corte, textura, color y etiquetas de estilo.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 justify-center sm:justify-start">
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Foto lista para tu armario</span>
+                            </span>
+                            <p className="text-[11px] text-slate-400">
+                              La foto se guardará en la ficha de la prenda. Puedes pedirle a la IA que re-analice si ajustaste la foto.
+                            </p>
+                            <div className="flex flex-wrap gap-2 pt-1 justify-center sm:justify-start">
+                              <button
+                                type="button"
+                                onClick={handleReanalyze}
+                                disabled={isAnalyzing}
+                                className="bg-[#e0a96d]/10 hover:bg-[#e0a96d]/20 border border-[#e0a96d]/30 text-[#e0a96d] text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all"
+                              >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Re-analizar con IA</span>
+                              </button>
+                              <label className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors">
+                                <Camera className="w-3.5 h-3.5" />
+                                <span>Cambiar foto</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  onChange={handleFileChange}
+                                  className="hidden"
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="flex flex-col sm:flex-row items-center justify-center gap-4 p-5 border-2 border-dashed border-[#e0a96d]/25 hover:border-[#e0a96d] hover:bg-[#e0a96d]/5 rounded-xl cursor-pointer transition-all group">
+                        <div className="p-3.5 bg-[#e0a96d]/10 text-[#e0a96d] rounded-full group-hover:scale-110 transition-transform">
+                          <Camera className="w-6 h-6" />
+                        </div>
+                        <div className="text-center sm:text-left">
+                          <div className="flex items-center gap-2 justify-center sm:justify-start">
+                            <span className="text-xs font-bold text-slate-100">
+                              Subir foto o Tomar con la cámara
+                            </span>
+                            <span className="bg-[#e0a96d]/10 text-[#e0a96d] text-[10px] px-2 py-0.5 rounded-full font-bold border border-[#e0a96d]/20 flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" /> Autollenado con IA
+                            </span>
+                          </div>
+                          <span className="block text-[11px] text-slate-400 mt-1">
+                            Sube una foto de tu ropa y Gemini autocompletará el nombre, categoría, color y etiquetas.
+                          </span>
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                      </label>
+                      
+                      {!geminiApiKey && (
+                        <div className="flex items-center justify-between text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg mt-3">
+                          <span>Para autollenar automáticamente necesitas ingresar tu Gemini API Key (gratis).</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTempApiKey('');
+                              setShowApiKeyModal(true);
+                            }}
+                            className="text-[#e0a96d] hover:underline font-bold ml-2 shrink-0 cursor-pointer"
+                          >
+                            Configurar clave &rarr;
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="md:col-span-2">
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre de la Prenda</label>
                   <input
@@ -327,16 +561,27 @@ export default function WardrobeModule({
                 <div className="flex gap-2 items-end justify-end md:col-span-1">
                   <button
                     type="button"
-                    onClick={() => setIsAddingGarment(false)}
+                    onClick={() => {
+                      setIsAddingGarment(false);
+                      setGImage('');
+                    }}
                     className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors"
+                    disabled={isAnalyzing}
+                    className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors flex items-center gap-1.5"
                   >
-                    Guardar
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Analizando...</span>
+                      </>
+                    ) : (
+                      <span>Guardar</span>
+                    )}
                   </button>
                 </div>
               </form>
@@ -351,8 +596,19 @@ export default function WardrobeModule({
                 </div>
               ) : (
                 filteredGarments.map(item => (
-                  <div key={item.id} className="bg-[#171a24] border border-[#e0a96d]/15 p-4 rounded-xl flex flex-col justify-between shadow-md">
+                  <div key={item.id} className="bg-[#171a24] border border-[#e0a96d]/15 p-4 rounded-xl flex flex-col justify-between shadow-md group">
                     <div>
+                      {item.image && (
+                        <div className="w-full h-44 rounded-lg overflow-hidden mb-3 bg-[#0b0c10] relative border border-[#e0a96d]/10">
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
+
                       <div className="flex justify-between items-start gap-2">
                         <span className="text-[9px] uppercase font-bold text-slate-400 bg-[#0b0c10] px-2 py-0.5 rounded">
                           {categories[item.category]?.split(' / ')[0]}
@@ -596,6 +852,92 @@ export default function WardrobeModule({
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* Gemini API Key Configuration Modal */}
+      {showApiKeyModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[#171a24] border border-[#e0a96d]/30 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 font-outfit flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-[#e0a96d]" />
+                <span>Configurar Google Gemini AI</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowApiKeyModal(false)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              La clave de API permite que Google Gemini reconozca la foto de tu ropa y autollene su categoría, corte, colores y etiquetas de estilo automáticamente.
+            </p>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-400">Gemini API Key</label>
+                <button
+                  type="button"
+                  onClick={() => setShowTempKey(!showTempKey)}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1 cursor-pointer"
+                >
+                  {showTempKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  <span>{showTempKey ? 'Ocultar' : 'Ver'}</span>
+                </button>
+              </div>
+              <input
+                type={showTempKey ? 'text' : 'password'}
+                placeholder="AIzaSy..."
+                value={tempApiKey}
+                onChange={(e) => setTempApiKey(e.target.value)}
+                className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2.5 px-3 text-slate-100 text-xs font-mono focus:outline-none focus:border-[#e0a96d]"
+              />
+            </div>
+
+            <div className="p-3 bg-[#0b0c10] rounded-lg border border-slate-800 text-[11px] text-slate-400 space-y-1">
+              <span className="block font-bold text-slate-300">¿Cómo obtenerla gratis?</span>
+              <p>
+                Entra a{' '}
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#e0a96d] hover:underline font-bold"
+                >
+                  Google AI Studio
+                </a>{' '}
+                con tu cuenta de Google y crea una API Key gratuita para uso personal.
+              </p>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowApiKeyModal(false)}
+                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGeminiApiKey(tempApiKey.trim());
+                  setShowApiKeyModal(false);
+                  showToast('success', 'Clave Guardada', 'Gemini AI está listo para analizar prendas.');
+                  if (gImage && tempApiKey.trim()) {
+                    handleReanalyze();
+                  }
+                }}
+                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors"
+              >
+                Guardar Clave
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
