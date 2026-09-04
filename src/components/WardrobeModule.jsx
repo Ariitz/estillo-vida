@@ -16,9 +16,17 @@ import {
   Image as ImageIcon,
   Key,
   Eye,
-  EyeOff
+  EyeOff,
+  Briefcase,
+  Compass,
+  CheckCircle2,
+  BookmarkPlus,
+  ArrowRight,
+  Wand2,
+  Calendar,
+  Layers
 } from 'lucide-react';
-import { compressImage, analyzeClothingImage } from '../utils/geminiService';
+import { compressImage, analyzeClothingImage, recommendOutfitForOccasion } from '../utils/geminiService';
 
 export default function WardrobeModule({
   wardrobe,
@@ -29,7 +37,7 @@ export default function WardrobeModule({
   geminiApiKey,
   setGeminiApiKey
 }) {
-  const [activeTab, setActiveTab] = useState('closet'); // 'closet' | 'outfits'
+  const [activeTab, setActiveTab] = useState('closet'); // 'closet' | 'stylist' | 'outfits'
   const [categoryFilter, setCategoryFilter] = useState('all');
   
   // Add garment form
@@ -50,6 +58,30 @@ export default function WardrobeModule({
   const [isAddingOutfit, setIsAddingOutfit] = useState(false);
   const [outfitName, setOutfitName] = useState('');
   const [selectedGarments, setSelectedGarments] = useState([]);
+
+  // AI Stylist by Occasion states
+  const [selectedOccasionPreset, setSelectedOccasionPreset] = useState('Junta de Trabajo / Ejecutiva');
+  const [customOccasion, setCustomOccasion] = useState('');
+  const [isGeneratingOutfit, setIsGeneratingOutfit] = useState(false);
+  const [recommendedOutfit, setRecommendedOutfit] = useState(null);
+
+  const presetOccasions = [
+    { id: 'work', label: 'Junta de Trabajo / Ejecutiva', icon: '💼', desc: 'Formal, pulcro y estructurado' },
+    { id: 'cafe', label: 'Café de Negocios / Casual', icon: '☕', desc: 'Smart casual moderno y relajado' },
+    { id: 'creative', label: 'Reunión Creativa / Tech Chic', icon: '🎨', desc: 'Expresivo con toques de diseño' },
+    { id: 'dinner', label: 'Cena / Salida Social', icon: '🍷', desc: 'Elegante, sobrio y sofisticado' },
+    { id: 'comfort', label: 'Día Casual / Home Office', icon: '🌿', desc: 'Máximo confort y silueta limpia' },
+    { id: 'gala', label: 'Evento Especial / Gala', icon: '✨', desc: 'Impecable y distinguido' }
+  ];
+
+  const cleanGarments = wardrobe.filter(item => item.isClean);
+  const cleanCountByCategory = {
+    tops: cleanGarments.filter(g => g.category === 'tops').length,
+    bottoms: cleanGarments.filter(g => g.category === 'bottoms').length,
+    outerwear: cleanGarments.filter(g => g.category === 'outerwear').length,
+    footwear: cleanGarments.filter(g => g.category === 'footwear').length,
+    accessories: cleanGarments.filter(g => g.category === 'accessories').length
+  };
 
   const categories = {
     tops: 'Tops / Camisas / Playeras',
@@ -234,6 +266,59 @@ export default function WardrobeModule({
     }
   };
 
+  // AI Stylist Handlers
+  const handleGenerateOutfit = async (overrideOccasion) => {
+    const occasionToUse = overrideOccasion || customOccasion.trim() || selectedOccasionPreset;
+    if (!occasionToUse) {
+      showToast('warning', 'Ocasión Requerida', 'Elige o describe el tipo de reunión o evento.');
+      return;
+    }
+
+    if (cleanGarments.length === 0) {
+      showToast('error', 'Sin Ropa Limpia', 'No tienes prendas marcadas como limpias actualmente en tu armario.');
+      return;
+    }
+
+    setIsGeneratingOutfit(true);
+    try {
+      showToast('info', 'Consultando a tu Estilista IA', `Diseñando look para "${occasionToUse}"...`);
+      const result = await recommendOutfitForOccasion(cleanGarments, occasionToUse, geminiApiKey);
+      setRecommendedOutfit(result);
+      showToast('success', '¡Outfit Armado!', `Se diseñó "${result.outfitName}" con tus prendas limpias.`);
+    } catch (err) {
+      console.error('Stylist error:', err);
+      showToast('error', 'Error del Estilista', err.message);
+    } finally {
+      setIsGeneratingOutfit(false);
+    }
+  };
+
+  const handleSaveRecommendedOutfit = () => {
+    if (!recommendedOutfit || !recommendedOutfit.selectedGarmentIds?.length) return;
+    const newOutfit = {
+      id: Date.now().toString(),
+      name: recommendedOutfit.outfitName,
+      garmentIds: recommendedOutfit.selectedGarmentIds
+    };
+    setCustomOutfits([...customOutfits, newOutfit]);
+    showToast('success', 'Outfit Guardado', `"${recommendedOutfit.outfitName}" se guardó en tus combinaciones.`);
+  };
+
+  const handleWearOutfit = () => {
+    if (!recommendedOutfit || !recommendedOutfit.selectedGarmentIds?.length) return;
+    
+    const count = recommendedOutfit.selectedGarmentIds.length;
+    const updated = wardrobe.map(g => {
+      if (recommendedOutfit.selectedGarmentIds.includes(g.id)) {
+        return { ...g, isClean: false };
+      }
+      return g;
+    });
+
+    setWardrobe(updated);
+    showToast('info', '¡Que tengas excelente reunión!', `${count} prendas del outfit pasaron a "En Lavandería / Sucia".`);
+  };
+
   // Helper to trace look items in current wardrobe
   const resolveLookStatus = (lookItems) => {
     let resolved = [];
@@ -279,26 +364,44 @@ export default function WardrobeModule({
     <div className="space-y-6 animate-fade-in">
       
       {/* Top Tabs */}
-      <div className="flex border-b border-[#e0a96d]/15">
+      <div className="flex flex-wrap border-b border-[#e0a96d]/15 gap-1 sm:gap-2">
         <button
           onClick={() => setActiveTab('closet')}
-          className={`py-2 px-6 font-outfit text-sm font-bold border-b-2 transition-all cursor-pointer ${
+          className={`py-2.5 px-4 font-outfit text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
             activeTab === 'closet' 
               ? 'border-[#e0a96d] text-[#e0a96d]' 
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          👚 Mi Armario ({wardrobe.length})
+          <span>👚</span>
+          <span>Mi Armario ({wardrobe.length})</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('stylist')}
+          className={`py-2.5 px-4 font-outfit text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            activeTab === 'stylist' 
+              ? 'border-[#e0a96d] text-[#e0a96d]' 
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5 text-[#e0a96d]" />
+          <span>Estilista IA por Ocasión</span>
+          <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.2 rounded-full font-mono">
+            {cleanGarments.length} limpias
+          </span>
+        </button>
+
         <button
           onClick={() => setActiveTab('outfits')}
-          className={`py-2 px-6 font-outfit text-sm font-bold border-b-2 transition-all cursor-pointer ${
+          className={`py-2.5 px-4 font-outfit text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
             activeTab === 'outfits' 
               ? 'border-[#e0a96d] text-[#e0a96d]' 
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          ✨ Diseñador & Outfits
+          <span>👗</span>
+          <span>Mis Outfits & Sugerencias</span>
         </button>
       </div>
 
@@ -356,6 +459,30 @@ export default function WardrobeModule({
 
           {/* Garments Display (Right Side) */}
           <div className="lg:col-span-3 space-y-6">
+            
+            {/* Quick Stylist Banner */}
+            <div className="bg-gradient-to-r from-[#171a24] via-[#1c1f2e] to-[#171a24] border border-[#e0a96d]/20 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[#e0a96d]/10 border border-[#e0a96d]/25 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5 text-[#e0a96d]" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-100 font-outfit">¿Tienes una reunión hoy?</h4>
+                  <p className="text-[11px] text-slate-400">
+                    Tienes <span className="text-emerald-400 font-semibold">{cleanGarments.length} prendas limpias</span> listas. Deja que tu Estilista IA arme el conjunto perfecto.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('stylist')}
+                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 shrink-0 cursor-pointer transition-all"
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                <span>Armar Outfit con IA</span>
+              </button>
+            </div>
+
             {/* Category selection row */}
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
               <button
@@ -652,6 +779,355 @@ export default function WardrobeModule({
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* View: AI STYLIST BY OCCASION */}
+      {activeTab === 'stylist' && (
+        <div className="space-y-6 animate-fade-in">
+          
+          {/* Hero Banner / Header */}
+          <div className="bg-[#171a24] border border-[#e0a96d]/20 p-6 rounded-2xl relative overflow-hidden shadow-xl">
+            <div className="absolute -top-12 -right-12 w-48 h-48 bg-[#e0a96d]/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="p-1.5 rounded-lg bg-[#e0a96d]/10 border border-[#e0a96d]/25 text-[#e0a96d]">
+                    <Sparkles className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-bold text-[#e0a96d] uppercase tracking-wider font-mono">
+                    AURA Personal Stylist AI
+                  </span>
+                </div>
+                <h3 className="text-xl font-bold text-slate-100 font-outfit">
+                  Estilista IA: Outfits por Ocasión & Reunión
+                </h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                  Indica qué tipo de reunión, junta o evento tienes hoy. La inteligencia artificial analizará tus <span className="text-emerald-400 font-semibold">{cleanGarments.length} prendas limpias</span> para armar una combinación óptima, cuidando etiqueta, paleta de color y estilo.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 self-start md:self-center">
+                <span className={`text-[10px] font-bold px-3 py-1 rounded-full border flex items-center gap-1.5 ${
+                  geminiApiKey?.trim()
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${geminiApiKey?.trim() ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  <span>{geminiApiKey?.trim() ? 'Gemini 3 Flash Conectado' : 'Modo Algorítmico Local'}</span>
+                </span>
+                {!geminiApiKey?.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempApiKey('');
+                      setShowApiKeyModal(true);
+                    }}
+                    className="text-[10px] text-[#e0a96d] hover:underline font-bold"
+                  >
+                    Activar Gemini IA &rarr;
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Clean garments availability bar */}
+            <div className="mt-6 pt-4 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-5 gap-3 relative z-10">
+              <div className="p-2.5 bg-[#0b0c10] border border-slate-800 rounded-lg text-center">
+                <span className="text-[10px] text-slate-500 block uppercase font-mono">Tops Limpios</span>
+                <span className={`text-sm font-bold font-outfit ${cleanCountByCategory.tops > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {cleanCountByCategory.tops}
+                </span>
+              </div>
+              <div className="p-2.5 bg-[#0b0c10] border border-slate-800 rounded-lg text-center">
+                <span className="text-[10px] text-slate-500 block uppercase font-mono">Pantalones Limpios</span>
+                <span className={`text-sm font-bold font-outfit ${cleanCountByCategory.bottoms > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {cleanCountByCategory.bottoms}
+                </span>
+              </div>
+              <div className="p-2.5 bg-[#0b0c10] border border-slate-800 rounded-lg text-center">
+                <span className="text-[10px] text-slate-500 block uppercase font-mono">Abrigos / Blazers</span>
+                <span className={`text-sm font-bold font-outfit ${cleanCountByCategory.outerwear > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  {cleanCountByCategory.outerwear}
+                </span>
+              </div>
+              <div className="p-2.5 bg-[#0b0c10] border border-slate-800 rounded-lg text-center">
+                <span className="text-[10px] text-slate-500 block uppercase font-mono">Calzado Limpio</span>
+                <span className={`text-sm font-bold font-outfit ${cleanCountByCategory.footwear > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  {cleanCountByCategory.footwear}
+                </span>
+              </div>
+              <div className="col-span-2 sm:col-span-1 p-2.5 bg-[#0b0c10] border border-slate-800 rounded-lg text-center">
+                <span className="text-[10px] text-slate-500 block uppercase font-mono">Accesorios</span>
+                <span className={`text-sm font-bold font-outfit ${cleanCountByCategory.accessories > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  {cleanCountByCategory.accessories}
+                </span>
+              </div>
+            </div>
+
+            {/* Warning if 0 bottoms or 0 tops */}
+            {(cleanCountByCategory.tops === 0 || cleanCountByCategory.bottoms === 0) && (
+              <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2 text-xs text-amber-300 relative z-10">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>
+                  {cleanCountByCategory.bottoms === 0 && cleanCountByCategory.tops === 0
+                    ? 'No tienes tops ni pantalones marcados como limpios. Puedes cambiar su estado a "Limpia" en la pestaña Mi Armario.'
+                    : cleanCountByCategory.bottoms === 0
+                    ? 'Nota: No tienes pantalones limpios. La IA intentará sugerir un look o puedes marcar alguno como limpio.'
+                    : 'Nota: No tienes prendas superiores (tops) limpias registradas actualmente.'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Occasion Selector & Input Form */}
+          <div className="bg-[#171a24] border border-[#e0a96d]/15 p-6 rounded-2xl space-y-6 shadow-lg">
+            <div>
+              <label className="block text-xs font-bold text-[#e0a96d] uppercase tracking-wider mb-2 font-mono flex items-center gap-1.5">
+                <Briefcase className="w-3.5 h-3.5" />
+                <span>1. Elige una Ocasión o Tipo de Reunión</span>
+              </label>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {presetOccasions.map((occ) => {
+                  const isSelected = selectedOccasionPreset === occ.label && !customOccasion.trim();
+                  return (
+                    <button
+                      key={occ.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedOccasionPreset(occ.label);
+                        setCustomOccasion('');
+                      }}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                        isSelected
+                          ? 'bg-[#e0a96d]/10 border-[#e0a96d] shadow-md shadow-[#e0a96d]/5'
+                          : 'bg-[#0b0c10] border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <span className="text-xl shrink-0 p-1 rounded-lg bg-slate-900 border border-slate-800">
+                        {occ.icon}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <h5 className={`text-xs font-bold font-outfit ${isSelected ? 'text-[#e0a96d]' : 'text-slate-200'}`}>
+                          {occ.label}
+                        </h5>
+                        <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                          {occ.desc}
+                        </p>
+                      </div>
+                      {isSelected && (
+                        <CheckCircle2 className="w-4 h-4 text-[#e0a96d] shrink-0 mt-0.5" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Custom Occasion Description Input */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-[#e0a96d] uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <Wand2 className="w-3.5 h-3.5" />
+                <span>2. O escribe detalles específicos de tu reunión (Opcional)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Ej. Junta con inversionistas por la tarde en terraza templada, formal pero no acartonado..."
+                  value={customOccasion}
+                  onChange={(e) => setCustomOccasion(e.target.value)}
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-xl py-3 px-4 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#e0a96d] shadow-inner"
+                />
+                {customOccasion && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomOccasion('')}
+                    className="absolute right-3 top-3 text-slate-500 hover:text-slate-300 p-0.5 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-500">
+                * Puedes especificar clima, lugar, nivel de jerarquía o requerimientos de confort.
+              </p>
+            </div>
+
+            {/* CTA Button */}
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-slate-400 flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Solo se utilizarán prendas marcadas como <strong>limpias ({cleanGarments.length})</strong>.</span>
+              </div>
+
+              <button
+                type="button"
+                disabled={isGeneratingOutfit || cleanGarments.length === 0}
+                onClick={() => handleGenerateOutfit()}
+                className={`w-full sm:w-auto btn-rose-gold text-xs font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-lg ${
+                  isGeneratingOutfit ? 'opacity-80 cursor-wait' : ''
+                }`}
+              >
+                {isGeneratingOutfit ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-[#0b0c10]" />
+                    <span>Diseñando Outfit con IA...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-[#0b0c10]" />
+                    <span>Armar Outfit para esta Reunión</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Recommended Outfit Display */}
+          {recommendedOutfit && (
+            <div className="bg-[#171a24] border border-[#e0a96d]/30 rounded-2xl p-6 space-y-6 shadow-2xl animate-fade-in">
+              
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#e0a96d] font-bold flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" /> Propuesta de tu Estilista
+                  </span>
+                  <h4 className="text-xl font-bold text-slate-100 font-outfit">
+                    {recommendedOutfit.outfitName}
+                  </h4>
+                </div>
+                <div className="flex items-center gap-2 self-start sm:self-center">
+                  <span className="bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/30 text-xs font-bold px-3 py-1 rounded-full">
+                    {recommendedOutfit.formalityLevel || 'Smart Casual'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Rationale & Tips Box */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 bg-[#0b0c10] border border-[#e0a96d]/15 rounded-xl space-y-1.5">
+                  <span className="text-xs font-bold text-[#e0a96d] flex items-center gap-1.5 font-outfit">
+                    <Compass className="w-3.5 h-3.5" />
+                    <span>Por qué funciona este look</span>
+                  </span>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    {recommendedOutfit.styleRationale}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-[#0b0c10] border border-[#e0a96d]/15 rounded-xl space-y-1.5">
+                  <span className="text-xs font-bold text-[#e0a96d] flex items-center gap-1.5 font-outfit">
+                    <Award className="w-3.5 h-3.5" />
+                    <span>Consejos de estilismo</span>
+                  </span>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    {recommendedOutfit.stylingTips}
+                  </p>
+                </div>
+              </div>
+
+              {/* Garments Visual Grid */}
+              <div className="space-y-3">
+                <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-[#e0a96d]" />
+                  <span>Prendas seleccionadas ({recommendedOutfit.selectedGarmentIds.length})</span>
+                </h5>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                  {recommendedOutfit.selectedGarmentIds.map((garmentId) => {
+                    const garment = wardrobe.find(g => g.id === garmentId);
+                    if (!garment) return null;
+
+                    return (
+                      <div
+                        key={garment.id}
+                        className="bg-[#0b0c10] border border-[#e0a96d]/20 rounded-xl overflow-hidden shadow flex flex-col justify-between hover:border-[#e0a96d]/40 transition-all"
+                      >
+                        {/* Photo or placeholder */}
+                        <div className="relative h-36 bg-slate-900 flex items-center justify-center overflow-hidden border-b border-slate-800">
+                          {garment.image ? (
+                            <img
+                              src={garment.image}
+                              alt={garment.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Shirt className="w-12 h-12 text-slate-700" />
+                          )}
+                          <span className="absolute top-2 left-2 bg-[#0b0c10]/80 backdrop-blur-sm border border-slate-700 text-slate-300 text-[9px] font-bold px-2 py-0.5 rounded capitalize">
+                            {categories[garment.category]?.split(' / ')[0] || garment.category}
+                          </span>
+                          <span className="absolute top-2 right-2 bg-emerald-500/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 shadow">
+                            <Check className="w-2.5 h-2.5" />
+                            <span>Limpia</span>
+                          </span>
+                        </div>
+
+                        {/* Details */}
+                        <div className="p-3.5 space-y-2">
+                          <h6 className="text-xs font-bold text-slate-100 font-outfit line-clamp-1">
+                            {garment.name}
+                          </h6>
+                          <div className="flex items-center justify-between text-[11px] text-slate-400">
+                            <span>Color:</span>
+                            <span className="font-semibold text-slate-200">{garment.color}</span>
+                          </div>
+
+                          {garment.tags?.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {garment.tags.slice(0, 3).map((t, idx) => (
+                                <span
+                                  key={idx}
+                                  className="text-[9px] text-[#e0a96d] bg-[#e0a96d]/10 px-1.5 py-0.5 rounded border border-[#e0a96d]/20"
+                                >
+                                  #{t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action Buttons Bar */}
+              <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleGenerateOutfit()}
+                  className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2.5 px-4 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-[#e0a96d]" />
+                  <span>Generar otra opción</span>
+                </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleWearOutfit}
+                    className="border border-rose-500/30 hover:bg-rose-500/10 text-rose-300 text-xs font-bold py-2.5 px-4 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all"
+                    title="Marca estas prendas como usadas / en lavandería"
+                  >
+                    <Shirt className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Vestir Outfit Hoy (Mover a Lavandería)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveRecommendedOutfit}
+                    className="btn-rose-gold text-xs font-bold py-2.5 px-5 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg transition-all"
+                  >
+                    <BookmarkPlus className="w-4 h-4 text-[#0b0c10]" />
+                    <span>Guardar en Mis Outfits</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
