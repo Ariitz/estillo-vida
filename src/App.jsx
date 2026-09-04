@@ -145,6 +145,79 @@ const initialWardrobe = [
   { id: 'w-10', name: 'Scrunchie de Satén', category: 'accessories', isClean: true, color: 'Verde Salvia', tags: ['satén', 'anti-frizz'] }
 ];
 
+const initialSelfCareActivities = [
+  {
+    id: 'sc-1',
+    title: 'Manicura & Pedicura Casera',
+    frequency: 'weekly',
+    daysInterval: 7,
+    lastCompletedDate: '2026-08-28',
+    category: 'beauty',
+    notes: 'Limado suave, nutrición de cutículas y cuidado de uñas.',
+    protocol: 'Usa el esmalte amargo Mavala Stop y el anillo de enfoque/fidget si sientes ansiedad por morder tus uñas o jalar tu cabello (Protocolo Contra Ansiedad).'
+  },
+  {
+    id: 'sc-2',
+    title: 'Masajes / Drenaje Linfático',
+    frequency: 'monthly',
+    daysInterval: 30,
+    lastCompletedDate: '2026-08-10',
+    category: 'wellness',
+    notes: 'Sesión para desinflamar, reactivar circulación y liberar toxinas y tensión muscular.',
+    protocol: 'Masaje manual o drenaje linfático suave. Mantener hidratación de 500ml de agua post-sesión.'
+  },
+  {
+    id: 'sc-3',
+    title: 'Corte de Cabello & Diseño de Cejas',
+    frequency: 'quarterly',
+    daysInterval: 90,
+    lastCompletedDate: '2026-06-15',
+    category: 'hair',
+    notes: 'Despunte saludable de puntas 1b/1c y perfilado de cejas simétrico.',
+    protocol: 'Corte de puntas para prevenir horzuela sin perder largo. Evitar adelgazar en exceso.'
+  },
+  {
+    id: 'sc-4',
+    title: 'Oftalmólogo (Salud Visual)',
+    frequency: 'annual',
+    daysInterval: 365,
+    lastCompletedDate: '2025-11-20',
+    category: 'health',
+    notes: 'Monitoreo de agudeza visual, presión intraocular y salud de córnea tras fatiga por pantallas.',
+    protocol: 'Chequeo preventivo anual con cirujano oftalmólogo.'
+  },
+  {
+    id: 'sc-5',
+    title: 'Ginecólogo (Control Preventivo)',
+    frequency: 'annual',
+    daysInterval: 365,
+    lastCompletedDate: '2025-10-12',
+    category: 'health',
+    notes: 'Chequeo preventivo, ultrasonido pélvico y Papanicolaou.',
+    protocol: 'Agendar preferentemente en la primera semana posterior al fin del ciclo menstrual.'
+  },
+  {
+    id: 'sc-6',
+    title: 'Podólogo / Salud de Pies',
+    frequency: 'annual',
+    daysInterval: 365,
+    lastCompletedDate: '2026-02-05',
+    category: 'health',
+    notes: 'Cuidado clínico de pies, eliminación de callosidades y salud ungueal.',
+    protocol: 'Revisión podológica preventiva anual.'
+  },
+  {
+    id: 'sc-7',
+    title: 'Odontología (Limpieza & Bruxismo)',
+    frequency: 'biannual',
+    daysInterval: 180,
+    lastCompletedDate: '2026-03-10',
+    category: 'health',
+    notes: 'Limpieza dental profunda y ajuste de guarda oclusiva nocturna rígida.',
+    protocol: 'Chequeo semestral para prevenir desgaste dental por estrés o tensión mandibular.'
+  }
+];
+
 export default function App() {
   // Navigation & UI States
   const [activeModule, setActiveModule] = useState('schedule');
@@ -182,6 +255,10 @@ export default function App() {
 
   const [schedule, setSchedule] = useState(() =>
     getSavedArray('aura-schedule', initialSchedule)
+  );
+
+  const [selfCareActivities, setSelfCareActivities] = useState(() =>
+    getSavedArray('aura-selfcare', initialSelfCareActivities)
   );
 
   const [householdItems, setHouseholdItems] = useState(() =>
@@ -306,6 +383,7 @@ export default function App() {
       height,
       waterIntake,
       schedule,
+      selfCareActivities: selfCareActivities || [],
       householdItems,
       experiences,
       wardrobe,
@@ -334,6 +412,10 @@ export default function App() {
     if (Array.isArray(data.schedule)) {
       setSchedule(data.schedule);
       localStorage.setItem('aura-schedule', JSON.stringify(data.schedule));
+    }
+    if (Array.isArray(data.selfCareActivities)) {
+      setSelfCareActivities(data.selfCareActivities);
+      localStorage.setItem('aura-selfcare', JSON.stringify(data.selfCareActivities));
     }
     if (Array.isArray(data.householdItems)) {
       setHouseholdItems(data.householdItems);
@@ -494,6 +576,7 @@ export default function App() {
     height,
     waterIntake,
     schedule,
+    selfCareActivities,
     householdItems,
     experiences,
     wardrobe,
@@ -521,6 +604,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('aura-schedule', JSON.stringify(schedule));
   }, [schedule]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-selfcare', JSON.stringify(selfCareActivities));
+  }, [selfCareActivities]);
 
   useEffect(() => {
     localStorage.setItem('aura-household', JSON.stringify(householdItems));
@@ -787,6 +874,8 @@ export default function App() {
               setWaterIntake={setWaterIntake}
               schedule={schedule}
               setSchedule={setSchedule}
+              selfCareActivities={selfCareActivities}
+              setSelfCareActivities={setSelfCareActivities}
               showToast={showToast}
             />
           )}
