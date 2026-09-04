@@ -54,13 +54,15 @@ export default function ScheduleModule({
   const [editingItem, setEditingItem] = useState(null);
 
   // Self-Care Calendar state
-  const [selfCareFilter, setSelfCareFilter] = useState('all'); // 'all' | 'weekly' | 'monthly' | 'quarterly' | 'annual'
+  const [selfCareFilter, setSelfCareFilter] = useState('all'); // 'all' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | 'custom'
   const [isAddingSelfCare, setIsAddingSelfCare] = useState(false);
   const [editingSelfCareItem, setEditingSelfCareItem] = useState(null);
 
   // New Self-Care form fields
   const [scTitle, setScTitle] = useState('');
   const [scFrequency, setScFrequency] = useState('weekly');
+  const [scCustomValue, setScCustomValue] = useState(1);
+  const [scCustomUnit, setScCustomUnit] = useState('weeks'); // 'days' | 'weeks' | 'months' | 'years'
   const [scCategory, setScCategory] = useState('beauty');
   const [scNotes, setScNotes] = useState('');
   const [scProtocol, setScProtocol] = useState('');
@@ -197,9 +199,40 @@ export default function ScheduleModule({
     weekly: { label: 'Semanal (7 días)', short: 'Semanal', days: 7, badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
     biweekly: { label: 'Quincenal (15 días)', short: 'Quincenal', days: 15, badge: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
     monthly: { label: 'Mensual (30 días)', short: 'Mensual', days: 30, badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+    bimonthly: { label: 'Bimestral (60 días)', short: 'Cada 2 meses', days: 60, badge: 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20' },
     quarterly: { label: 'Trimestral (90 días)', short: 'Cada 3 meses', days: 90, badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
     biannual: { label: 'Semestral (180 días)', short: 'Cada 6 meses', days: 180, badge: 'bg-teal-500/10 text-teal-400 border-teal-500/20' },
-    annual: { label: 'Anual (365 días)', short: 'Anual (Médico)', days: 365, badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' }
+    annual: { label: 'Anual (365 días)', short: 'Anual (Médico)', days: 365, badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+    custom: { label: 'Personalizado', short: 'Personalizado', days: null, badge: 'bg-[#e0a96d]/15 text-[#e0a96d] border-[#e0a96d]/30' }
+  };
+
+  const getFrequencyDetails = (activity) => {
+    if (activity.frequency === 'custom' || activity.customValue) {
+      const val = Math.max(1, parseInt(activity.customValue, 10) || 1);
+      const unit = activity.customUnit || 'days';
+      let totalDays = val;
+      let unitLabel = val === 1 ? 'día' : 'días';
+      if (unit === 'days') {
+        totalDays = val;
+        unitLabel = val === 1 ? 'día' : 'días';
+      } else if (unit === 'weeks') {
+        totalDays = val * 7;
+        unitLabel = val === 1 ? 'semana' : 'semanas';
+      } else if (unit === 'months') {
+        totalDays = val * 30;
+        unitLabel = val === 1 ? 'mes' : 'meses';
+      } else if (unit === 'years') {
+        totalDays = val * 365;
+        unitLabel = val === 1 ? 'año' : 'años';
+      }
+      return {
+        label: `Cada ${val} ${unitLabel} (${totalDays}d)`,
+        short: `Cada ${val} ${unitLabel}`,
+        days: activity.daysInterval || totalDays,
+        badge: 'bg-[#e0a96d]/15 text-[#e0a96d] border-[#e0a96d]/30'
+      };
+    }
+    return frequencyMeta[activity.frequency] || frequencyMeta.monthly;
   };
 
   const categoryIcons = {
@@ -211,7 +244,8 @@ export default function ScheduleModule({
   };
 
   const getSelfCareStatus = (activity) => {
-    const interval = activity.daysInterval || frequencyMeta[activity.frequency]?.days || 30;
+    const freqInfo = getFrequencyDetails(activity);
+    const interval = activity.daysInterval || freqInfo.days || 30;
     if (!activity.lastCompletedDate) {
       return {
         status: 'pending_first',
@@ -309,12 +343,24 @@ export default function ScheduleModule({
     e.preventDefault();
     if (!scTitle.trim()) return;
 
-    const days = frequencyMeta[scFrequency]?.days || 30;
+    let days = 30;
+    if (scFrequency === 'custom') {
+      const val = Math.max(1, parseInt(scCustomValue, 10) || 1);
+      if (scCustomUnit === 'days') days = val;
+      else if (scCustomUnit === 'weeks') days = val * 7;
+      else if (scCustomUnit === 'months') days = val * 30;
+      else if (scCustomUnit === 'years') days = val * 365;
+    } else {
+      days = frequencyMeta[scFrequency]?.days || 30;
+    }
+
     const newItem = {
       id: 'sc-' + Date.now(),
       title: scTitle.trim(),
       frequency: scFrequency,
       daysInterval: days,
+      customValue: scFrequency === 'custom' ? (parseInt(scCustomValue, 10) || 1) : null,
+      customUnit: scFrequency === 'custom' ? scCustomUnit : null,
       lastCompletedDate: scLastDate || null,
       category: scCategory,
       notes: scNotes.trim(),
@@ -325,6 +371,9 @@ export default function ScheduleModule({
     setScTitle('');
     setScNotes('');
     setScProtocol('');
+    setScFrequency('weekly');
+    setScCustomValue(1);
+    setScCustomUnit('weeks');
     setIsAddingSelfCare(false);
     showToast('success', 'Actividad Registrada', `Se añadió "${newItem.title}" al calendario de autocuidado.`);
   };
@@ -336,10 +385,26 @@ export default function ScheduleModule({
 
   const handleSaveEditSelfCare = () => {
     if (!editingSelfCareItem?.title?.trim()) return;
-    const days = frequencyMeta[editingSelfCareItem.frequency]?.days || editingSelfCareItem.daysInterval || 30;
+    let days = 30;
+    if (editingSelfCareItem.frequency === 'custom') {
+      const val = Math.max(1, parseInt(editingSelfCareItem.customValue, 10) || 1);
+      const unit = editingSelfCareItem.customUnit || 'days';
+      if (unit === 'days') days = val;
+      else if (unit === 'weeks') days = val * 7;
+      else if (unit === 'months') days = val * 30;
+      else if (unit === 'years') days = val * 365;
+    } else {
+      days = frequencyMeta[editingSelfCareItem.frequency]?.days || editingSelfCareItem.daysInterval || 30;
+    }
+
     const updated = selfCareActivities.map(a => 
       a.id === editingSelfCareItem.id 
-        ? { ...editingSelfCareItem, daysInterval: days } 
+        ? { 
+            ...editingSelfCareItem, 
+            daysInterval: days,
+            customValue: editingSelfCareItem.frequency === 'custom' ? (parseInt(editingSelfCareItem.customValue, 10) || 1) : null,
+            customUnit: editingSelfCareItem.frequency === 'custom' ? (editingSelfCareItem.customUnit || 'days') : null
+          } 
         : a
     );
     setSelfCareActivities(updated);
@@ -351,9 +416,10 @@ export default function ScheduleModule({
   const filteredSelfCare = (selfCareActivities || []).filter(item => {
     if (selfCareFilter === 'all') return true;
     if (selfCareFilter === 'weekly') return item.frequency === 'weekly' || item.frequency === 'biweekly';
-    if (selfCareFilter === 'monthly') return item.frequency === 'monthly';
+    if (selfCareFilter === 'monthly') return item.frequency === 'monthly' || item.frequency === 'bimonthly';
     if (selfCareFilter === 'quarterly') return item.frequency === 'quarterly' || item.frequency === 'biannual';
     if (selfCareFilter === 'annual') return item.frequency === 'annual';
+    if (selfCareFilter === 'custom') return item.frequency === 'custom' || !!item.customValue;
     return true;
   });
 
@@ -882,11 +948,54 @@ export default function ScheduleModule({
                     <option value="weekly">Semanal (7 días)</option>
                     <option value="biweekly">Quincenal (15 días)</option>
                     <option value="monthly">Mensual (30 días)</option>
+                    <option value="bimonthly">Bimestral (60 días / Cada 2 meses)</option>
                     <option value="quarterly">Trimestral (Cada 3 meses / 90d)</option>
                     <option value="biannual">Semestral (Cada 6 meses / 180d)</option>
                     <option value="annual">Anual (Prevención Médica / 365d)</option>
+                    <option value="custom">✨ Personalizado (X días / semanas / meses / años)</option>
                   </select>
                 </div>
+
+                {scFrequency === 'custom' && (
+                  <div className="sm:col-span-3 p-3.5 bg-[#0b0c10] border border-[#e0a96d]/30 rounded-xl space-y-2 animate-fade-in">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#e0a96d]">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Definir Intervalo Personalizado:</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-400">Cada:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="365"
+                          value={scCustomValue}
+                          onChange={(e) => setScCustomValue(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                          className="w-20 bg-[#171a24] border border-[#e0a96d]/40 rounded-lg py-1.5 px-2.5 text-slate-100 text-xs text-center font-bold focus:outline-none focus:border-[#e0a96d]"
+                        />
+                        <select
+                          value={scCustomUnit}
+                          onChange={(e) => setScCustomUnit(e.target.value)}
+                          className="bg-[#171a24] border border-[#e0a96d]/40 rounded-lg py-1.5 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                        >
+                          <option value="days">Día(s)</option>
+                          <option value="weeks">Semana(s)</option>
+                          <option value="months">Mes(es)</option>
+                          <option value="years">Año(s)</option>
+                        </select>
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        ⚡ Ciclo estimado:{' '}
+                        <strong className="text-[#e0a96d] font-mono">
+                          {scCustomUnit === 'days' && `${scCustomValue} día(s)`}
+                          {scCustomUnit === 'weeks' && `${scCustomValue * 7} días (${scCustomValue} sem)`}
+                          {scCustomUnit === 'months' && `${scCustomValue * 30} días (~${scCustomValue} mes${scCustomValue > 1 ? 'es' : ''})`}
+                          {scCustomUnit === 'years' && `${scCustomValue * 365} días (${scCustomValue} año${scCustomValue > 1 ? 's' : ''})`}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Categoría</label>
@@ -985,7 +1094,7 @@ export default function ScheduleModule({
                   : 'bg-[#171a24] border-slate-800 text-slate-400 hover:border-slate-700'
               }`}
             >
-              💆‍♀️ Mensuales
+              💆‍♀️ Mensuales / Bimestrales
             </button>
             <button
               onClick={() => setSelfCareFilter('quarterly')}
@@ -1006,6 +1115,16 @@ export default function ScheduleModule({
               }`}
             >
               🩺 Anuales (Prevención Médica)
+            </button>
+            <button
+              onClick={() => setSelfCareFilter('custom')}
+              className={`text-xs font-bold py-1.5 px-4 rounded-full border shrink-0 transition-all cursor-pointer ${
+                selfCareFilter === 'custom'
+                  ? 'bg-[#e0a96d] text-[#0b0c10] border-[#e0a96d]'
+                  : 'bg-[#171a24] border-slate-800 text-slate-400 hover:border-slate-700'
+              }`}
+            >
+              ✨ Personalizadas
             </button>
           </div>
 
@@ -1029,7 +1148,7 @@ export default function ScheduleModule({
             ) : (
               filteredSelfCare.map((activity) => {
                 const info = getSelfCareStatus(activity);
-                const freq = frequencyMeta[activity.frequency] || frequencyMeta.monthly;
+                const freq = getFrequencyDetails(activity);
                 const catIcon = categoryIcons[activity.category] || '✨';
 
                 return (
@@ -1337,9 +1456,11 @@ export default function ScheduleModule({
                     <option value="weekly">Semanal (7 días)</option>
                     <option value="biweekly">Quincenal (15 días)</option>
                     <option value="monthly">Mensual (30 días)</option>
-                    <option value="quarterly">Trimestral (90 días)</option>
-                    <option value="biannual">Semestral (180 días)</option>
-                    <option value="annual">Anual (365 días)</option>
+                    <option value="bimonthly">Bimestral (60 días / Cada 2 meses)</option>
+                    <option value="quarterly">Trimestral (90 días / Cada 3 meses)</option>
+                    <option value="biannual">Semestral (180 días / Cada 6 meses)</option>
+                    <option value="annual">Anual (365 días / Prevención Médica)</option>
+                    <option value="custom">✨ Personalizado (X días / semanas / meses / años)</option>
                   </select>
                 </div>
 
@@ -1358,6 +1479,53 @@ export default function ScheduleModule({
                   </select>
                 </div>
               </div>
+
+              {editingSelfCareItem.frequency === 'custom' && (
+                <div className="p-3.5 bg-[#0b0c10] border border-[#e0a96d]/30 rounded-xl space-y-2 animate-fade-in">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#e0a96d]">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Definir Intervalo Personalizado:</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400">Cada:</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={editingSelfCareItem.customValue || 1}
+                        onChange={(e) => setEditingSelfCareItem({
+                          ...editingSelfCareItem,
+                          customValue: Math.max(1, parseInt(e.target.value, 10) || 1)
+                        })}
+                        className="w-20 bg-[#171a24] border border-[#e0a96d]/40 rounded-lg py-1.5 px-2.5 text-slate-100 text-xs text-center font-bold focus:outline-none focus:border-[#e0a96d]"
+                      />
+                      <select
+                        value={editingSelfCareItem.customUnit || 'days'}
+                        onChange={(e) => setEditingSelfCareItem({
+                          ...editingSelfCareItem,
+                          customUnit: e.target.value
+                        })}
+                        className="bg-[#171a24] border border-[#e0a96d]/40 rounded-lg py-1.5 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                      >
+                        <option value="days">Día(s)</option>
+                        <option value="weeks">Semana(s)</option>
+                        <option value="months">Mes(es)</option>
+                        <option value="years">Año(s)</option>
+                      </select>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      ⚡ Ciclo estimado:{' '}
+                      <strong className="text-[#e0a96d] font-mono">
+                        {(editingSelfCareItem.customUnit || 'days') === 'days' && `${editingSelfCareItem.customValue || 1} día(s)`}
+                        {(editingSelfCareItem.customUnit || 'days') === 'weeks' && `${(editingSelfCareItem.customValue || 1) * 7} días (${editingSelfCareItem.customValue || 1} sem)`}
+                        {(editingSelfCareItem.customUnit || 'days') === 'months' && `${(editingSelfCareItem.customValue || 1) * 30} días (~${editingSelfCareItem.customValue || 1} mes${(editingSelfCareItem.customValue || 1) > 1 ? 'es' : ''})`}
+                        {(editingSelfCareItem.customUnit || 'days') === 'years' && `${(editingSelfCareItem.customValue || 1) * 365} días (${editingSelfCareItem.customValue || 1} año${(editingSelfCareItem.customValue || 1) > 1 ? 's' : ''})`}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Fecha Última Realización</label>
