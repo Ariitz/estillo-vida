@@ -891,15 +891,20 @@ export default function WardrobeModule({
               </div>
               <input
                 type={showTempKey ? 'text' : 'password'}
-                placeholder="AIzaSy..."
+                placeholder="AIzaSy... o AQ.Ab..."
                 value={tempApiKey}
                 onChange={(e) => setTempApiKey(e.target.value)}
                 className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2.5 px-3 text-slate-100 text-xs font-mono focus:outline-none focus:border-[#e0a96d]"
               />
             </div>
 
-            <div className="p-3 bg-[#0b0c10] rounded-lg border border-slate-800 text-[11px] text-slate-400 space-y-1">
-              <span className="block font-bold text-slate-300">¿Cómo obtenerla gratis?</span>
+            <div className="p-3 bg-[#0b0c10] rounded-lg border border-slate-800 text-[11px] text-slate-400 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-300">¿Cómo obtener tu clave?</span>
+                <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  Formatos AIzaSy... o AQ.Ab...
+                </span>
+              </div>
               <p>
                 Entra a{' '}
                 <a
@@ -910,7 +915,7 @@ export default function WardrobeModule({
                 >
                   Google AI Studio
                 </a>{' '}
-                con tu cuenta de Google y crea una API Key gratuita para uso personal.
+                y genera tu clave gratuita. Al guardarla, se sincronizará automáticamente con todos tus dispositivos mediante tu nube de Firestore.
               </p>
             </div>
 

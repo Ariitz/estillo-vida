@@ -312,6 +312,7 @@ export default function App() {
       customOutfits,
       customManuals,
       customTimers,
+      geminiApiKey: (geminiApiKey || localStorage.getItem('aura-gemini-key') || '').trim(),
       lastUpdated: Date.now()
     };
   };
@@ -357,6 +358,10 @@ export default function App() {
     if (Array.isArray(data.customTimers)) {
       setCustomTimers(data.customTimers);
       localStorage.setItem('aura-timers', JSON.stringify(data.customTimers));
+    }
+    if (typeof data.geminiApiKey === 'string' && data.geminiApiKey.trim()) {
+      setGeminiApiKey(data.geminiApiKey.trim());
+      localStorage.setItem('aura-gemini-key', data.geminiApiKey.trim());
     }
   };
 
@@ -494,7 +499,8 @@ export default function App() {
     wardrobe,
     customOutfits,
     customManuals,
-    customTimers
+    customTimers,
+    geminiApiKey
   ]);
 
   // ==========================================

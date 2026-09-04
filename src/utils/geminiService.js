@@ -89,8 +89,9 @@ Reglas estrictas de categoría:
 - "accessories": gorros, bufandas, cinturones, lentes, mochilas, bolsas, joyas, scrunchies.
 `;
 
-  // Try primary model (gemini-2.5-flash) and fallback to gemini-1.5-flash if needed
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+  // Production models with automatic fallback
+  // 'gemini-flash-latest' always points to the latest production Flash model (supports vision & fast inference)
+  const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
   let lastError = null;
 
   for (const model of models) {
@@ -126,6 +127,13 @@ Reglas estrictas de categoría:
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
         const errMsg = errJson.error?.message || response.statusText;
+        
+        if (response.status === 400 && errMsg.toLowerCase().includes('api key')) {
+          throw new Error('La API Key ingresada no es válida en Google AI Studio. Verifica tu clave.');
+        }
+        if (response.status === 429 || errMsg.includes('RESOURCE_EXHAUSTED')) {
+          throw new Error('Límite de cuota temporal alcanzado en Gemini. Intenta en unos momentos.');
+        }
         throw new Error(`[${model}] Error de Gemini: ${errMsg}`);
       }
 
@@ -136,12 +144,30 @@ Reglas estrictas de categoría:
       }
 
       // Parse JSON from response
-      const cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleaned = jsonMatch[0];
+      }
       const parsed = JSON.parse(cleaned);
 
       // Validate and sanitize categories
       const validCategories = ['tops', 'bottoms', 'outerwear', 'footwear', 'accessories'];
-      const category = validCategories.includes(parsed.category) ? parsed.category : 'tops';
+      let category = parsed.category?.toLowerCase() || '';
+      if (!validCategories.includes(category)) {
+        const textToInspect = `${parsed.name || ''} ${category} ${(parsed.tags || []).join(' ')}`.toLowerCase();
+        if (/pantalon|jeans|short|falda|cargo|legging|pants|bermuda/.test(textToInspect)) {
+          category = 'bottoms';
+        } else if (/chamarra|sudadera|hoodie|blazer|abrigo|sueter|cardigan|saco|chaleco|chaqueta/.test(textToInspect)) {
+          category = 'outerwear';
+        } else if (/zapato|tenis|bota|mocas|sandalia|tac|sneaker|calzado/.test(textToInspect)) {
+          category = 'footwear';
+        } else if (/gorro|gorra|cinturon|lente|mochila|bolsa|joya|bufanda|reloj|collar|anillo/.test(textToInspect)) {
+          category = 'accessories';
+        } else {
+          category = 'tops';
+        }
+      }
 
       return {
         name: parsed.name || 'Prenda sin título',
@@ -152,6 +178,10 @@ Reglas estrictas de categoría:
     } catch (err) {
       console.warn(`Attempt with ${model} failed:`, err.message);
       lastError = err;
+      // If error is definitely an invalid API key, do not retry other models uselessly
+      if (err.message.includes('API Key ingresada no es válida')) {
+        break;
+      }
     }
   }
 

@@ -292,7 +292,7 @@ export default function SyncModule({
               <div className="flex gap-2">
                 <input
                   type={showGeminiKey ? 'text' : 'password'}
-                  placeholder="AIzaSy..."
+                  placeholder="AIzaSy... o AQ.Ab..."
                   value={geminiApiKey || ''}
                   onChange={(e) => {
                     setGeminiApiKey(e.target.value);
@@ -313,13 +313,13 @@ export default function SyncModule({
                 )}
               </div>
 
-              <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
-                <span>* Tu clave se guarda exclusivamente en tu navegador (localStorage).</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[10px] text-slate-500 pt-1">
+                <span>* Se almacena localmente y se sincroniza automáticamente entre todos tus dispositivos mediante tu nube de Firestore.</span>
                 <a
                   href="https://aistudio.google.com/app/apikey"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#e0a96d] hover:underline font-bold flex items-center gap-1"
+                  className="text-[#e0a96d] hover:underline font-bold flex items-center gap-1 shrink-0"
                 >
                   Obtener API Key gratis &rarr;
                 </a>
