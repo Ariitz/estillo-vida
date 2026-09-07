@@ -401,3 +401,283 @@ Responde EXCLUSIVAMENTE con un JSON válido con la siguiente estructura:
   // If all models failed or network error, return the algorithmic fallback
   return generateFallbackOutfit(cleanGarments, occasion);
 };
+
+/**
+ * Algorithmic fallback for health, pain, ergonomic & aesthetic triage
+ * when Gemini API key is missing or offline.
+ * 
+ * @param {Object} symptom
+ * @returns {Object} Structured clinical & ergonomic guidance
+ */
+export const generateFallbackHealthTriage = (symptom) => {
+  const text = `${symptom.title || ''} ${symptom.bodyZone || ''} ${symptom.trigger || ''} ${symptom.notes || ''} ${symptom.category || ''}`.toLowerCase();
+  
+  // Pain / Musculoskeletal / Posture / Driving
+  if (/espalda|lumbar|ciatic|columna|tobillo|manejar|conduc|rodilla|pie|talon|cuello|cervical|hombro|postura|ergonom|muñeca|tunel/.test(text)) {
+    const isDriving = /manejar|conduc|auto|carro|pedal|acelerad/.test(text);
+    return {
+      specialist: 'Ortopedista / Fisioterapeuta o Fisiatra',
+      specialistDescription: 'Especialista en biomecánica musculoesquelética, columna y rehabilitación articular postural.',
+      priority: (symptom.painLevel >= 7) ? 'Atención Recomendada' : 'Rutinario',
+      physiologicalExplanation: isDriving
+        ? 'La conducción prolongada genera tensión asimétrica: el pie derecho en el pedal hiperextiende los tendones del tobillo, mientras que la vibración y el ángulo del asiento aplanan la curvatura lumbar natural (L4-S1), irradiando molestia a rodillas y cadera.'
+        : 'Sobrecarga miofascial y desalineación postural por posturas estáticas prolongadas o desbalance en los grupos musculares estabilizadores.',
+      immediateReliefTips: [
+        'Ajustar la distancia del asiento del auto: tus rodillas deben quedar flexionadas a 120° con el talón apoyado de pivote frente al freno.',
+        'Colocar un cojín o toalla enrollada como soporte lumbar en la curva baja de la espalda.',
+        'Realizar pausas activas cada 45-60 min: estiramiento suave de isquiotibiales y rotaciones circulares de tobillo.',
+        'Aplicar compresas tibias 15 minutos por la noche en la zona lumbar para relajar los músculos paravertebrales.'
+      ],
+      consultationQuestions: [
+        '¿Recomienda estudios de imagen (radiografía/resonancia) para evaluar alineación articular o descartar pinzamiento?',
+        '¿Qué ejercicios específicos de fortalecimiento de core y flexibilidad debo integrar en mi rutina?',
+        '¿Sería conveniente el uso de plantillas ortopédicas personalizadas para optimizar la pisada al caminar y conducir?'
+      ],
+      lifestyleHabits: [
+        'Evitar llevar billetera u objetos voluminosos en los bolsillos traseros al sentarte.',
+        'Fortalecer el abdomen y glúteos 3 veces por semana para proteger la zona lumbar.'
+      ],
+      redFlags: 'Dolor que irradia con adormecimiento/hormigueo hacia los dedos del pie, pérdida de fuerza o dolor que no cede en reposo total.'
+    };
+  }
+
+  // Skin / Warts / Dry skin / Dermatological
+  if (/verruga|piel|reseca|talon|cutan|mancha|lunar|acne|poro|dermat|alergia|eczema|granit/.test(text)) {
+    const isWart = /verruga|mezquino|lunar|bulto|verrug/.test(text);
+    return {
+      specialist: 'Dermatólogo Clínico',
+      specialistDescription: 'Médico especialista en patologías cutáneas, lesiones epidérmicas y restauración de la barrera de la piel.',
+      priority: isWart ? 'Rutinario' : 'Preventivo',
+      physiologicalExplanation: isWart
+        ? 'Las lesiones verrugosas o queratosis suelen ser proliferaciones epidérmicas benignas causadas por microtraumatismos o agentes virales localizados que requieren diagnóstico dermatoscópico.'
+        : 'Pérdida de agua transepidérmica y déficit en la síntesis de ceramidas y factores naturales de hidratación, agravado por agua caliente, jabones abrasivos o climas secos.',
+      immediateReliefTips: [
+        'Para resequedad severa: aplicar cremas con Urea al 10% - 20% inmediatamente después de la ducha sobre la piel húmeda.',
+        'No cortar, raspar ni aplicar químicos cáusticos caseros sobre verrugas o lunares para evitar cicatrices o infección.',
+        'Usar sustitutos de jabón (syndet) con pH neutro 5.5 y agua tibia en lugar de caliente.',
+        'Aplicar protector solar diario FPS 50+ en todas las áreas corporales expuestas.'
+      ],
+      consultationQuestions: [
+        '¿Qué procedimiento de consultorio (crioterapia, electrofulguración, láser) es el más seguro y estético para retirar la lesión?',
+        '¿Cuál es la concentración ideal de activos (urea, ácido láctico, ceramidas) para mi tipo de piel?',
+        '¿Requiere biopsia o análisis dermatoscópico para mayor tranquilidad?'
+      ],
+      lifestyleHabits: [
+        'Duchas breves menores a 8 minutos sin esponjas ásperas.',
+        'Mantener hidratación hídrica constante con al menos 2.5 litros de agua al día.'
+      ],
+      redFlags: 'Lesiones que cambien rápidamente de color, tamaño, sangren espontáneamente o tengan bordes irregulares y asimétricos.'
+    };
+  }
+
+  // Hair / Frizz / Scalp
+  if (/cabello|frizz|pelo|cuero cabelludo|capilar|horzuela|quiebre|alopec|caida/.test(text)) {
+    return {
+      specialist: 'Tricólogo / Dermatólogo Capilar',
+      specialistDescription: 'Especialista en salud del folículo piloso, cutícula capilar y cuero cabelludo.',
+      priority: 'Preventivo',
+      physiologicalExplanation: 'La cutícula capilar deshidratada o porosa absorbe la humedad ambiental de forma desigual, levantando las escamas del cabello y generando frizz y encrespamiento estático.',
+      immediateReliefTips: [
+        'Dormir con funda o gorro de satén para reducir la fricción nocturna que rompe la fibra.',
+        'Secar con toalla de microfibra mediante toques suaves, sin frotar con toallas de algodón.',
+        'Sellar las puntas con 2-3 gotas de aceite de argán o jojoba tras aplicar acondicionador leave-in.',
+        'Terminar el lavado con agua templada a fría para cerrar la cutícula.'
+      ],
+      consultationQuestions: [
+        '¿Qué tratamiento de consultorio (reconstrucción térmica, ozonoterapia capilar) es más compatible con mi fibra capilar?',
+        '¿Presento porosidad alta o desbalance proteico en la hebra capilar?'
+      ],
+      lifestyleHabits: [
+        'Usar cepillos de cerdas de madera natural para distribuir los aceites propios del cuero cabelludo.',
+        'Aplicar protector térmico si se utilizan herramientas de calor.'
+      ],
+      redFlags: 'Caída masiva en mechones, zonas circulares sin cabello o prurito y descamación severa en el cuero cabelludo.'
+    };
+  }
+
+  // Weight / Metabolism / Digestion
+  if (/peso|sobrepeso|grasa|metabol|inflam|digest|hinchaz|gastrit|colitis/.test(text)) {
+    return {
+      specialist: 'Nutriólogo Clínico / Endocrinólogo',
+      specialistDescription: 'Especialista en metabolismo, balance hormonal y recomposición corporal sostenible.',
+      priority: 'Atención Recomendada',
+      physiologicalExplanation: 'El sobrepeso o la inflamación recurrente se asocian a un balance calórico desajustado, resistencia a la insulina o disbiosis intestinal que impactan la energía y la salud articular.',
+      immediateReliefTips: [
+        'Priorizar 25-30g de proteína de alta calidad y fibra en el desayuno para regular la saciedad y glucosa.',
+        'Caminar 10-15 minutos a paso ligero inmediatamente después de las comidas principales.',
+        'Eliminar bebidas azucaradas y harinas refinadas ultraprocesadas.',
+        'Mantener un horario regular de sueño (7-8 horas) para regular el cortisol y la grelina.'
+      ],
+      consultationQuestions: [
+        '¿Qué panel de laboratorio (química sanguínea completa, perfil tiroideo, insulina en ayunas) sugiere realizar?',
+        '¿Cómo planificar un déficit calórico moderado que preserve mi masa muscular y energía?',
+        '¿Hay factores hormonales o de absorción que estén dificultando mi control de peso?'
+      ],
+      lifestyleHabits: [
+        'Planificar compras saludables semanales usando el Comparador de Precios de AURA Nexus.',
+        'Registrar el pesaje semanal matutino en ayunas para monitorear tendencias.'
+      ],
+      redFlags: 'Aumento o pérdida drástica de peso involuntaria, fatiga extrema o sed excesiva acompañada de visión borrosa.'
+    };
+  }
+
+  // Bruxism / Jaw / Headaches
+  if (/bruxis|mandib|diente|mord|cabeza|migraña|tensin|apret/.test(text)) {
+    return {
+      specialist: 'Odontólogo Especialista en ATM / Rehabilitación Oral',
+      specialistDescription: 'Especialista en articulación temporomandibular, oclusión y protección contra el desgaste dental nocturno.',
+      priority: 'Atención Recomendada',
+      physiologicalExplanation: 'El bruxismo céntrico o excéntrico somete a la articulación temporomandibular (ATM) a cargas de hasta 100 kg/cm² durante el sueño por estrés no canalizado.',
+      immediateReliefTips: [
+        'Aplicar compresas tibias en los laterales del rostro (músculos maseteros) 10 min antes de dormir.',
+        'Practicar la posición de reposo mandibular: lengua pegada al paladar, dientes ligeramente separados y labios sellados.',
+        'Evitar masticar chicle, alimentos extremadamente duros o apoyar la barbilla en las manos al trabajar.',
+        'Tomar citrato de magnesio por la noche para favorecer la relajación muscular.'
+      ],
+      consultationQuestions: [
+        '¿Presento facetas de desgaste en el esmalte dental o inflamación en la cápsula articular?',
+        '¿Qué tipo de guarda oclusiva rígida de acrílico es la más adecuada para mi mordida?',
+        '¿Se recomienda fisioterapia maxilofacial complementaria?'
+      ],
+      lifestyleHabits: [
+        'Realizar higiene del sueño sin pantallas 30 minutos antes de dormir.',
+        'Ejercicios de respiración diafragmática al final del día.'
+      ],
+      redFlags: 'Bloqueo mandibular (incapacidad para abrir o cerrar la boca) o chasquidos con dolor agudo al masticar.'
+    };
+  }
+
+  // General / Default
+  return {
+    specialist: 'Médico General / Especialista en Medicina Preventiva',
+    specialistDescription: 'Profesional de primer contacto para evaluación integral, descarte clínico y canalización precisa.',
+    priority: (symptom.painLevel >= 6) ? 'Atención Recomendada' : 'Rutinario',
+    physiologicalExplanation: `Manifestación sintomática en ${symptom.bodyZone || 'el organismo'} asociada a factores de estilo de vida, posturas cotidianas o procesos inflamatorios leves que ameritan seguimiento clínico.`,
+    immediateReliefTips: [
+      'Llevar una bitácora detallada de cuándo se intensifica la molestia y qué actividades la alivian.',
+      'Mantener hidratación adecuada y evitar posturas forzadas o sobreesfuerzos repentinos.',
+      'Favorecer periodos de descanso y sueño reparador.'
+    ],
+    consultationQuestions: [
+      '¿Qué causas principales pueden originar esta molestia con base en mi historial?',
+      '¿Qué medidas preventivas o estudios específicos recomienda realizar?'
+    ],
+    lifestyleHabits: [
+      'Seguimiento periódico de signos y registro en AURA Nexus.',
+      'Alimentación equilibrada y actividad física moderada.'
+    ],
+    redFlags: 'Aparición de fiebre, dolor súbito incapacitante, inflamación desmedida o alteraciones neurológicas.'
+  };
+};
+
+/**
+ * Analyzes a health symptom / pain / posture / aesthetic complaint using Google Gemini AI
+ * and returns structured triage, specialist recommendation, consultation questions, and relief tips.
+ * 
+ * @param {Object} symptom - The symptom object with title, bodyZone, trigger, painLevel, notes, etc.
+ * @param {string} apiKey - Gemini API Key from Google AI Studio
+ * @returns {Promise<Object>}
+ */
+export const analyzeHealthSymptomWithGemini = async (symptom, apiKey) => {
+  if (!apiKey || !apiKey.trim()) {
+    // Return high quality algorithmic triage immediately
+    return generateFallbackHealthTriage(symptom);
+  }
+
+  const prompt = `
+Eres un médico especialista en medicina preventiva, ergonomía clínica y dermatología/estética.
+Analiza la siguiente molestia o síntoma registrado por la usuaria y genera una orientación médica/estética estructurada para canalizarla con el especialista adecuado y darle pautas claras para su consulta y alivio inmediato.
+
+Información del síntoma:
+- Título / Molestia: "${symptom.title || ''}"
+- Categoría: "${symptom.category || 'general'}"
+- Zona corporal afectada: "${symptom.bodyZone || 'No especificada'}"
+- Escala de dolor/molestia (1-10): ${symptom.painLevel || 3}/10
+- Desencadenante / Contexto: "${symptom.trigger || 'No especificado'}"
+- Frecuencia: "${symptom.frequency || 'Ocasional'}"
+- Notas / Descripción detallada: "${symptom.notes || 'Ninguna'}"
+
+Responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicional, sin bloques de código ni texto antes o después) con la siguiente estructura exacta:
+
+{
+  "specialist": "Nombre exacto del especialista médico idóneo (ej: 'Ortopedista / Fisioterapeuta', 'Dermatólogo Clínico', 'Nutriólogo Clínico / Endocrinólogo', 'Tricólogo Capilar', 'Odontólogo Especialista en ATM', 'Podólogo Clínico')",
+  "specialistDescription": "1 o 2 oraciones explicando por qué este profesional es el más capacitado para atender esta molestia",
+  "priority": "Preventivo" | "Rutinario" | "Atención Recomendada" | "Prioritario",
+  "physiologicalExplanation": "Explicación clara, empática y con rigor biomecánico o fisiológico de por qué ocurre este síntoma o molestia y cómo los factores como postura, manejo, clima o estrés lo detonan.",
+  "immediateReliefTips": [
+    "Consejo ergonómico o de autocuidado práctico y seguro #1 (ej. ajuste específico del asiento del auto o escritorio)",
+    "Consejo de alivio #2 (ej. compresa, estiramiento suave, crema con urea o cambio de hábito)",
+    "Consejo de alivio #3",
+    "Consejo de alivio #4"
+  ],
+  "consultationQuestions": [
+    "Pregunta clave #1 formulada para que la usuaria le haga al médico en su cita",
+    "Pregunta clave #2 sobre estudios de imagen, laboratorio o tratamientos",
+    "Pregunta clave #3"
+  ],
+  "lifestyleHabits": [
+    "Hábito preventivo diario #1",
+    "Hábito preventivo diario #2"
+  ],
+  "redFlags": "Signos de alarma específicos que ameritarían acudir a urgencias médicas"
+}
+`;
+
+  const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
+
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const payload = {
+        contents: [
+          {
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.25
+        }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) continue;
+
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
+      const parsed = JSON.parse(cleaned);
+
+      if (parsed.specialist && parsed.physiologicalExplanation) {
+        return {
+          specialist: parsed.specialist,
+          specialistDescription: parsed.specialistDescription || 'Especialista clínico indicado para valoración.',
+          priority: parsed.priority || 'Atención Recomendada',
+          physiologicalExplanation: parsed.physiologicalExplanation,
+          immediateReliefTips: Array.isArray(parsed.immediateReliefTips) ? parsed.immediateReliefTips : [],
+          consultationQuestions: Array.isArray(parsed.consultationQuestions) ? parsed.consultationQuestions : [],
+          lifestyleHabits: Array.isArray(parsed.lifestyleHabits) ? parsed.lifestyleHabits : [],
+          redFlags: parsed.redFlags || 'Dolor intenso súbito, pérdida de fuerza o cambios abruptos en la lesión.'
+        };
+      }
+    } catch (err) {
+      console.warn(`Attempt with ${model} failed for health triage:`, err.message);
+    }
+  }
+
+  // Fallback if AI endpoint failed
+  return generateFallbackHealthTriage(symptom);
+};
+

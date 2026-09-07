@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, Plus, Star, Award, RotateCcw, ThumbsUp, ThumbsDown, HelpCircle, Save, Trash2, ArrowUpDown, PlusCircle, X } from 'lucide-react';
 
 export default function PriceComparatorModule({
@@ -27,6 +28,17 @@ export default function PriceComparatorModule({
   const [newStoreName, setNewStoreName] = useState('Costco');
   const [newStorePrice, setNewStorePrice] = useState('');
   const [newStoreQty, setNewStoreQty] = useState('');
+
+  // Body scroll lock on modal open
+  useEffect(() => {
+    if (addingStoreToItem) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [addingStoreToItem]);
 
   const categories = ['All', 'Skincare', 'Dental', 'Higiene', 'Despensa', 'Limpieza', 'Otros'];
   const storesPreset = ["Costco", "Sam's Club", "Bodega Aurrera", "Tiendas 3B", "Farmacias Guadalajara", "Amazon"];
@@ -508,10 +520,10 @@ export default function PriceComparatorModule({
       </div>
 
       {/* Add Price Store Modal Dialog */}
-      {addingStoreToItem && (
-        <div className="fixed inset-0 bg-[#0b0c10]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleAddStorePrice} className="bg-[#171a24] border border-[#e0a96d]/20 rounded-xl p-6 max-w-sm w-full shadow-2xl animate-fade-in">
-            <div className="flex justify-between items-center mb-4">
+      {addingStoreToItem && createPortal(
+        <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <form onSubmit={handleAddStorePrice} className="bg-[#171a24] border border-[#e0a96d]/25 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-modal-pop my-auto max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-800/80 shrink-0">
               <div>
                 <h3 className="text-md font-bold text-slate-100 font-outfit">Agregar Precio</h3>
                 <p className="text-[10px] text-slate-400 mt-0.5">Para: {addingStoreToItem.name}</p>
@@ -519,25 +531,24 @@ export default function PriceComparatorModule({
               <button 
                 type="button"
                 onClick={() => setAddingStoreToItem(null)}
-                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1 rounded-lg hover:bg-slate-800 transition-colors"
                 aria-label="Cerrar modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <div className="space-y-3.5">
+            <div className="space-y-3.5 overflow-y-auto pr-1 flex-1 py-1">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Establecimiento</label>
                 <select
                   value={newStoreName}
                   onChange={(e) => setNewStoreName(e.target.value)}
-                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none"
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
                 >
                   {storesPreset.map(st => (
                     <option key={st} value={st}>{st}</option>
                   ))}
-                  {/* Allow custom manual type in future if needed */}
                 </select>
               </div>
               <div>
@@ -548,7 +559,7 @@ export default function PriceComparatorModule({
                   placeholder="Ej. 195.50"
                   value={newStorePrice}
                   onChange={(e) => setNewStorePrice(e.target.value)}
-                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none"
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                   required
                 />
               </div>
@@ -560,13 +571,13 @@ export default function PriceComparatorModule({
                   placeholder="Ej. 12 (rollos, botes, etc)"
                   value={newStoreQty}
                   onChange={(e) => setNewStoreQty(e.target.value)}
-                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none"
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                   required
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 mt-5">
+            <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-slate-800/80 shrink-0">
               <button
                 type="button"
                 onClick={() => setAddingStoreToItem(null)}
@@ -576,13 +587,14 @@ export default function PriceComparatorModule({
               </button>
               <button
                 type="submit"
-                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all"
+                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all shadow-md"
               >
                 Añadir Precio
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

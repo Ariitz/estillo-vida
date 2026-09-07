@@ -15,7 +15,9 @@ import {
   ChevronRight,
   TrendingUp,
   Award,
-  Cloud
+  Cloud,
+  HeartPulse,
+  Activity
 } from 'lucide-react';
 
 // Firebase Client SDK
@@ -29,6 +31,7 @@ import ExperiencesModule from './components/ExperiencesModule';
 import WardrobeModule from './components/WardrobeModule';
 import ManualsModule from './components/ManualsModule';
 import TimersModule from './components/TimersModule';
+import HealthTrackerModule from './components/HealthTrackerModule';
 import SyncModule from './components/SyncModule';
 import Toast from './components/Toast';
 
@@ -218,6 +221,139 @@ const initialSelfCareActivities = [
   }
 ];
 
+const initialHealthSymptoms = [
+  {
+    id: 'hlth-1',
+    title: 'Molestia en espalda baja y tobillo derecho al manejar',
+    category: 'pain_posture',
+    bodyZone: 'Espalda baja / Lumbar',
+    painLevel: 6,
+    trigger: 'Al manejar (>30 min)',
+    frequency: 'Al realizar la actividad',
+    notes: 'Rigidez en zona lumbar L4-S1 y sobretensión en tendón de Aquiles derecho por uso constante del acelerador en tráfico.',
+    status: 'active',
+    createdAt: '2026-08-20',
+    aiTriage: {
+      specialist: 'Ortopedista / Fisioterapeuta o Fisiatra',
+      specialistDescription: 'Especialista en biomecánica articular y ergonomía de columna y extremidades inferiores.',
+      priority: 'Atención Recomendada',
+      physiologicalExplanation: 'La conducción prolongada somete al pie derecho a una flexión dorsal continua sobre los pedales, tensando la cadena posterior y aplanando la curva lumbar por falta de apoyo en el respaldo del auto.',
+      immediateReliefTips: [
+        'Ajustar la distancia del asiento del auto: rodillas a 120° con talón apoyado firmemente frente al freno.',
+        'Colocar un cojín o toalla enrollada en la curva lumbar baja del asiento del automóvil.',
+        'Realizar pausas activas cada 45-60 min: estiramiento de isquiotibiales y círculos suaves de tobillo.',
+        'Aplicar compresas tibias por 15 minutos en la noche en la zona lumbar.'
+      ],
+      consultationQuestions: [
+        '¿Recomienda una radiografía de columna lumbosacra o ecografía de tobillo para descartar pinzamiento o tendinopatía?',
+        '¿Qué ejercicios de fortalecimiento de core y glúteos debo realizar para proteger la espalda baja?',
+        '¿Sería beneficioso usar plantillas ortopédicas personalizadas para manejar y caminar?'
+      ],
+      lifestyleHabits: [
+        'Evitar llevar objetos o carteras en los bolsillos traseros al sentarse.',
+        'Ajustar la altura del volante para relajar hombros y trapecios.'
+      ],
+      redFlags: 'Dolor que baje con adormecimiento u hormigueo por la pierna hacia los dedos del pie o pérdida de fuerza.'
+    }
+  },
+  {
+    id: 'hlth-2',
+    title: 'Piel reseca y talones agrietados',
+    category: 'aesthetic_skin',
+    bodyZone: 'Piel (Talones / Manos / Cuerpo)',
+    painLevel: 4,
+    trigger: 'En clima seco o con aire acondicionado',
+    frequency: 'Diario / Constante',
+    notes: 'Piel tirante en extremidades y engrosamiento/resequedad en talones a pesar de usar crema hidratante estándar.',
+    status: 'treatment',
+    createdAt: '2026-08-22',
+    aiTriage: {
+      specialist: 'Dermatólogo Clínico',
+      specialistDescription: 'Médico especialista en barrera cutánea, queratodermias y cosmecéutica de grado dermatológico.',
+      priority: 'Preventivo',
+      physiologicalExplanation: 'Pérdida de agua transepidérmica e hiperqueratosis en zonas de apoyo mecánico (talones) por déficit de ceramidas y factores naturales de hidratación.',
+      immediateReliefTips: [
+        'Aplicar crema emoliente con Urea al 10% - 20% sobre la piel ligeramente húmeda tras salir de la ducha.',
+        'Evitar el uso de agua excesivamente caliente al bañarse y usar syndets sin fragancias abrasivas.',
+        'Usar calcetines de algodón suaves tras la crema de urea para potenciar la absorción nocturna.'
+      ],
+      consultationQuestions: [
+        '¿Qué porcentaje de urea o ácido láctico es el más recomendable para mi tipo de piel?',
+        '¿Requiere descartar eccema asteatósico o dermatitis de contacto?'
+      ],
+      lifestyleHabits: [
+        'Mantener ingesta hídrica de al menos 2.5 litros de agua al día.',
+        'Duchas breves menores a 8 minutos.'
+      ],
+      redFlags: 'Fisuras sangrantes profundas o signos de infección con calor y enrojecimiento.'
+    }
+  },
+  {
+    id: 'hlth-3',
+    title: 'Frizz capilar y encrespamiento estático (Cabello 1b/1c)',
+    category: 'aesthetic_skin',
+    bodyZone: 'Cabello & Cuero cabelludo',
+    painLevel: 3,
+    trigger: 'En clima seco o con aire acondicionado',
+    frequency: 'Frecuente (3-4 veces por semana)',
+    notes: 'Cabello lacio/ondulado fino con tendencia al frizz en la coronilla y puntas abiertas.',
+    status: 'active',
+    createdAt: '2026-08-25',
+    aiTriage: {
+      specialist: 'Tricólogo / Dermatólogo Capilar',
+      specialistDescription: 'Especialista en estructura del tallo piloso, cutícula capilar y salud del cuero cabelludo.',
+      priority: 'Preventivo',
+      physiologicalExplanation: 'La cutícula capilar deshidratada o porosa absorbe la humedad ambiental de forma desigual, generando dilatación de la fibra y encrespamiento estático típico del patrón 1b/1c.',
+      immediateReliefTips: [
+        'Dormir con funda de almohada o gorro de satén para eliminar la fricción mecánica.',
+        'Secar únicamente con toalla de microfibra presionando suavemente sin frotar.',
+        'Sellar puntas con 2 gotas de aceite de argán o jojoba tras el acondicionador sin enjuague.'
+      ],
+      consultationQuestions: [
+        '¿Qué tratamiento de reestructuración lipídica o botox capilar de consultorio recomienda?',
+        '¿Presento porosidad alta que requiera selladores de cutícula específicos?'
+      ],
+      lifestyleHabits: [
+        'Cepillado suave con cepillo de cerdas de madera natural dos veces al día.',
+        'Uso de protector térmico antes de la secadora.'
+      ],
+      redFlags: 'Caída de cabello en mechones abundantes o áreas circulares con descamación.'
+    }
+  },
+  {
+    id: 'hlth-4',
+    title: 'Tensión mandibular y bruxismo matutino',
+    category: 'general',
+    bodyZone: 'Rostro / Mandíbula (ATM)',
+    painLevel: 5,
+    trigger: 'Al despertar por las mañanas',
+    frequency: 'Diario / Constante',
+    notes: 'Despertar con rigidez en maseteros, cansancio en la mandíbula y dolor de cabeza tensional leve.',
+    status: 'active',
+    createdAt: '2026-08-26',
+    aiTriage: {
+      specialist: 'Odontólogo Especialista en ATM / Rehabilitación Oral',
+      specialistDescription: 'Especialista en articulación temporomandibular, oclusión y protección contra el desgaste dental nocturno.',
+      priority: 'Atención Recomendada',
+      physiologicalExplanation: 'Hiperactividad de los músculos maseteros y temporales durante la fase REM del sueño que comprime el disco articular de la ATM y desgasta el esmalte dental.',
+      immediateReliefTips: [
+        'Compresas tibias en los lados de la cara (músculos maseteros) 10 minutos antes de dormir.',
+        'Posición de descanso lingual: lengua suavemente pegada al paladar superior sin apretar dientes.',
+        'Tomar citrato de magnesio nocturno para favorecer la relajación muscular profunda.'
+      ],
+      consultationQuestions: [
+        '¿Presento desgaste oclusal en las piezas dentales que amerite guarda rígida de acrílico?',
+        '¿Se recomienda aplicar fisioterapia maxilofacial o toxina botulínica en maseteros?'
+      ],
+      lifestyleHabits: [
+        'Evitar masticar chicle o morder objetos duros.',
+        'Higiene del sueño sin pantallas 30 minutos antes de acostarse.'
+      ],
+      redFlags: 'Bloqueo articular que impida abrir o cerrar la boca o chasquido agudo con dolor al comer.'
+    }
+  }
+];
+
 export default function App() {
   // Navigation & UI States
   const [activeModule, setActiveModule] = useState('schedule');
@@ -261,6 +397,10 @@ export default function App() {
     getSavedArray('aura-selfcare', initialSelfCareActivities)
   );
 
+  const [healthSymptoms, setHealthSymptoms] = useState(() =>
+    getSavedArray('aura-health-tracker', initialHealthSymptoms)
+  );
+
   const [householdItems, setHouseholdItems] = useState(() =>
     getSavedArray('aura-household', initialHousehold)
   );
@@ -284,6 +424,11 @@ export default function App() {
   const [customTimers, setCustomTimers] = useState(() =>
     getSavedArray('aura-timers', [])
   );
+
+  // Sync health symptoms to localStorage
+  useEffect(() => {
+    localStorage.setItem('aura-health-tracker', JSON.stringify(healthSymptoms));
+  }, [healthSymptoms]);
 
   // ==========================================
   // CLOUD SYNC STATE DECLARATIONS
@@ -384,6 +529,7 @@ export default function App() {
       waterIntake,
       schedule,
       selfCareActivities: selfCareActivities || [],
+      healthSymptoms: healthSymptoms || [],
       householdItems,
       experiences,
       wardrobe,
@@ -416,6 +562,10 @@ export default function App() {
     if (Array.isArray(data.selfCareActivities)) {
       setSelfCareActivities(data.selfCareActivities);
       localStorage.setItem('aura-selfcare', JSON.stringify(data.selfCareActivities));
+    }
+    if (Array.isArray(data.healthSymptoms)) {
+      setHealthSymptoms(data.healthSymptoms);
+      localStorage.setItem('aura-health-tracker', JSON.stringify(data.healthSymptoms));
     }
     if (Array.isArray(data.householdItems)) {
       setHouseholdItems(data.householdItems);
@@ -652,6 +802,7 @@ export default function App() {
   // Breadcrumbs title mapper
   const moduleTitles = {
     schedule: 'Rutina Diaria & Cronograma',
+    health: 'Tracker de Dolor, Postura & Diagnóstico IA',
     comparator: 'Comparador de Precios & Alacena',
     experiences: 'Bitácora de Experiencias',
     wardrobe: 'Armario Virtual Geek Chic',
@@ -663,6 +814,7 @@ export default function App() {
   // Menu items list
   const menuItems = [
     { id: 'schedule', label: 'Rutina Diaria', icon: <Calendar className="w-5 h-5" /> },
+    { id: 'health', label: 'Dolor & Salud IA', icon: <HeartPulse className="w-5 h-5" /> },
     { id: 'comparator', label: 'Comparador de Precios', icon: <Tag className="w-5 h-5" /> },
     { id: 'experiences', label: 'Bitácora & Reviews', icon: <MapPin className="w-5 h-5" /> },
     { id: 'wardrobe', label: 'Armario Virtual', icon: <Shirt className="w-5 h-5" /> },
@@ -876,6 +1028,15 @@ export default function App() {
               setSchedule={setSchedule}
               selfCareActivities={selfCareActivities}
               setSelfCareActivities={setSelfCareActivities}
+              showToast={showToast}
+            />
+          )}
+
+          {activeModule === 'health' && (
+            <HealthTrackerModule
+              healthSymptoms={healthSymptoms}
+              setHealthSymptoms={setHealthSymptoms}
+              geminiApiKey={geminiApiKey}
               showToast={showToast}
             />
           )}

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Plus, 
   Trash2, 
@@ -57,6 +58,17 @@ export default function ScheduleModule({
   const [selfCareFilter, setSelfCareFilter] = useState('all'); // 'all' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | 'custom'
   const [isAddingSelfCare, setIsAddingSelfCare] = useState(false);
   const [editingSelfCareItem, setEditingSelfCareItem] = useState(null);
+
+  // Lock body scroll when editing modal is open
+  useEffect(() => {
+    if (editingItem || editingSelfCareItem) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [editingItem, editingSelfCareItem]);
 
   // New Self-Care form fields
   const [scTitle, setScTitle] = useState('');
@@ -1287,21 +1299,22 @@ export default function ScheduleModule({
       {/* ========================================== */}
       {/* EDIT MODAL: DAILY TIMELINE ITEM */}
       {/* ========================================== */}
-      {editingItem && (
-        <div className="fixed inset-0 bg-[#0b0c10]/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#171a24] border border-[#e0a96d]/30 rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+      {editingItem && createPortal(
+        <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div className="bg-[#171a24] border border-[#e0a96d]/30 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-modal-pop my-auto max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 shrink-0">
               <h4 className="text-base font-bold text-slate-100 font-outfit">Editar Actividad</h4>
               <button
                 type="button"
                 onClick={() => setEditingItem(null)}
-                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1"
+                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                aria-label="Cerrar modal"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto pr-1 flex-1 py-1">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Hora</label>
                 <div className="flex gap-1.5">
@@ -1393,7 +1406,7 @@ export default function ScheduleModule({
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 mt-6">
+            <div className="flex justify-end gap-2 pt-4 border-t border-slate-800/80 shrink-0">
               <button
                 type="button"
                 onClick={() => setEditingItem(null)}
@@ -1404,22 +1417,23 @@ export default function ScheduleModule({
               <button
                 type="button"
                 onClick={handleSaveEdit}
-                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all"
+                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all shadow-md"
               >
                 Guardar Cambios
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================== */}
       {/* EDIT MODAL: SELF-CARE ACTIVITY */}
       {/* ========================================== */}
-      {editingSelfCareItem && (
-        <div className="fixed inset-0 bg-[#0b0c10]/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#171a24] border border-[#e0a96d]/30 rounded-xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+      {editingSelfCareItem && createPortal(
+        <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div className="bg-[#171a24] border border-[#e0a96d]/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl animate-modal-pop my-auto max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 shrink-0">
               <h4 className="text-base font-bold text-slate-100 font-outfit flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-[#e0a96d]" />
                 <span>Editar Actividad de Autocuidado</span>
@@ -1427,13 +1441,14 @@ export default function ScheduleModule({
               <button
                 type="button"
                 onClick={() => setEditingSelfCareItem(null)}
-                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1"
+                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                aria-label="Cerrar modal"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto pr-1.5 flex-1 py-1">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre</label>
                 <input
@@ -1557,7 +1572,7 @@ export default function ScheduleModule({
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 mt-6">
+            <div className="flex justify-end gap-2 pt-4 border-t border-slate-800/80 shrink-0">
               <button
                 type="button"
                 onClick={() => setEditingSelfCareItem(null)}
@@ -1568,13 +1583,14 @@ export default function ScheduleModule({
               <button
                 type="button"
                 onClick={handleSaveEditSelfCare}
-                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all"
+                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all shadow-md"
               >
                 Guardar Cambios
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Shirt, 
   Check, 
@@ -53,6 +54,17 @@ export default function WardrobeModule({
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [tempApiKey, setTempApiKey] = useState('');
   const [showTempKey, setShowTempKey] = useState(false);
+
+  // Lock body scroll when API Key modal is open
+  useEffect(() => {
+    if (showApiKeyModal) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [showApiKeyModal]);
   
   // Add custom outfit form
   const [isAddingOutfit, setIsAddingOutfit] = useState(false);
@@ -1332,10 +1344,10 @@ export default function WardrobeModule({
       )}
 
       {/* Gemini API Key Configuration Modal */}
-      {showApiKeyModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-[#171a24] border border-[#e0a96d]/30 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      {showApiKeyModal && createPortal(
+        <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div className="bg-[#171a24] border border-[#e0a96d]/30 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-modal-pop my-auto max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
               <h3 className="text-base font-bold text-slate-100 font-outfit flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-[#e0a96d]" />
                 <span>Configurar Google Gemini AI</span>
@@ -1343,59 +1355,62 @@ export default function WardrobeModule({
               <button
                 type="button"
                 onClick={() => setShowApiKeyModal(false)}
-                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1"
+                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                aria-label="Cerrar modal"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
-              La clave de API permite que Google Gemini reconozca la foto de tu ropa y autollene su categoría, corte, colores y etiquetas de estilo automáticamente.
-            </p>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-slate-400">Gemini API Key</label>
-                <button
-                  type="button"
-                  onClick={() => setShowTempKey(!showTempKey)}
-                  className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1 cursor-pointer"
-                >
-                  {showTempKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                  <span>{showTempKey ? 'Ocultar' : 'Ver'}</span>
-                </button>
-              </div>
-              <input
-                type={showTempKey ? 'text' : 'password'}
-                placeholder="AIzaSy... o AQ.Ab..."
-                value={tempApiKey}
-                onChange={(e) => setTempApiKey(e.target.value)}
-                className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2.5 px-3 text-slate-100 text-xs font-mono focus:outline-none focus:border-[#e0a96d]"
-              />
-            </div>
-
-            <div className="p-3 bg-[#0b0c10] rounded-lg border border-slate-800 text-[11px] text-slate-400 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-300">¿Cómo obtener tu clave?</span>
-                <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                  Formatos AIzaSy... o AQ.Ab...
-                </span>
-              </div>
-              <p>
-                Entra a{' '}
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#e0a96d] hover:underline font-bold"
-                >
-                  Google AI Studio
-                </a>{' '}
-                y genera tu clave gratuita. Al guardarla, se sincronizará automáticamente con todos tus dispositivos mediante tu nube de Firestore.
+            <div className="space-y-4 overflow-y-auto pr-1 flex-1 py-1">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                La clave de API permite que Google Gemini reconozca la foto de tu ropa y autollene su categoría, corte, colores y etiquetas de estilo automáticamente.
               </p>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-400">Gemini API Key</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowTempKey(!showTempKey)}
+                    className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1 cursor-pointer"
+                  >
+                    {showTempKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                    <span>{showTempKey ? 'Ocultar' : 'Ver'}</span>
+                  </button>
+                </div>
+                <input
+                  type={showTempKey ? 'text' : 'password'}
+                  placeholder="AIzaSy... o AQ.Ab..."
+                  value={tempApiKey}
+                  onChange={(e) => setTempApiKey(e.target.value)}
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2.5 px-3 text-slate-100 text-xs font-mono focus:outline-none focus:border-[#e0a96d]"
+                />
+              </div>
+
+              <div className="p-3 bg-[#0b0c10] rounded-lg border border-slate-800 text-[11px] text-slate-400 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-300">¿Cómo obtener tu clave?</span>
+                  <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    Formatos AIzaSy... o AQ.Ab...
+                  </span>
+                </div>
+                <p>
+                  Entra a{' '}
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#e0a96d] hover:underline font-bold"
+                  >
+                    Google AI Studio
+                  </a>{' '}
+                  y genera tu clave gratuita. Al guardarla, se sincronizará automáticamente con todos tus dispositivos mediante tu nube de Firestore.
+                </p>
+              </div>
             </div>
 
-            <div className="flex gap-2 justify-end pt-2">
+            <div className="flex gap-2 justify-end pt-4 border-t border-slate-800/80 shrink-0">
               <button
                 type="button"
                 onClick={() => setShowApiKeyModal(false)}
@@ -1413,13 +1428,14 @@ export default function WardrobeModule({
                     handleReanalyze();
                   }
                 }}
-                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors"
+                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors shadow-md"
               >
                 Guardar Clave
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

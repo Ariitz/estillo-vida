@@ -273,7 +273,7 @@ export default function SyncModule({
             </div>
 
             <p className="text-xs text-slate-400">
-              Potencia el **Armario Virtual Inteligente** con visión computacional para reconocer prendas por foto y autollenar su categoría, corte, color y etiquetas.
+              Potencia el <strong className="text-slate-200">Armario Virtual Inteligente</strong> (visión computacional para reconocer prendas y armar looks) y el <strong className="text-[#e0a96d]">Tracker de Dolor & Salud</strong> (diagnóstico ergonómico, recomendación de especialistas médicos y guías para tus citas).
             </p>
 
             <div className="space-y-2">
