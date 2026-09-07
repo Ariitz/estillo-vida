@@ -45,7 +45,9 @@ export default function HealthTrackerModule({
 
   // Modals state
   const [isAddingSymptom, setIsAddingSymptom] = useState(false);
+  const [isSavingSymptom, setIsSavingSymptom] = useState(false);
   const [editingSymptom, setEditingSymptom] = useState(null);
+  const [isUpdatingSymptom, setIsUpdatingSymptom] = useState(false);
   const [selectedTriageSymptom, setSelectedTriageSymptom] = useState(null);
   const [analyzingId, setAnalyzingId] = useState(null);
   const [copiedQuestions, setCopiedQuestions] = useState(false);
@@ -82,11 +84,11 @@ export default function HealthTrackerModule({
 
   const bodyZonesPreset = [
     'Espalda baja / Lumbar',
-    'Tobillo derecho / Pie',
-    'Rodillas',
+    'Tobillo / Pie',
+    'Rodillas / Piernas',
     'Cuello / Cervicales',
     'Hombros / Trapecios',
-    'Muñeca / Manos',
+    'Muñecas / Manos',
     'Rostro / Mandíbula (ATM)',
     'Piel (Talones / Manos / Cuerpo)',
     'Cabello & Cuero cabelludo',
@@ -243,6 +245,7 @@ export default function HealthTrackerModule({
       return;
     }
 
+    setIsSavingSymptom(true);
     const effectiveTrigger = newTrigger === 'Otro desencadenante...' ? (newCustomTrigger.trim() || 'No especificado') : newTrigger;
 
     const newSymptomObj = {
@@ -259,45 +262,60 @@ export default function HealthTrackerModule({
       aiTriage: null
     };
 
-    if (autoAnalyzeOnSave) {
-      showToast('info', 'Evaluando...', 'Generando recomendación clínica con IA...');
-      try {
-        const triage = await analyzeHealthSymptomWithGemini(newSymptomObj, geminiApiKey);
-        newSymptomObj.aiTriage = triage;
-        newSymptomObj.lastAnalyzedDate = new Date().toISOString().split('T')[0];
-      } catch (err) {
-        console.warn("Auto-triage fallback triggered:", err);
-        newSymptomObj.aiTriage = generateFallbackHealthTriage(newSymptomObj);
+    try {
+      if (autoAnalyzeOnSave) {
+        showToast('info', 'Analizando con IA', 'Evaluando especialista y recomendaciones ergonómicas...');
+        try {
+          const triage = await analyzeHealthSymptomWithGemini(newSymptomObj, geminiApiKey);
+          newSymptomObj.aiTriage = triage;
+          newSymptomObj.lastAnalyzedDate = new Date().toISOString().split('T')[0];
+        } catch (err) {
+          console.warn("Auto-triage fallback triggered:", err);
+          newSymptomObj.aiTriage = generateFallbackHealthTriage(newSymptomObj);
+        }
       }
+
+      const updated = [newSymptomObj, ...healthSymptoms];
+      setHealthSymptoms(updated);
+      showToast('success', 'Molestia Registrada', `Se guardó "${newTitle.trim()}" en tu bitácora de salud.`);
+
+      // Reset form
+      setNewTitle('');
+      setNewCategory('pain_posture');
+      setNewBodyZone('Espalda baja / Lumbar');
+      setNewPainLevel(5);
+      setNewTrigger('Al manejar');
+      setNewCustomTrigger('');
+      setNewFrequency('Al realizar la actividad');
+      setNewNotes('');
+      setIsAddingSymptom(false);
+    } catch (err) {
+      console.error("Error saving symptom:", err);
+      showToast('error', 'Error al Guardar', 'No se pudo guardar la molestia: ' + err.message);
+    } finally {
+      setIsSavingSymptom(false);
     }
-
-    const updated = [newSymptomObj, ...healthSymptoms];
-    setHealthSymptoms(updated);
-    showToast('success', 'Molestia Registrada', `Se guardó "${newTitle.trim()}" en tu bitácora de salud.`);
-
-    // Reset form
-    setNewTitle('');
-    setNewCategory('pain_posture');
-    setNewBodyZone('Espalda baja / Lumbar');
-    setNewPainLevel(5);
-    setNewTrigger('Al manejar');
-    setNewCustomTrigger('');
-    setNewFrequency('Al realizar la actividad');
-    setNewNotes('');
-    setIsAddingSymptom(false);
   };
 
   // Save Edit Handler
   const handleSaveEdit = () => {
     if (!editingSymptom || !editingSymptom.title.trim()) return;
 
-    const updated = healthSymptoms.map((item) =>
-      item.id === editingSymptom.id ? editingSymptom : item
-    );
+    setIsUpdatingSymptom(true);
+    try {
+      const updated = healthSymptoms.map((item) =>
+        item.id === editingSymptom.id ? editingSymptom : item
+      );
 
-    setHealthSymptoms(updated);
-    showToast('success', 'Actualizado', `Se guardaron los cambios de "${editingSymptom.title}".`);
-    setEditingSymptom(null);
+      setHealthSymptoms(updated);
+      showToast('success', 'Actualizado', `Se guardaron los cambios de "${editingSymptom.title}".`);
+      setEditingSymptom(null);
+    } catch (err) {
+      console.error("Error updating symptom:", err);
+      showToast('error', 'Error al Actualizar', 'No se pudieron guardar los cambios: ' + err.message);
+    } finally {
+      setIsUpdatingSymptom(false);
+    }
   };
 
   // Toggle Status Handler
@@ -708,7 +726,7 @@ export default function HealthTrackerModule({
                 </label>
                 <input
                   type="text"
-                  placeholder="Ej. Molestia en espalda baja y tobillo derecho al manejar, Piel reseca en talones..."
+                  placeholder="Ej. Molestia en espalda baja o tobillo al manejar, Piel reseca en talones, Frizz..."
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2.5 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
@@ -838,19 +856,48 @@ export default function HealthTrackerModule({
                 />
               </div>
 
+              {/* Dynamic Loading State Indicator */}
+              {isSavingSymptom && (
+                <div className="p-3 bg-gradient-to-r from-[#e0a96d]/15 via-purple-500/15 to-[#e0a96d]/15 border border-[#e0a96d]/40 rounded-xl flex items-center gap-3 animate-pulse">
+                  <Loader2 className="w-5 h-5 text-[#e0a96d] animate-spin shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-xs font-bold text-slate-100">
+                      {autoAnalyzeOnSave ? 'Analizando con IA & Guardando Molestia...' : 'Guardando registro...'}
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      {autoAnalyzeOnSave
+                        ? 'Evaluando especialista médico idóneo y recomendaciones ergonómicas...'
+                        : 'Guardando en tu bitácora de salud y sincronizando en la nube...'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-800 shrink-0">
                 <button
                   type="button"
+                  disabled={isSavingSymptom}
                   onClick={() => setIsAddingSymptom(false)}
-                  className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all"
+                  className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-lg cursor-pointer transition-all shadow-md"
+                  disabled={isSavingSymptom}
+                  className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-lg cursor-pointer transition-all shadow-md flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Guardar Molestia
+                  {isSavingSymptom ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>{autoAnalyzeOnSave ? 'Generando con IA...' : 'Guardando...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Guardar Molestia</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -973,17 +1020,29 @@ export default function HealthTrackerModule({
             <div className="flex justify-end gap-2 pt-4 border-t border-slate-800 shrink-0">
               <button
                 type="button"
+                disabled={isUpdatingSymptom}
                 onClick={() => setEditingSymptom(null)}
-                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all"
+                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Cancelar
               </button>
               <button
                 type="button"
+                disabled={isUpdatingSymptom}
                 onClick={handleSaveEdit}
-                className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-lg cursor-pointer transition-all shadow-md"
+                className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-lg cursor-pointer transition-all shadow-md flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Guardar Cambios
+                {isUpdatingSymptom ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Guardando Cambios...</span>
+                  </>
+                ) : (
+                  <>
+                    <Edit3 className="w-4 h-4" />
+                    <span>Guardar Cambios</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
