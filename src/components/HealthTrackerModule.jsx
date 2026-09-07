@@ -48,6 +48,7 @@ export default function HealthTrackerModule({
   const [isSavingSymptom, setIsSavingSymptom] = useState(false);
   const [editingSymptom, setEditingSymptom] = useState(null);
   const [isUpdatingSymptom, setIsUpdatingSymptom] = useState(false);
+  const [reAnalyzeOnEdit, setReAnalyzeOnEdit] = useState(true);
   const [selectedTriageSymptom, setSelectedTriageSymptom] = useState(null);
   const [analyzingId, setAnalyzingId] = useState(null);
   const [copiedQuestions, setCopiedQuestions] = useState(false);
@@ -298,17 +299,39 @@ export default function HealthTrackerModule({
   };
 
   // Save Edit Handler
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async (forceReAnalyze = null) => {
     if (!editingSymptom || !editingSymptom.title.trim()) return;
 
+    const shouldReAnalyze = forceReAnalyze !== null ? forceReAnalyze : reAnalyzeOnEdit;
     setIsUpdatingSymptom(true);
+
     try {
+      let updatedSymptom = { ...editingSymptom };
+
+      if (shouldReAnalyze) {
+        showToast('info', 'Re-evaluando con IA', `Analizando nuevos datos de "${updatedSymptom.title}"...`);
+        try {
+          const triage = await analyzeHealthSymptomWithGemini(updatedSymptom, geminiApiKey);
+          updatedSymptom.aiTriage = triage;
+          updatedSymptom.lastAnalyzedDate = new Date().toISOString().split('T')[0];
+        } catch (err) {
+          console.warn("Auto-triage fallback triggered on edit:", err);
+          updatedSymptom.aiTriage = generateFallbackHealthTriage(updatedSymptom);
+        }
+      }
+
       const updated = healthSymptoms.map((item) =>
-        item.id === editingSymptom.id ? editingSymptom : item
+        item.id === updatedSymptom.id ? updatedSymptom : item
       );
 
       setHealthSymptoms(updated);
-      showToast('success', 'Actualizado', `Se guardaron los cambios de "${editingSymptom.title}".`);
+      showToast(
+        'success',
+        shouldReAnalyze ? 'Actualizado & Re-evaluado' : 'Actualizado',
+        shouldReAnalyze
+          ? `Se guardó "${updatedSymptom.title}" y se actualizó el triaje con IA.`
+          : `Se guardaron los cambios de "${updatedSymptom.title}".`
+      );
       setEditingSymptom(null);
     } catch (err) {
       console.error("Error updating symptom:", err);
@@ -1015,32 +1038,75 @@ export default function HealthTrackerModule({
                   className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] h-20 resize-none"
                 />
               </div>
+
+              {/* AI Re-analysis toggle */}
+              <div className="p-3 bg-[#e0a96d]/10 border border-[#e0a96d]/20 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#e0a96d]" />
+                  <div>
+                    <span className="text-xs font-bold text-slate-200 block">Re-evaluar con IA al guardar</span>
+                    <span className="text-[10px] text-slate-400">Actualiza especialista y plan de alivio según los nuevos cambios</span>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={reAnalyzeOnEdit}
+                  onChange={(e) => setReAnalyzeOnEdit(e.target.checked)}
+                  className="rounded border-slate-700 text-[#e0a96d] focus:ring-[#e0a96d] bg-[#0b0c10] cursor-pointer"
+                />
+              </div>
+
+              {/* Dynamic Loading State Indicator during Edit */}
+              {isUpdatingSymptom && (
+                <div className="p-3 bg-gradient-to-r from-[#e0a96d]/15 via-purple-500/15 to-[#e0a96d]/15 border border-[#e0a96d]/40 rounded-xl flex items-center gap-3 animate-pulse">
+                  <Loader2 className="w-5 h-5 text-[#e0a96d] animate-spin shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-xs font-bold text-slate-100">
+                      {reAnalyzeOnEdit ? 'Re-evaluando con IA & Guardando Cambios...' : 'Guardando cambios...'}
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      {reAnalyzeOnEdit
+                        ? 'Consultando a Gemini para actualizar especialista, causas y preguntas médicas...'
+                        : 'Actualizando registro en la bitácora...'}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-800 shrink-0">
+            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-800 shrink-0">
               <button
                 type="button"
                 disabled={isUpdatingSymptom}
                 onClick={() => setEditingSymptom(null)}
-                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-3.5 rounded-lg cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 disabled={isUpdatingSymptom}
-                onClick={handleSaveEdit}
-                className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-lg cursor-pointer transition-all shadow-md flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                onClick={() => handleSaveEdit(false)}
+                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-3.5 rounded-lg cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed hidden sm:inline-flex"
+                title="Guarda los cambios rápidamente sin llamar a la IA"
+              >
+                Guardar sin IA
+              </button>
+              <button
+                type="button"
+                disabled={isUpdatingSymptom}
+                onClick={() => handleSaveEdit(reAnalyzeOnEdit)}
+                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all shadow-md flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isUpdatingSymptom ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Guardando Cambios...</span>
+                    <span>{reAnalyzeOnEdit ? 'Re-analizando con IA...' : 'Guardando...'}</span>
                   </>
                 ) : (
                   <>
-                    <Edit3 className="w-4 h-4" />
-                    <span>Guardar Cambios</span>
+                    <Sparkles className="w-4 h-4" />
+                    <span>{reAnalyzeOnEdit ? 'Guardar y Re-evaluar IA' : 'Guardar Cambios'}</span>
                   </>
                 )}
               </button>
@@ -1172,11 +1238,32 @@ export default function HealthTrackerModule({
               )}
             </div>
 
-            {/* Triage Footer */}
+            {/* Triage Footer with Re-analyze Button */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-800 shrink-0">
-              <span className="text-[10px] text-slate-500">
-                Orientación preventiva generada por IA. No sustituye valoración presencial.
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={analyzingId === selectedTriageSymptom.id}
+                  onClick={() => handleAnalyzeSymptom(selectedTriageSymptom)}
+                  className="text-xs font-bold text-[#e0a96d] hover:text-[#f5d4af] bg-[#e0a96d]/10 hover:bg-[#e0a96d]/20 border border-[#e0a96d]/30 py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+                  title="Vuelve a consultar a Gemini IA con los datos de esta molestia"
+                >
+                  {analyzingId === selectedTriageSymptom.id ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Re-evaluando con IA...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Re-evaluar con IA</span>
+                    </>
+                  )}
+                </button>
+                <span className="text-[10px] text-slate-500 hidden sm:inline">
+                  Orientación preventiva generada por IA.
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedTriageSymptom(null)}
