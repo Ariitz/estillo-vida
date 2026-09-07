@@ -681,3 +681,542 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicion
   return generateFallbackHealthTriage(symptom);
 };
 
+/**
+ * Multimodal analysis of a Product / Skincare / Pantry / Household item image
+ * Extracts product name, category, brand, active ingredients / notes, and store recommendations.
+ * 
+ * @param {string} base64Data 
+ * @param {string} mimeType 
+ * @param {string} apiKey 
+ * @returns {Promise<{ name: string, category: string, brand: string, notes: string, stores: Array }>}
+ */
+export const analyzeProductImage = async (base64Data, mimeType, apiKey) => {
+  if (!apiKey || !apiKey.trim()) {
+    // Algorithmic fallback
+    return {
+      name: 'Producto Identificado',
+      category: 'Skincare',
+      brand: 'Marca Registrada',
+      notes: 'Ingredientes activos y fórmula para cuidado personal.',
+      stores: [
+        { storeName: 'Farmacias Guadalajara', price: 95, quantity: 150 },
+        { storeName: 'Amazon', price: 110, quantity: 150 }
+      ]
+    };
+  }
+
+  const prompt = `
+Eres un asistente de compras inteligente y experto en productos de consumo, cosmética, skincare, despensa y farmacia.
+Analiza la fotografía de este producto o etiqueta y responde EXCLUSIVAMENTE con un objeto JSON válido (sin markdown adicional) con la siguiente estructura:
+
+{
+  "name": "Nombre completo, marca y presentación del producto (ej. 'Crema Aclaradora Concha Nácar Teatrical 200g', 'Serum Retinol 0.3% CeraVe 30ml', 'Café Tostado Sam\\'s Member\\'s Mark 1kg')",
+  "category": "Skincare" | "Dental" | "Higiene" | "Despensa" | "Limpieza" | "Otros",
+  "brand": "Marca del producto (ej. 'Teatrical', 'CeraVe', 'Colgate', 'Kirkland')",
+  "notes": "Resumen conciso (1-2 oraciones) de ingredientes activos clave, beneficios principales o modo de uso",
+  "stores": [
+    { "storeName": "Costco" | "Sam's Club" | "Bodega Aurrera" | "Tiendas 3B" | "Farmacias Guadalajara" | "Amazon", "price": 0, "quantity": 1 }
+  ]
+}
+
+Reglas estrictas de categoría:
+- "Skincare": cremas faciales, sueros, bloqueadores solares, mascarillas, tónicos, contorno de ojos, jabón facial.
+- "Dental": pastas dentales, cepillos, enjuague bucal, hilo dental, guardas.
+- "Higiene": desodorantes, jabón corporal, champú, toallas sanitarias, rastrillos, cremas corporales.
+- "Despensa": café, arroz, avena, especies, aceites, suplementos alimenticios, snacks.
+- "Limpieza": detergentes, suavizantes, cloro, limpiapisos, bolsas de basura.
+- "Otros": medicamentos de venta libre, herramientas, accesorios.
+`;
+
+  const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
+
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const payload = {
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: mimeType || 'image/jpeg',
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.2
+        }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) continue;
+
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
+      const parsed = JSON.parse(cleaned);
+      if (parsed.name) {
+        const validCats = ['Skincare', 'Dental', 'Higiene', 'Despensa', 'Limpieza', 'Otros'];
+        const cat = validCats.includes(parsed.category) ? parsed.category : 'Skincare';
+        return {
+          name: parsed.name,
+          category: cat,
+          brand: parsed.brand || '',
+          notes: parsed.notes || '',
+          stores: Array.isArray(parsed.stores) && parsed.stores.length > 0 ? parsed.stores : [
+            { storeName: 'Farmacias Guadalajara', price: '', quantity: '' },
+            { storeName: 'Amazon', price: '', quantity: '' }
+          ]
+        };
+      }
+    } catch (err) {
+      console.warn(`Product image analysis with ${model} failed:`, err.message);
+    }
+  }
+
+  throw new Error('No se pudo analizar la imagen del producto con Gemini.');
+};
+
+/**
+ * Multimodal analysis of an Experience, Landmark, Restaurant, Cafe or Place image
+ * 
+ * @param {string} base64Data 
+ * @param {string} mimeType 
+ * @param {string} apiKey 
+ * @returns {Promise<{ name: string, type: string, category: string, placeOrBrand: string, cost: string, notes: string }>}
+ */
+export const analyzeExperienceImage = async (base64Data, mimeType, apiKey) => {
+  if (!apiKey || !apiKey.trim()) {
+    return {
+      name: 'Lugar o Experiencia Identificada',
+      type: 'place',
+      category: 'Cafeterías',
+      placeOrBrand: 'Zona Centro',
+      cost: '$$',
+      notes: 'Espacio recomendado para visita cultural o gastronómica.'
+    };
+  }
+
+  const prompt = `
+Eres un guía turístico, crítico gastronómico y curador de experiencias de estilo de vida.
+Analiza la fotografía de este lugar, monumento arquitectónico, cafetería, restaurante, museo o platillo y responde EXCLUSIVAMENTE con un objeto JSON válido con la siguiente estructura:
+
+{
+  "name": "Nombre reconocido y preciso del lugar, monumento, café o experiencia (ej. 'Palacio de Bellas Artes', 'Café Nin', 'Museo Frida Kahlo (Casa Azul)', 'Restaurante Rosetta')",
+  "type": "place" | "product",
+  "category": "Cafeterías" | "Restaurantes" | "Cuidado Personal" | "Gourmet/Despensa" | "Entretenimiento al aire libre" | "Tiendas Especializadas",
+  "placeOrBrand": "Ubicación, colonia o zona geográfica (ej. 'Centro Histórico, CDMX', 'Roma Norte, CDMX', 'Coyoacán, CDMX')",
+  "cost": "$" | "$$" | "$$$" | "$$$$",
+  "notes": "Breve descripción (1-2 oraciones) de su importancia arquitectónica, atmósfera o recomendación principal (ej. 'Majestuoso palacio de mármol de estilo Art Nouveau y Art Decó; ideal para paseos culturales y fotos al atardecer.')"
+}
+
+Reglas estrictas de categoría:
+- "Entretenimiento al aire libre": monumentos, museos, teatros, parques, paseos históricos (ej. Bellas Artes, Chapultepec).
+- "Cafeterías": specialty coffee, cafeterías de autor, panaderías boutique.
+- "Restaurantes": bistrós, alta cocina, comida tradicional, cenas.
+- "Cuidado Personal": spas, estéticas, barberías, centros de relajación.
+- "Gourmet/Despensa": mercados gourmet, tiendas de té, chocolaterías.
+- "Tiendas Especializadas": librerías, boutiques, tiendas de diseño o anime.
+`;
+
+  const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
+
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const payload = {
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: mimeType || 'image/jpeg',
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.2
+        }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) continue;
+
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
+      const parsed = JSON.parse(cleaned);
+      if (parsed.name) {
+        return {
+          name: parsed.name,
+          type: parsed.type === 'product' ? 'product' : 'place',
+          category: parsed.category || 'Entretenimiento al aire libre',
+          placeOrBrand: parsed.placeOrBrand || 'Ubicación identificada',
+          cost: parsed.cost || '$$',
+          notes: parsed.notes || 'Experiencia registrada con IA.'
+        };
+      }
+    } catch (err) {
+      console.warn(`Experience image analysis with ${model} failed:`, err.message);
+    }
+  }
+
+  throw new Error('No se pudo analizar la foto de la experiencia con Gemini.');
+};
+
+/**
+ * Multimodal analysis of a Health, Skin, Posture or Aesthetic image
+ * 
+ * @param {string} base64Data 
+ * @param {string} mimeType 
+ * @param {string} apiKey 
+ * @returns {Promise<{ title: string, category: string, bodyZone: string, notes: string }>}
+ */
+export const analyzeHealthImage = async (base64Data, mimeType, apiKey) => {
+  if (!apiKey || !apiKey.trim()) {
+    return {
+      title: 'Molestia o Condición Cutánea Identificada',
+      category: 'aesthetic_skin',
+      bodyZone: 'Piel (Talones / Manos / Cuerpo)',
+      notes: 'Observación visual para valoración de autocuidado o consulta médica.'
+    };
+  }
+
+  const prompt = `
+Eres un asistente clínico y dermatológico.
+Analiza con respeto y rigor la fotografía de esta molestia, postura, condición en la piel (ej. resequedad, talones agrietados, verrugas, tono irregular), cabello o producto de salud.
+Responde EXCLUSIVAMENTE con un objeto JSON válido con la siguiente estructura:
+
+{
+  "title": "Título conciso y respetuoso de la molestia o condición (ej. 'Resequedad y descamación en talones', 'Frizz y cutícula abierta en cabello ondulado', 'Tensión cervical postural')",
+  "category": "pain_posture" | "aesthetic_skin" | "metabolism" | "general",
+  "bodyZone": "Espalda baja / Lumbar" | "Tobillo / Pie" | "Rodillas / Piernas" | "Cuello / Cervicales" | "Hombros / Trapecios" | "Muñecas / Manos" | "Rostro / Mandíbula (ATM)" | "Piel (Talones / Manos / Cuerpo)" | "Cabello & Cuero cabelludo" | "Abdomen / Zona Digestiva" | "Otra zona corporal",
+  "notes": "Descripción objetiva de las características visuales (textura, enrojecimiento, descamación, postura) para orientar el registro"
+}
+`;
+
+  const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
+
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const payload = {
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: mimeType || 'image/jpeg',
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.2
+        }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) continue;
+
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
+      const parsed = JSON.parse(cleaned);
+      if (parsed.title) {
+        return {
+          title: parsed.title,
+          category: parsed.category || 'aesthetic_skin',
+          bodyZone: parsed.bodyZone || 'Piel (Talones / Manos / Cuerpo)',
+          notes: parsed.notes || ''
+        };
+      }
+    } catch (err) {
+      console.warn(`Health image analysis with ${model} failed:`, err.message);
+    }
+  }
+
+  throw new Error('No se pudo analizar la foto médica/estética con Gemini.');
+};
+
+/**
+ * Offline / Heuristic fallback for Copilot Routine and Lifestyle Parser
+ */
+export const generateFallbackCopilotResponse = (userText = '') => {
+  const lower = userText.toLowerCase();
+
+  // Skincare Matrix (Retinol, Concha Nácar, Máscara LED, Mascarilla de Arroz)
+  if (/skincare|retinol|concha n|teatrical|m[aá]scara led|arroz|activo|facial/.test(lower)) {
+    return {
+      replyText: `### 🌸 Estrategia de Skincare y Frecuencias No Diarias
+
+He analizado tu protocolo para optimizar la renovación celular y evitar sobreexposición o irritación de la barrera cutánea:
+
+1. **Matriz de Activos Nocturnos (Alternancia Segura):**
+   - **Noche A (Renovación & Colágeno):** Aplicar **Retinol Facial** sobre piel completamente seca.
+   - **Noche B (Aclarado & Nutrición):** Aplicar **Concha Nácar + Teatrical Aclaradora** para despigmentar e hidratar.
+   - *Regla de oro:* No encimar retinol y concha nácar la misma noche para proteger el manto lipídico.
+
+2. **Fototerapia con Máscara LED Roja:**
+   - **Frecuencia:** 3 a 4 veces por semana (días alternos).
+   - **Duración:** 10 a 15 minutos en piel limpia antes de los activos densos. Estimula la síntesis de colágeno y calma la inflamación.
+
+3. **Mascarilla Coreana de Arroz:**
+   - **Frecuencia:** Un día sí, un día no (intervalo de 2 días) para unificar el tono y luminosidad sin saturar los poros.
+
+---
+
+A continuación tienes las **tarjetas de acciones automáticas** para integrar todo a tus módulos con un solo clic:`,
+      actions: {
+        products: [
+          { name: 'Serum de Retinol Facial 0.3% - 0.5%', category: 'Skincare', notes: 'Uso nocturno días alternos para renovación celular.' },
+          { name: 'Crema Concha Nácar Natural', category: 'Skincare', notes: 'Activo despigmentante para tono uniforme.' },
+          { name: 'Crema Aclaradora Teatrical con Células Madre', category: 'Skincare', notes: 'Hidratación y sellado nocturno en noches sin retinol.' },
+          { name: 'Máscara Facial LED de Luz Roja', category: 'Skincare', notes: 'Terapia de colágeno y fotorejuvenecimiento 3-4x/semana.' },
+          { name: 'Mascarilla Coreana de Extracto de Arroz', category: 'Skincare', notes: 'Hidratación profunda e iluminación día por medio.' }
+        ],
+        selfCare: [
+          {
+            title: 'Fototerapia con Máscara LED Roja (12 min)',
+            frequency: 'custom',
+            daysInterval: 2,
+            category: 'skincare',
+            notes: 'Sesión de luz roja 10-15 min sobre piel limpia para estimulación de colágeno.',
+            protocol: 'Usar 3 a 4 veces por semana en días alternos.'
+          },
+          {
+            title: 'Mascarilla Coreana de Arroz (Iluminación & Tono)',
+            frequency: 'custom',
+            daysInterval: 2,
+            category: 'skincare',
+            notes: 'Aplicar durante 15 minutos un día sí y un día no.',
+            protocol: 'Cadencia día por medio para mantener la barrera cutánea radiante.'
+          },
+          {
+            title: 'Noche de Retinol (Renovación Celular)',
+            frequency: 'custom',
+            daysInterval: 2,
+            category: 'skincare',
+            notes: 'Aplicar capa fina de retinol de noche sobre piel seca.',
+            protocol: 'Alternar con noches de Concha Nácar.'
+          },
+          {
+            title: 'Noche de Concha Nácar + Teatrical Aclaradora',
+            frequency: 'custom',
+            daysInterval: 2,
+            category: 'skincare',
+            notes: 'Masaje facial aclarador e hidratación profunda.',
+            protocol: 'Uso nocturno en días sin retinol.'
+          }
+        ],
+        timers: [
+          { name: 'Máscara LED Roja (Terapia Facial)', durationSeconds: 720, category: 'skincare', description: 'Temporizador de 12 minutos para fototerapia facial.' },
+          { name: 'Mascarilla Coreana de Arroz', durationSeconds: 900, category: 'skincare', description: 'Temporizador de 15 minutos para absorción de nutrientes.' }
+        ],
+        schedule: [
+          { time: '22:00', title: 'Rutina de Skincare Nocturna & Activos Alternos', tag: 'beauty', isRoutine: true }
+        ]
+      }
+    };
+  }
+
+  // General lifestyle parser fallback
+  return {
+    replyText: `### 🤖 Asistente AURA Copilot
+
+He procesado tu solicitud de estilo de vida: **"${userText}"**.
+
+Aquí tienes el desglose estratégico de acciones para incorporar en tu sistema:
+- **Compras recomendadas:** Insumos y productos necesarios para la ejecución.
+- **Autocuidado periódico:** Frecuencias no diarias programadas.
+- **Temporizadores:** Minutos de aplicación listos para activar.
+
+Haz clic en los botones de abajo para agregar cada elemento a su módulo correspondiente.`,
+    actions: {
+      products: [
+        { name: 'Insumo sugerido para: ' + userText.slice(0, 30), category: 'Skincare', notes: 'Recomendado por AURA Copilot.' }
+      ],
+      selfCare: [
+        {
+          title: 'Sesión periódica: ' + userText.slice(0, 35),
+          frequency: 'custom',
+          daysInterval: 3,
+          category: 'skincare',
+          notes: 'Protocolo de autocuidado periódico.',
+          protocol: 'Realizar cada 3 días según recomendaciones.'
+        }
+      ],
+      timers: [
+        { name: 'Temporizador AURA (' + userText.slice(0, 20) + ')', durationSeconds: 600, category: 'custom', description: '10 minutos de enfoque o tratamiento.' }
+      ],
+      schedule: []
+    }
+  };
+};
+
+/**
+ * Intelligent Routine & Lifestyle Parser using Google Gemini
+ * Analyzes complex routines, advice or text and returns a conversational explanation
+ * alongside structured actionable items (products, self care cadences, timers, schedule blocks).
+ * 
+ * @param {string} userMessage - Text or routine pasted by user
+ * @param {Array} history - Previous chat messages
+ * @param {string} apiKey - Gemini API key
+ * @returns {Promise<{ replyText: string, actions: { products: Array, selfCare: Array, timers: Array, schedule: Array } }>}
+ */
+export const parseRoutineWithCopilot = async (userMessage, history = [], apiKey = '') => {
+  if (!apiKey || !apiKey.trim()) {
+    return generateFallbackCopilotResponse(userMessage);
+  }
+
+  const prompt = `
+Eres AURA Copilot, el asistente de inteligencia artificial élite de AURA Nexus para Estilo de Vida, Belleza, Skincare, Ergonomía, Productividad y Organización Personal.
+
+La usuaria te ha enviado el siguiente mensaje o rutina para analizar y estructurar:
+"${userMessage}"
+
+Tu tarea es doble:
+1. "replyText": Escribe una respuesta conversacional, empática, elegante y profesional en Markdown (en español). Explica claramente la estrategia, cómo combinar los activos/hábitos de forma segura (ej. qué días usar retinol vs concha nácar para evitar irritación, cuánto tiempo usar la máscara LED, etc.), y qué beneficios obtendrá.
+2. "actions": Extrae de forma estructurada y precisa todos los elementos accionables que la usuaria necesitará para que la aplicación los agregue a sus respectivos módulos con un solo clic.
+
+Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
+
+{
+  "replyText": "Respuesta en markdown con explicaciones claras, pasos y recomendaciones...",
+  "actions": {
+    "products": [
+      {
+        "name": "Nombre completo del producto (ej. 'Serum de Retinol Facial 0.3%', 'Crema Concha Nácar Teatrical', 'Máscara LED Roja')",
+        "category": "Skincare" | "Dental" | "Higiene" | "Despensa" | "Limpieza" | "Otros",
+        "notes": "Para qué sirve o en qué momento de la rutina se usa"
+      }
+    ],
+    "selfCare": [
+      {
+        "title": "Nombre de la actividad de autocuidado periódico (ej. 'Máscara LED Roja (12 min)', 'Mascarilla Coreana de Arroz (Día sí / Día no)')",
+        "frequency": "daily" | "weekly" | "biweekly" | "monthly" | "bimonthly" | "custom",
+        "daysInterval": 2,
+        "category": "skincare" | "health" | "body" | "hair" | "general",
+        "notes": "Instrucciones de uso o precauciones",
+        "protocol": "Especificación de cadencia (ej. 'Usar 3 a 4 veces por semana' o 'Un día sí y un día no')"
+      }
+    ],
+    "timers": [
+      {
+        "name": "Nombre del temporizador (ej. 'Máscara LED Facial', 'Mascarilla de Arroz')",
+        "durationSeconds": 720,
+        "category": "skincare" | "health" | "custom",
+        "description": "Tiempo exacto recomendado"
+      }
+    ],
+    "schedule": [
+      {
+        "time": "22:00",
+        "title": "Rutina de Skincare Nocturna & Activos",
+        "tag": "beauty",
+        "isRoutine": true
+      }
+    ]
+  }
+}
+`;
+
+  const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
+
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const payload = {
+        contents: [
+          {
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.3
+        }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) continue;
+
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
+      const parsed = JSON.parse(cleaned);
+      if (parsed.replyText) {
+        return {
+          replyText: parsed.replyText,
+          actions: {
+            products: Array.isArray(parsed.actions?.products) ? parsed.actions.products : [],
+            selfCare: Array.isArray(parsed.actions?.selfCare) ? parsed.actions.selfCare : [],
+            timers: Array.isArray(parsed.actions?.timers) ? parsed.actions.timers : [],
+            schedule: Array.isArray(parsed.actions?.schedule) ? parsed.actions.schedule : []
+          }
+        };
+      }
+    } catch (err) {
+      console.warn(`Copilot routine parsing with ${model} failed:`, err.message);
+    }
+  }
+
+  // Fallback if AI endpoint failed
+  return generateFallbackCopilotResponse(userMessage);
+};
+
+

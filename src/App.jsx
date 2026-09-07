@@ -17,7 +17,10 @@ import {
   Award,
   Cloud,
   HeartPulse,
-  Activity
+  Activity,
+  Bot,
+  Sparkles,
+  MessageSquare
 } from 'lucide-react';
 
 // Firebase Client SDK
@@ -32,6 +35,7 @@ import WardrobeModule from './components/WardrobeModule';
 import ManualsModule from './components/ManualsModule';
 import TimersModule from './components/TimersModule';
 import HealthTrackerModule from './components/HealthTrackerModule';
+import CopilotModule from './components/CopilotModule';
 import SyncModule from './components/SyncModule';
 import Toast from './components/Toast';
 
@@ -802,6 +806,7 @@ export default function App() {
   // Breadcrumbs title mapper
   const moduleTitles = {
     schedule: 'Rutina Diaria & Cronograma',
+    copilot: 'AURA Copilot & Conversor de Rutinas IA',
     health: 'Tracker de Dolor, Postura & Diagnóstico IA',
     comparator: 'Comparador de Precios & Alacena',
     experiences: 'Bitácora de Experiencias',
@@ -814,6 +819,7 @@ export default function App() {
   // Menu items list
   const menuItems = [
     { id: 'schedule', label: 'Rutina Diaria', icon: <Calendar className="w-5 h-5" /> },
+    { id: 'copilot', label: 'Chat Copilot IA', icon: <Bot className="w-5 h-5 text-[#e0a96d]" /> },
     { id: 'health', label: 'Dolor & Salud IA', icon: <HeartPulse className="w-5 h-5" /> },
     { id: 'comparator', label: 'Comparador de Precios', icon: <Tag className="w-5 h-5" /> },
     { id: 'experiences', label: 'Bitácora & Reviews', icon: <MapPin className="w-5 h-5" /> },
@@ -1032,6 +1038,22 @@ export default function App() {
             />
           )}
 
+          {activeModule === 'copilot' && (
+            <CopilotModule
+              geminiApiKey={geminiApiKey}
+              householdItems={householdItems}
+              setHouseholdItems={setHouseholdItems}
+              selfCareActivities={selfCareActivities}
+              setSelfCareActivities={setSelfCareActivities}
+              customTimers={customTimers}
+              setCustomTimers={setCustomTimers}
+              schedule={schedule}
+              setSchedule={setSchedule}
+              showToast={showToast}
+              setActiveModule={setActiveModule}
+            />
+          )}
+
           {activeModule === 'health' && (
             <HealthTrackerModule
               healthSymptoms={healthSymptoms}
@@ -1046,6 +1068,7 @@ export default function App() {
               householdItems={householdItems}
               setHouseholdItems={setHouseholdItems}
               showToast={showToast}
+              geminiApiKey={geminiApiKey}
             />
           )}
 
@@ -1054,6 +1077,7 @@ export default function App() {
               experiences={experiences}
               setExperiences={setExperiences}
               showToast={showToast}
+              geminiApiKey={geminiApiKey}
             />
           )}
 
@@ -1106,6 +1130,18 @@ export default function App() {
 
         {/* TOAST SYSTEM */}
         <Toast toasts={toasts} onClose={handleCloseToast} />
+
+        {/* FLOATING COPILOT LAUNCHER BUTTON */}
+        {activeModule !== 'copilot' && (
+          <button
+            onClick={() => setActiveModule('copilot')}
+            className="fixed bottom-6 right-6 z-30 p-3.5 bg-gradient-to-r from-[#e0a96d] to-[#b37d46] text-[#0b0c10] rounded-full shadow-2xl hover:scale-105 transition-all cursor-pointer flex items-center gap-2 group font-bold text-xs"
+            title="Abrir AURA Copilot & Conversor de Rutinas IA"
+          >
+            <Sparkles className="w-5 h-5 animate-pulse" />
+            <span className="hidden sm:inline font-outfit font-black">Copilot IA</span>
+          </button>
+        )}
 
       </main>
 

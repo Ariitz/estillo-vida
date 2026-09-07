@@ -1,11 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Plus, Star, Award, RotateCcw, ThumbsUp, ThumbsDown, HelpCircle, Save, Trash2, ArrowUpDown, PlusCircle, X } from 'lucide-react';
+import {
+  Search,
+  Plus,
+  Star,
+  Award,
+  RotateCcw,
+  ThumbsUp,
+  ThumbsDown,
+  HelpCircle,
+  Save,
+  Trash2,
+  ArrowUpDown,
+  PlusCircle,
+  X,
+  Camera,
+  Sparkles,
+  Loader2,
+  RefreshCw,
+  Image as ImageIcon
+} from 'lucide-react';
+import { compressImage, analyzeProductImage } from '../utils/geminiService';
 
 export default function PriceComparatorModule({
   householdItems,
   setHouseholdItems,
-  showToast
+  showToast,
+  geminiApiKey = ''
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -16,6 +37,9 @@ export default function PriceComparatorModule({
   const [itemCategory, setItemCategory] = useState('Higiene');
   const [itemNotes, setItemNotes] = useState('');
   const [itemVerdict, setItemVerdict] = useState('yes');
+  const [productImage, setProductImage] = useState('');
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  const fileInputRef = useRef(null);
   
   // Store options in form
   const [storePrices, setStorePrices] = useState([
@@ -28,6 +52,36 @@ export default function PriceComparatorModule({
   const [newStoreName, setNewStoreName] = useState('Costco');
   const [newStorePrice, setNewStorePrice] = useState('');
   const [newStoreQty, setNewStoreQty] = useState('');
+
+  // Handle Photo Upload with Multimodal AI Vision
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsAnalyzingImage(true);
+      showToast('info', 'Procesando Foto', 'Comprimiendo y analizando etiqueta del producto...');
+      
+      const { dataUrl, base64, mimeType } = await compressImage(file, 800, 0.75);
+      setProductImage(dataUrl);
+
+      const parsed = await analyzeProductImage(base64, mimeType, geminiApiKey);
+      if (parsed.name) setItemName(parsed.name);
+      if (parsed.category) setItemCategory(parsed.category);
+      if (parsed.notes) setItemNotes(parsed.notes);
+      if (Array.isArray(parsed.stores) && parsed.stores.length > 0) {
+        setStorePrices(parsed.stores);
+      }
+
+      showToast('success', '¡Producto Identificado!', `Se detectó "${parsed.name}" y se autollenaron los datos.`);
+    } catch (err) {
+      console.error('Vision analysis error:', err);
+      showToast('warning', 'Lectura de Imagen', err.message || 'No se pudo leer la etiqueta automáticamente.');
+    } finally {
+      setIsAnalyzingImage(false);
+      e.target.value = '';
+    }
+  };
 
   // Body scroll lock on modal open
   useEffect(() => {
@@ -229,14 +283,97 @@ export default function PriceComparatorModule({
       {/* Add New Item Form */}
       {isAddingItem && (
         <form onSubmit={handleAddItem} className="bg-[#171a24] border border-[#e0a96d]/20 p-6 rounded-xl space-y-4 animate-fade-in shadow-xl">
-          <h3 className="text-lg font-bold text-slate-100 font-outfit">Registrar Nuevo Insumo / Producto</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <h3 className="text-lg font-bold text-slate-100 font-outfit flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-[#e0a96d]" />
+              <span>Registrar Nuevo Insumo / Producto</span>
+            </h3>
+            <span className="text-[11px] text-slate-400">
+              Captura manual o automática por foto
+            </span>
+          </div>
+
+          {/* AI Vision Upload Card */}
+          <div className="p-4 bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl flex flex-col sm:flex-row items-center gap-4">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoUpload}
+            />
+
+            {productImage ? (
+              <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-[#e0a96d]/40 shrink-0 group">
+                <img src={productImage} alt="Producto" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setProductImage('')}
+                  className="absolute top-1 right-1 p-1 rounded-md bg-[#0b0c10]/80 text-rose-400 hover:text-rose-200 cursor-pointer"
+                  title="Quitar foto"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={isAnalyzingImage}
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full sm:w-auto px-4 py-3 bg-[#171a24] hover:bg-slate-800 border border-dashed border-[#e0a96d]/40 rounded-lg text-slate-300 text-xs font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all disabled:opacity-50"
+              >
+                {isAnalyzingImage ? (
+                  <>
+                    <Loader2 className="w-4 h-4 text-[#e0a96d] animate-spin" />
+                    <span>Analizando etiqueta con IA...</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-4 h-4 text-[#e0a96d]" />
+                    <span>Tomar / Subir Foto y Autollenar con IA</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            <div className="flex-1 text-center sm:text-left">
+              {isAnalyzingImage ? (
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-[#e0a96d] animate-pulse">
+                    🤖 Gemini IA está leyendo la etiqueta...
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    Detectando nombre, marca, categoría, ingredientes activos y estimaciones de tienda.
+                  </p>
+                </div>
+              ) : productImage ? (
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                    ✓ Foto Analizada por Visión IA
+                  </span>
+                  <p className="text-[11px] text-slate-300 mt-1">
+                    Puedes ajustar o confirmar los campos autollenados abajo antes de guardar.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-slate-200">
+                    ¿Tienes el producto en mano o una foto del empaque?
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    Sube una foto de cremas, skincare, despensa o farmacia para autollenar todos los campos en un segundo.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre</label>
               <input
                 type="text"
-                placeholder="Ej. Papel Higiénico Premium"
+                placeholder="Ej. Crema Aclaradora Teatrical Concha Nácar"
                 value={itemName}
                 onChange={(e) => setItemName(e.target.value)}
                 className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"

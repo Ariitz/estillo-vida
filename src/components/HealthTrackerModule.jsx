@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Activity,
@@ -27,9 +27,11 @@ import {
   PlusCircle,
   TrendingUp,
   RefreshCw,
-  Loader2
+  Loader2,
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react';
-import { analyzeHealthSymptomWithGemini, generateFallbackHealthTriage } from '../utils/geminiService';
+import { analyzeHealthSymptomWithGemini, generateFallbackHealthTriage, compressImage, analyzeHealthImage } from '../utils/geminiService';
 
 export default function HealthTrackerModule({
   healthSymptoms = [],
@@ -63,6 +65,37 @@ export default function HealthTrackerModule({
   const [newFrequency, setNewFrequency] = useState('Al realizar la actividad');
   const [newNotes, setNewNotes] = useState('');
   const [autoAnalyzeOnSave, setAutoAnalyzeOnSave] = useState(true);
+  const [healthImage, setHealthImage] = useState('');
+  const [isAnalyzingHealthImage, setIsAnalyzingHealthImage] = useState(false);
+  const healthFileInputRef = useRef(null);
+
+  // Handle Photo Upload with Multimodal AI Vision
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsAnalyzingHealthImage(true);
+      showToast('info', 'Analizando Imagen', 'Evaluando piel, postura o molestia con IA...');
+
+      const { dataUrl, base64, mimeType } = await compressImage(file, 800, 0.75);
+      setHealthImage(dataUrl);
+
+      const parsed = await analyzeHealthImage(base64, mimeType, geminiApiKey);
+      if (parsed.title) setNewTitle(parsed.title);
+      if (parsed.category) setNewCategory(parsed.category);
+      if (parsed.bodyZone) setNewBodyZone(parsed.bodyZone);
+      if (parsed.notes) setNewNotes(parsed.notes);
+
+      showToast('success', '¡Condición Reconocida!', `Se detectó "${parsed.title}" y se autollenaron los datos.`);
+    } catch (err) {
+      console.error('Health vision analysis error:', err);
+      showToast('warning', 'Lectura de Imagen', err.message || 'No se pudo analizar la foto automáticamente.');
+    } finally {
+      setIsAnalyzingHealthImage(false);
+      e.target.value = '';
+    }
+  };
 
   // Body scroll lock when any modal is open
   useEffect(() => {
@@ -743,6 +776,66 @@ export default function HealthTrackerModule({
             </div>
 
             <form onSubmit={handleAddSymptom} className="space-y-4 overflow-y-auto pr-1.5 flex-1 py-1">
+              {/* AI Vision Photo Upload Card */}
+              <div className="p-3.5 bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl flex flex-col sm:flex-row items-center gap-3">
+                <input
+                  type="file"
+                  ref={healthFileInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                />
+
+                {healthImage ? (
+                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-[#e0a96d]/40 shrink-0 group">
+                    <img src={healthImage} alt="Foto Síntoma" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setHealthImage('')}
+                      className="absolute top-1 right-1 p-1 rounded-md bg-[#0b0c10]/80 text-rose-400 hover:text-rose-200 cursor-pointer"
+                      title="Quitar foto"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isAnalyzingHealthImage}
+                    onClick={() => healthFileInputRef.current?.click()}
+                    className="w-full sm:w-auto px-3.5 py-2.5 bg-[#171a24] hover:bg-slate-800 border border-dashed border-[#e0a96d]/40 rounded-lg text-slate-300 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50 shrink-0"
+                  >
+                    {isAnalyzingHealthImage ? (
+                      <>
+                        <Loader2 className="w-4 h-4 text-[#e0a96d] animate-spin" />
+                        <span>Analizando foto con IA...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="w-4 h-4 text-[#e0a96d]" />
+                        <span>📸 Foto de la Molestia o Piel</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                <div className="flex-1 text-center sm:text-left text-[11px] text-slate-400">
+                  {isAnalyzingHealthImage ? (
+                    <p className="text-xs font-bold text-[#e0a96d] animate-pulse">
+                      🤖 Gemini IA está evaluando la condición visual...
+                    </p>
+                  ) : healthImage ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                      ✓ Foto procesada y campos autollenados
+                    </span>
+                  ) : (
+                    <span>
+                      Sube una foto de piel reseca, postura, cabello o afección para autollenar nombre y zona.
+                    </span>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Nombre de la Molestia o Síntoma *

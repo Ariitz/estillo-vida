@@ -1,10 +1,29 @@
-import React, { useState } from 'react';
-import { Star, Filter, Heart, MapPin, ShoppingBag, Eye, Trash2, Calendar, Plus, HelpCircle, X, Search } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import {
+  Star,
+  Filter,
+  Heart,
+  MapPin,
+  ShoppingBag,
+  Eye,
+  Trash2,
+  Calendar,
+  Plus,
+  HelpCircle,
+  X,
+  Search,
+  Camera,
+  Sparkles,
+  Loader2,
+  Image as ImageIcon
+} from 'lucide-react';
+import { compressImage, analyzeExperienceImage } from '../utils/geminiService';
 
 export default function ExperiencesModule({
   experiences,
   setExperiences,
-  showToast
+  showToast,
+  geminiApiKey = ''
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -24,6 +43,9 @@ export default function ExperiencesModule({
   const [placeOrBrand, setPlaceOrBrand] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
+  const [placeImage, setPlaceImage] = useState('');
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  const fileInputRef = useRef(null);
 
   const categories = [
     'Cafeterías',
@@ -33,6 +55,36 @@ export default function ExperiencesModule({
     'Entretenimiento al aire libre',
     'Tiendas Especializadas'
   ];
+
+  // Handle Photo Upload with Multimodal AI Vision
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsAnalyzingImage(true);
+      showToast('info', 'Analizando Lugar con IA', 'Reconociendo monumento, restaurante o experiencia...');
+      
+      const { dataUrl, base64, mimeType } = await compressImage(file, 800, 0.75);
+      setPlaceImage(dataUrl);
+
+      const parsed = await analyzeExperienceImage(base64, mimeType, geminiApiKey);
+      if (parsed.name) setName(parsed.name);
+      if (parsed.type) setItemType(parsed.type);
+      if (parsed.category) setCategory(parsed.category);
+      if (parsed.placeOrBrand) setPlaceOrBrand(parsed.placeOrBrand);
+      if (parsed.cost) setCost(parsed.cost);
+      if (parsed.notes) setNotes(parsed.notes);
+
+      showToast('success', '¡Lugar Reconocido!', `Se identificó "${parsed.name}" y se autollenaron los datos.`);
+    } catch (err) {
+      console.error('Experience vision error:', err);
+      showToast('warning', 'Lectura de Imagen', err.message || 'No se pudo identificar el lugar automáticamente.');
+    } finally {
+      setIsAnalyzingImage(false);
+      e.target.value = '';
+    }
+  };
 
   const handleAddExperience = (e) => {
     e.preventDefault();
@@ -208,14 +260,97 @@ export default function ExperiencesModule({
       {/* Add Entry Form */}
       {isAdding && (
         <form onSubmit={handleAddExperience} className="bg-[#171a24] border border-[#e0a96d]/20 p-6 rounded-xl space-y-4 shadow-xl animate-fade-in">
-          <h3 className="text-lg font-bold text-slate-100 font-outfit">Añadir Entrada en la Bitácora</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <h3 className="text-lg font-bold text-slate-100 font-outfit flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-[#e0a96d]" />
+              <span>Añadir Entrada en la Bitácora</span>
+            </h3>
+            <span className="text-[11px] text-slate-400">
+              Captura manual o automática por foto del lugar
+            </span>
+          </div>
+
+          {/* AI Vision Upload Card */}
+          <div className="p-4 bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl flex flex-col sm:flex-row items-center gap-4">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoUpload}
+            />
+
+            {placeImage ? (
+              <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-[#e0a96d]/40 shrink-0 group">
+                <img src={placeImage} alt="Lugar o Producto" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setPlaceImage('')}
+                  className="absolute top-1 right-1 p-1 rounded-md bg-[#0b0c10]/80 text-rose-400 hover:text-rose-200 cursor-pointer"
+                  title="Quitar foto"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={isAnalyzingImage}
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full sm:w-auto px-4 py-3 bg-[#171a24] hover:bg-slate-800 border border-dashed border-[#e0a96d]/40 rounded-lg text-slate-300 text-xs font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all disabled:opacity-50"
+              >
+                {isAnalyzingImage ? (
+                  <>
+                    <Loader2 className="w-4 h-4 text-[#e0a96d] animate-spin" />
+                    <span>Reconociendo lugar con IA...</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-4 h-4 text-[#e0a96d]" />
+                    <span>Tomar / Subir Foto del Lugar o Platillo</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            <div className="flex-1 text-center sm:text-left">
+              {isAnalyzingImage ? (
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-[#e0a96d] animate-pulse">
+                    🤖 Gemini IA está identificando el lugar...
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    Reconociendo arquitectura, nombre oficial, ubicación geográfica y categoría.
+                  </p>
+                </div>
+              ) : placeImage ? (
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                    ✓ Lugar Reconocido por Visión IA
+                  </span>
+                  <p className="text-[11px] text-slate-300 mt-1">
+                    Verifica la información autollenada antes de guardar en tu bitácora.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-slate-200">
+                    ¿Tomaste foto de Bellas Artes, un museo, café o platillo?
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    Sube la foto y la IA identificará el lugar exacto, zona y categoría automáticamente.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre / Título</label>
               <input
                 type="text"
-                placeholder="Ej. Tarta de Lichi"
+                placeholder="Ej. Palacio de Bellas Artes, Tarta de Lichi..."
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
