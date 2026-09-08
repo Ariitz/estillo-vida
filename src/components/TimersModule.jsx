@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, Plus, Trash2, Clock, Volume2, X } from 'lucide-react';
+import { Play, Pause, RotateCcw, Plus, Trash2, Clock, Volume2, X, Edit3 } from 'lucide-react';
 import { sanitizeTimerList } from '../utils/sanitizers';
 
 export default function TimersModule({
@@ -12,6 +12,12 @@ export default function TimersModule({
   const [timerMins, setTimerMins] = useState(5);
   const [timerSecs, setTimerSecs] = useState(0);
 
+  // Edit timer state
+  const [editingTimer, setEditingTimer] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editMins, setEditMins] = useState(5);
+  const [editSecs, setEditSecs] = useState(0);
+
   const defaultTimers = [
     { id: 't-led', title: 'Máscara de Luz LED Roja', duration: 15 * 60 },
     { id: 't-stretch', title: 'Intervalos de Estiramiento', duration: 30 },
@@ -19,7 +25,13 @@ export default function TimersModule({
   ];
 
   const safeCustomTimers = sanitizeTimerList(customTimers);
-  const allTimers = [...defaultTimers, ...safeCustomTimers];
+  const allTimers = [
+    ...defaultTimers.map(dt => {
+      const override = safeCustomTimers.find(ct => ct && ct.id === dt.id);
+      return override || dt;
+    }),
+    ...safeCustomTimers.filter(ct => !defaultTimers.some(dt => dt.id === ct.id))
+  ];
 
   const playSynthesizedChime = () => {
     try {
@@ -77,6 +89,53 @@ export default function TimersModule({
     showToast('warning', 'Temporizador Eliminado', `Se removió "${title || 'Temporizador'}".`);
   };
 
+  const handleOpenEdit = (timer) => {
+    const duration = Math.max(1, Number(timer?.duration) || 60);
+    const mins = Math.floor(duration / 60);
+    const secs = duration % 60;
+    setEditingTimer(timer);
+    setEditTitle(timer.title || '');
+    setEditMins(mins);
+    setEditSecs(secs);
+  };
+
+  const handleSaveEdit = (e) => {
+    e.preventDefault();
+    if (!editingTimer || !editTitle.trim()) return;
+
+    const totalSecs = (parseInt(editMins) || 0) * 60 + (parseInt(editSecs) || 0);
+    if (totalSecs <= 0) return;
+
+    const timerId = editingTimer.id;
+    const isCustom = String(timerId).startsWith('custom-');
+
+    if (isCustom) {
+      setCustomTimers(prev => (Array.isArray(prev) ? prev : []).map(t => {
+        if (t && t.id === timerId) {
+          return { ...t, title: editTitle.trim(), duration: totalSecs };
+        }
+        return t;
+      }));
+    } else {
+      const updatedPreset = {
+        id: timerId,
+        title: editTitle.trim(),
+        duration: totalSecs
+      };
+      setCustomTimers(prev => {
+        const list = Array.isArray(prev) ? prev : [];
+        const exists = list.some(t => t && t.id === timerId);
+        if (exists) {
+          return list.map(t => t && t.id === timerId ? updatedPreset : t);
+        }
+        return [...list, updatedPreset];
+      });
+    }
+
+    showToast('success', 'Temporizador Actualizado', `Se guardó "${editTitle.trim()}" (${editMins}m ${editSecs}s)`);
+    setEditingTimer(null);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       
@@ -94,6 +153,81 @@ export default function TimersModule({
           <span>Añadir Timer</span>
         </button>
       </div>
+
+      {/* Edit Timer Modal */}
+      {editingTimer && (
+        <div className="fixed inset-0 bg-[#0b0c10]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <form onSubmit={handleSaveEdit} className="bg-[#171a24] border border-[#e0a96d]/30 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 font-outfit flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-[#e0a96d]" />
+                <span>Editar Temporizador</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingTimer(null)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre del Temporizador</label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Minutos</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="180"
+                  value={editMins}
+                  onChange={(e) => setEditMins(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Segundos</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="59"
+                  value={editSecs}
+                  onChange={(e) => setEditSecs(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingTimer(null)}
+                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-lg cursor-pointer transition-all"
+              >
+                Guardar Cambios
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Add Custom Timer Form */}
       {isAdding && (
@@ -162,6 +296,7 @@ export default function TimersModule({
           <TimerCard
             key={timer?.id || `timer-${idx}`}
             timer={timer}
+            onEdit={handleOpenEdit}
             onDelete={handleDeleteCustom}
             playChime={playSynthesizedChime}
             showToast={showToast}
@@ -173,7 +308,7 @@ export default function TimersModule({
   );
 }
 
-function TimerCard({ timer, onDelete, playChime, showToast }) {
+function TimerCard({ timer, onEdit, onDelete, playChime, showToast }) {
   const duration = Math.max(1, Number(timer?.duration) || 60);
   const title = String(timer?.title || 'Temporizador');
   const timerId = String(timer?.id || 'custom-0');
@@ -240,23 +375,33 @@ function TimerCard({ timer, onDelete, playChime, showToast }) {
     <div className="bg-[#171a24] border border-[#e0a96d]/15 p-5 rounded-xl shadow-lg flex flex-col justify-between space-y-5">
       <div>
         <div className="flex justify-between items-start gap-3">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-[#e0a96d]" />
-            <h4 className="font-bold text-sm text-slate-100 font-outfit truncate max-w-[150px]" title={timer.title}>
+          <div className="flex items-center gap-2 min-w-0">
+            <Clock className="w-4 h-4 text-[#e0a96d] shrink-0" />
+            <h4 className="font-bold text-sm text-slate-100 font-outfit truncate" title={timer.title}>
               {timer.title}
             </h4>
           </div>
           
-          {isCustom && (
+          <div className="flex items-center gap-1 shrink-0">
             <button
-              onClick={() => onDelete(timer.id, timer.title)}
-              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
-              title="Eliminar timer"
-              aria-label={`Eliminar timer ${timer.title}`}
+              onClick={() => onEdit(timer)}
+              className="p-1 rounded text-slate-400 hover:text-[#e0a96d] hover:bg-[#e0a96d]/10 transition-all cursor-pointer"
+              title="Editar temporizador"
+              aria-label={`Editar temporizador ${timer.title}`}
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Edit3 className="w-3.5 h-3.5" />
             </button>
-          )}
+            {isCustom && (
+              <button
+                onClick={() => onDelete(timer.id, timer.title)}
+                className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                title="Eliminar timer"
+                aria-label={`Eliminar timer ${timer.title}`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Large Countdown timer display */}

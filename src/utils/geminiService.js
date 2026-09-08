@@ -1058,7 +1058,13 @@ A continuación tienes las **tarjetas de acciones automáticas** para integrar t
           { name: 'Mascarilla Coreana de Arroz', durationSeconds: 900, category: 'skincare', description: 'Temporizador de 15 minutos para absorción de nutrientes.' }
         ],
         schedule: [
-          { time: '22:00', title: 'Rutina de Skincare Nocturna & Activos Alternos', tag: 'beauty', isRoutine: true }
+          {
+            time: '10:00 PM',
+            title: 'Rutina de Skincare Nocturna & Activos Alternos',
+            desc: 'Alternancia de activos: Noche A (Retinol sobre piel seca) / Noche B (Concha Nácar + Teatrical Aclaradora). Fototerapia LED roja 12 min.',
+            tag: 'beauty',
+            isRoutine: true
+          }
         ]
       }
     };
@@ -1123,6 +1129,8 @@ Tu tarea es doble:
 1. "replyText": Escribe una respuesta conversacional, empática, elegante y profesional en Markdown (en español). Explica claramente la estrategia, cómo combinar los activos/hábitos de forma segura (ej. qué días usar retinol vs concha nácar para evitar irritación, cuánto tiempo usar la máscara LED, etc.), y qué beneficios obtendrá.
 2. "actions": Extrae de forma estructurada y precisa todos los elementos accionables que la usuaria necesitará para que la aplicación los agregue a sus respectivos módulos con un solo clic.
 
+Para los bloques de "schedule", utiliza SIEMPRE el formato de hora de 12 horas con AM/PM (ej. "10:00 PM", "07:30 AM", "02:00 PM") e incluye SIEMPRE una descripción detallada en el campo "desc" con los pasos, precauciones o alternancias del hábito.
+
 Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
 
 {
@@ -1155,8 +1163,9 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
     ],
     "schedule": [
       {
-        "time": "22:00",
+        "time": "10:00 PM",
         "title": "Rutina de Skincare Nocturna & Activos",
+        "desc": "Alternancia de activos y aplicación paso a paso.",
         "tag": "beauty",
         "isRoutine": true
       }

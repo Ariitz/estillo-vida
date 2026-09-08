@@ -18,7 +18,10 @@ import {
   Sparkles,
   Loader2,
   RefreshCw,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ChevronDown,
+  ShoppingCart,
+  ShoppingBag
 } from 'lucide-react';
 import { compressImage, analyzeProductImage } from '../utils/geminiService';
 import { safeNumber, sanitizeHouseholdItem, sanitizeHouseholdList } from '../utils/sanitizers';
@@ -156,18 +159,21 @@ export default function PriceComparatorModule({
     }));
   };
 
-  const handleToggleVerdict = (itemId, current) => {
-    const verdicts = ['yes', 'maybe', 'no'];
-    const currentIdx = verdicts.indexOf(current);
-    const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % verdicts.length : 0;
-    const nextVerdict = verdicts[nextIdx];
-    
+  const handleSetVerdict = (itemId, newVerdict) => {
     setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
       if (item && item.id === itemId) {
-        return { ...item, repurchaseVerdict: nextVerdict };
+        return { ...item, repurchaseVerdict: newVerdict };
       }
       return item;
     }));
+    const label = newVerdict === 'need_to_buy' 
+      ? 'Marcado como: Necesito Comprar 🛒' 
+      : newVerdict === 'yes' 
+      ? 'Marcado como: Compraría ✓' 
+      : newVerdict === 'maybe' 
+      ? 'Marcado como: En Duda ?' 
+      : 'Marcado como: No Volver a Comprar ✕';
+    showToast('info', 'Estado Actualizado', label);
   };
 
   const handleAddStorePrice = (e) => {
@@ -238,6 +244,7 @@ export default function PriceComparatorModule({
 
   // Safe normalized list & Filter
   const safeItemsList = sanitizeHouseholdList(householdItems);
+  const needToBuyCount = safeItemsList.filter(i => i && i.repurchaseVerdict === 'need_to_buy').length;
 
   const filteredItems = safeItemsList.filter(item => {
     if (!item) return false;
@@ -247,7 +254,13 @@ export default function PriceComparatorModule({
     const matchesSearch = !search || 
       name.toLowerCase().includes(search) || 
       notes.toLowerCase().includes(search);
-    const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
+    
+    let matchesCategory = true;
+    if (categoryFilter === 'need_to_buy') {
+      matchesCategory = item.repurchaseVerdict === 'need_to_buy';
+    } else if (categoryFilter !== 'All') {
+      matchesCategory = item.category === categoryFilter;
+    }
     return matchesSearch && matchesCategory;
   });
 
@@ -280,7 +293,7 @@ export default function PriceComparatorModule({
       
       {/* Search, Filter & Add Row */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#171a24] p-4 rounded-xl border border-[#e0a96d]/15">
-        <div className="flex flex-col sm:flex-row gap-3 flex-1">
+        <div className="flex flex-col sm:flex-row gap-3 flex-1 items-stretch sm:items-center">
           {/* Search Input */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -297,17 +310,34 @@ export default function PriceComparatorModule({
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-300 text-sm focus:outline-none focus:border-[#e0a96d]"
+            className="bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-300 text-sm focus:outline-none focus:border-[#e0a96d] cursor-pointer"
           >
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat === 'All' ? 'Todas las categorías' : cat}</option>
+            <option value="All">Todas las categorías</option>
+            <option value="need_to_buy" className="text-amber-400 font-bold">🛒 Lista: Necesito Comprar ({needToBuyCount})</option>
+            {categories.filter(c => c !== 'All').map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
+
+          {/* Quick Filter Pill for Need to Buy */}
+          <button
+            type="button"
+            onClick={() => setCategoryFilter(prev => prev === 'need_to_buy' ? 'All' : 'need_to_buy')}
+            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
+              categoryFilter === 'need_to_buy'
+                ? 'bg-amber-500 text-[#0b0c10] border-amber-400 shadow-lg shadow-amber-500/20'
+                : 'bg-[#0b0c10] hover:bg-[#0b0c10]/80 text-amber-300 border-amber-500/30'
+            }`}
+            title="Filtrar únicamente productos marcados como 'Necesito Comprar'"
+          >
+            <ShoppingCart className="w-3.5 h-3.5" />
+            <span>Por Comprar ({needToBuyCount})</span>
+          </button>
         </div>
 
         <button
           onClick={() => setIsAddingItem(!isAddingItem)}
-          className="btn-rose-gold text-xs font-bold py-2.5 px-5 rounded-lg flex items-center gap-2 cursor-pointer transition-all self-stretch md:self-auto justify-center"
+          className="btn-rose-gold text-xs font-bold py-2.5 px-5 rounded-lg flex items-center gap-2 cursor-pointer transition-all self-stretch md:self-auto justify-center shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Registrar Insumo</span>
@@ -427,15 +457,16 @@ export default function PriceComparatorModule({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1">¿Lo volverías a comprar?</label>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">Estado de Compra / Intención</label>
               <select
                 value={itemVerdict}
                 onChange={(e) => setItemVerdict(e.target.value)}
                 className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
               >
-                <option value="yes">Sí, seguro (Recomendado)</option>
-                <option value="maybe">Tal vez / Dudoso</option>
-                <option value="no">No volvería a comprar</option>
+                <option value="yes">✓ Compraría / Aprobado</option>
+                <option value="need_to_buy">🛒 Necesito Comprar</option>
+                <option value="maybe">? Duda / En Evaluación</option>
+                <option value="no">✕ No volvería a comprar</option>
               </select>
             </div>
           </div>
@@ -553,22 +584,30 @@ export default function PriceComparatorModule({
                       <h4 className="text-base font-bold text-slate-100 font-outfit mt-1.5">{item.name}</h4>
                     </div>
 
-                    <div className="flex items-center gap-1">
-                      {/* Repurchase Badge Toggle */}
-                      <button
-                        onClick={() => handleToggleVerdict(item.id, item.repurchaseVerdict)}
-                        className={`text-[10px] font-bold py-1 px-2.5 rounded-full border transition-all flex items-center gap-1.5 cursor-pointer ${
-                          item.repurchaseVerdict === 'yes' 
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/35 hover:bg-emerald-500/20' 
-                            : item.repurchaseVerdict === 'maybe'
-                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/35 hover:bg-amber-500/20'
-                            : 'bg-rose-500/10 text-rose-400 border-rose-500/35 hover:bg-rose-500/20'
-                        }`}
-                        title="Veredicto de recompra. Clic para cambiar."
-                      >
-                        {item.repurchaseVerdict === 'yes' ? <ThumbsUp className="w-3 h-3" /> : item.repurchaseVerdict === 'no' ? <ThumbsDown className="w-3 h-3" /> : <HelpCircle className="w-3 h-3" />}
-                        <span>{item.repurchaseVerdict === 'yes' ? 'Compraría' : item.repurchaseVerdict === 'maybe' ? 'Duda' : 'No' }</span>
-                      </button>
+                    <div className="flex items-center gap-2">
+                      {/* Direct Dropdown Verdict Selector */}
+                      <div className="relative">
+                        <select
+                          value={item.repurchaseVerdict || 'yes'}
+                          onChange={(e) => handleSetVerdict(item.id, e.target.value)}
+                          className={`text-[11px] font-bold py-1.5 pl-3 pr-7 rounded-full border transition-all cursor-pointer focus:outline-none appearance-none ${
+                            item.repurchaseVerdict === 'need_to_buy' 
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-500/30' 
+                              : item.repurchaseVerdict === 'yes' 
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25' 
+                              : item.repurchaseVerdict === 'maybe'
+                              ? 'bg-sky-500/15 text-sky-400 border-sky-500/40 hover:bg-sky-500/25'
+                              : 'bg-rose-500/15 text-rose-400 border-rose-500/40 hover:bg-rose-500/25'
+                          }`}
+                          title="Seleccionar veredicto / estado de compra"
+                        >
+                          <option value="yes" className="bg-[#171a24] text-emerald-400">✓ Compraría</option>
+                          <option value="need_to_buy" className="bg-[#171a24] text-amber-300">🛒 Necesito Comprar</option>
+                          <option value="maybe" className="bg-[#171a24] text-sky-400">? Duda</option>
+                          <option value="no" className="bg-[#171a24] text-rose-400">✕ No Comprar</option>
+                        </select>
+                        <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+                      </div>
 
                       {/* Delete item */}
                       <button

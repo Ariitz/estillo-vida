@@ -106,14 +106,35 @@ export default function ScheduleModule({
   };
 
   const getMinutesFromMidnight = (timeStr) => {
-    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-    if (!match) return 0;
-    let h = parseInt(match[1], 10);
-    const m = parseInt(match[2], 10);
-    const period = match[3].toUpperCase();
-    if (period === 'PM' && h !== 12) h += 12;
-    if (period === 'AM' && h === 12) h = 0;
-    return h * 60 + m;
+    if (!timeStr) return 0;
+    const str = String(timeStr).trim();
+    
+    // Check 12-hour format: "08:00 AM", "8:30 PM", "10:00pm"
+    const match12 = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (match12) {
+      let h = parseInt(match12[1], 10);
+      const m = parseInt(match12[2], 10);
+      const period = match12[3] ? match12[3].toUpperCase() : null;
+      if (period === 'PM' && h !== 12) h += 12;
+      if (period === 'AM' && h === 12) h = 0;
+      return h * 60 + m;
+    }
+
+    // Check 24-hour format: "22:00", "07:30"
+    const match24 = str.match(/^(\d{1,2}):(\d{2})$/);
+    if (match24) {
+      const h = parseInt(match24[1], 10);
+      const m = parseInt(match24[2], 10);
+      return h * 60 + m;
+    }
+
+    return 0;
+  };
+
+  const getNightSortMinutes = (timeStr) => {
+    const mins = getMinutesFromMidnight(timeStr);
+    // In Night section (19:00 to 04:59), early morning hours 00:00 - 04:59 (< 300 mins) belong after 23:59 (+ 1440 mins)
+    return mins < 300 ? mins + 1440 : mins;
   };
 
   const handleAddActivity = (e) => {
@@ -159,14 +180,25 @@ export default function ScheduleModule({
   };
 
   const handleEditClick = (item) => {
-    const match = item.time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    const str = String(item.time || '').trim();
+    const match12 = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
     let h = "08";
     let m = "00";
     let p = "AM";
-    if (match) {
-      h = match[1].padStart(2, '0');
-      m = match[2];
-      p = match[3].toUpperCase();
+    if (match12) {
+      h = match12[1].padStart(2, '0');
+      m = match12[2];
+      p = match12[3].toUpperCase();
+    } else {
+      const match24 = str.match(/^(\d{1,2}):(\d{2})$/);
+      if (match24) {
+        let rawH = parseInt(match24[1], 10);
+        m = match24[2];
+        p = rawH >= 12 ? 'PM' : 'AM';
+        if (rawH > 12) rawH -= 12;
+        if (rawH === 0) rawH = 12;
+        h = rawH.toString().padStart(2, '0');
+      }
     }
     setEditingItem({ 
       ...item, 
@@ -202,7 +234,7 @@ export default function ScheduleModule({
       label: 'Noche (07:00 PM - 04:59 AM)', 
       items: safeSchedule
         .filter(i => i && i.category === 'night')
-        .sort((a, b) => getMinutesFromMidnight(a.time) - getMinutesFromMidnight(b.time))
+        .sort((a, b) => getNightSortMinutes(a.time) - getNightSortMinutes(b.time))
     }
   };
 
@@ -439,6 +471,24 @@ export default function ScheduleModule({
     if (selfCareFilter === 'annual') return item.frequency === 'annual';
     if (selfCareFilter === 'custom') return item.frequency === 'custom' || !!item.customValue;
     return true;
+  });
+
+  // Sort self-care activities by urgency:
+  // 1. Pending first or Overdue (ordered by most overdue first: -185d before -2d)
+  // 2. Due today (0 days remaining)
+  // 3. Due soon / upcoming in ascending days remaining (1d, 2d, 5d, 30d, 365d)
+  const sortedSelfCare = [...filteredSelfCare].sort((a, b) => {
+    const stA = getSelfCareStatus(a);
+    const stB = getSelfCareStatus(b);
+
+    const getSortWeight = (st) => {
+      if (st.status === 'pending_first' || st.daysRemaining === null || isNaN(st.daysRemaining)) {
+        return -999999;
+      }
+      return st.daysRemaining;
+    };
+
+    return getSortWeight(stA) - getSortWeight(stB);
   });
 
   // Calculate self-care global metrics
@@ -1149,7 +1199,7 @@ export default function ScheduleModule({
 
           {/* Self-Care Activities Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {filteredSelfCare.length === 0 ? (
+            {sortedSelfCare.length === 0 ? (
               <div className="col-span-full p-10 bg-[#171a24] border border-slate-800 rounded-xl text-center space-y-3">
                 <Sparkles className="w-8 h-8 text-slate-600 mx-auto" />
                 <p className="text-xs text-slate-400 font-medium">
@@ -1165,7 +1215,7 @@ export default function ScheduleModule({
                 </button>
               </div>
             ) : (
-              filteredSelfCare.map((activity) => {
+              sortedSelfCare.map((activity) => {
                 const info = getSelfCareStatus(activity);
                 const freq = getFrequencyDetails(activity);
                 const catIcon = categoryIcons[activity.category] || '✨';

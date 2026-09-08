@@ -49,7 +49,7 @@ export const sanitizeHouseholdItem = (item) => {
   }
 
   let repurchaseVerdict = 'yes';
-  if (['yes', 'maybe', 'no'].includes(item.repurchaseVerdict)) {
+  if (['yes', 'maybe', 'no', 'need_to_buy'].includes(item.repurchaseVerdict)) {
     repurchaseVerdict = item.repurchaseVerdict;
   }
 

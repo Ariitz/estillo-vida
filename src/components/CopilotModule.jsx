@@ -19,7 +19,9 @@ import {
   ListPlus,
   Check,
   Zap,
-  Tag
+  Tag,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { parseRoutineWithCopilot } from '../utils/geminiService';
 import { sanitizeHouseholdItem, sanitizeSelfCareItem } from '../utils/sanitizers';
@@ -92,7 +94,13 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
             { name: 'Mascarilla de Arroz (15 min)', durationSeconds: 900, category: 'skincare', description: 'Tiempo de absorción.' }
           ],
           schedule: [
-            { time: '22:00', title: 'Rutina de Skincare Nocturna & Activos Alternos', tag: 'beauty', isRoutine: true }
+            {
+              time: '10:00 PM',
+              title: 'Rutina de Skincare Nocturna & Activos Alternos',
+              desc: 'Alternancia de activos: Noche A (Retinol) / Noche B (Concha Nácar + Teatrical Aclaradora). Fototerapia LED roja 12 min.',
+              tag: 'beauty',
+              isRoutine: true
+            }
           ]
         },
         executedActions: {
@@ -107,7 +115,14 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
 
   const [inputPrompt, setInputPrompt] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [conflictModal, setConflictModal] = useState(null);
   const messagesEndRef = useRef(null);
+
+  const defaultTimers = [
+    { id: 't-led', title: 'Máscara de Luz LED Roja', duration: 15 * 60 },
+    { id: 't-stretch', title: 'Intervalos de Estiramiento', duration: 30 },
+    { id: 't-cold', title: 'Compresa Fría / Antifaz de Gel', duration: 3 * 60 }
+  ];
 
   useEffect(() => {
     if (typeof localStorage !== 'undefined') {
@@ -174,157 +189,181 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
     }
   };
 
-  // Action Executers with strict sanitization
-  const handleAddProductsToComparator = (msgId, products = []) => {
-    if (!products || !Array.isArray(products) || products.length === 0) return;
+  // Helper for duplicate / similarity detection
+  const findItemConflict = (newItemName, existingList, nameKey = 'title') => {
+    if (!newItemName || !existingList || !Array.isArray(existingList)) return null;
 
-    const newItems = products
-      .filter(p => p && (typeof p === 'object' || typeof p === 'string'))
-      .map(p => {
-        const itemObj = typeof p === 'string' ? { name: p } : p;
-        const validStores = (Array.isArray(itemObj.stores) ? itemObj.stores : [])
-          .filter(s => s && typeof s === 'object')
-          .map(s => {
-            const price = parseFloat(s.price) || 0;
-            const quantity = parseFloat(s.quantity) || 1;
-            return {
-              storeName: s.storeName || s.name || s.store || 'Amazon',
-              price: price,
-              quantity: quantity,
-              unitPrice: quantity > 0 ? price / quantity : 0
-            };
-          })
-          .filter(s => s.price > 0 && s.quantity > 0);
+    const normalize = (str) =>
+      String(str || '')
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .trim();
 
-        const rawItem = {
-          id: 'item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-          name: typeof itemObj.name === 'string' ? itemObj.name : (itemObj.name?.title || itemObj.name?.name || 'Producto'),
-          category: typeof itemObj.category === 'string' ? itemObj.category : 'Skincare',
-          stores: validStores,
-          preferredStore: validStores[0]?.storeName || '',
-          repurchaseVerdict: 'yes',
-          notes: typeof itemObj.notes === 'string' ? itemObj.notes : (Array.isArray(itemObj.notes) ? itemObj.notes.join('. ') : 'Agregado automáticamente por AURA Copilot.')
-        };
+    const cleanNew = normalize(newItemName);
+    const newWords = cleanNew.split(/\s+/).filter(w => w.length > 2);
+    const stopWords = new Set(['con', 'para', 'del', 'los', 'las', 'una', 'uno', 'por', 'que', 'min', 'sesion', 'rutina', 'crema', 'serum', 'cremas', 'tiempo', 'facial', 'coreana', 'extracto']);
+    const significantNewWords = newWords.filter(w => !stopWords.has(w));
 
-        return sanitizeHouseholdItem(rawItem);
-      })
-      .filter(Boolean);
+    for (const item of existingList) {
+      if (!item) continue;
+      const existingName = normalize(item[nameKey] || item.name || item.title || '');
+      if (!existingName) continue;
 
-    if (newItems.length === 0) return;
+      // Direct match or substring inclusion
+      if (cleanNew === existingName || cleanNew.includes(existingName) || existingName.includes(cleanNew)) {
+        return item;
+      }
 
-    setHouseholdItems(prev => [...(Array.isArray(prev) ? prev : []), ...newItems]);
+      // Significant word overlap (e.g. 'arroz', 'retinol', 'nacar', 'led')
+      if (significantNewWords.length > 0) {
+        const existingWords = new Set(existingName.split(/\s+/).filter(w => w.length > 2));
+        const matchCount = significantNewWords.filter(w => existingWords.has(w)).length;
+        if (matchCount >= 2 || (significantNewWords.length === 1 && matchCount === 1 && significantNewWords[0].length >= 4)) {
+          return item;
+        }
+      }
+    }
+
+    return null;
+  };
+
+  // Execution Handlers
+  const executeApplyProducts = (msgId, finalProductsToAdd, itemsToReplace = []) => {
+    setHouseholdItems(prev => {
+      let list = Array.isArray(prev) ? [...prev] : [];
+      itemsToReplace.forEach(({ existingId, updatedItem }) => {
+        list = list.map(item => item && item.id === existingId ? {
+          ...item,
+          name: updatedItem.name,
+          category: updatedItem.category || item.category,
+          repurchaseVerdict: updatedItem.repurchaseVerdict || 'need_to_buy',
+          notes: updatedItem.notes ? `${item.notes ? item.notes + ' | ' : ''}${updatedItem.notes}` : item.notes
+        } : item);
+      });
+      return [...list, ...finalProductsToAdd];
+    });
+
     setMessages(prev => (Array.isArray(prev) ? prev : []).map(m => m.id === msgId ? {
       ...m,
       executedActions: { ...(m.executedActions || {}), products: true }
     } : m));
 
-    showToast('success', 'Productos Agregados', `Se añadieron ${newItems.length} productos al Comparador de Precios.`);
+    showToast('success', 'Comparador Actualizado', `Se procesaron ${finalProductsToAdd.length + itemsToReplace.length} insumos en Compras.`);
   };
 
-  const handleAddSelfCareToCalendar = (msgId, selfCareList = []) => {
-    if (!selfCareList || !Array.isArray(selfCareList) || selfCareList.length === 0) return;
+  const executeApplySelfCare = (msgId, finalActivitiesToAdd, itemsToReplace = []) => {
+    setSelfCareActivities(prev => {
+      let list = Array.isArray(prev) ? [...prev] : [];
+      itemsToReplace.forEach(({ existingId, updatedItem }) => {
+        list = list.map(item => item && item.id === existingId ? {
+          ...item,
+          title: updatedItem.title,
+          frequency: updatedItem.frequency || item.frequency,
+          customValue: updatedItem.customValue || item.customValue,
+          customUnit: updatedItem.customUnit || item.customUnit,
+          daysInterval: updatedItem.daysInterval || item.daysInterval,
+          category: updatedItem.category || item.category,
+          notes: updatedItem.notes || item.notes,
+          protocol: updatedItem.protocol || item.protocol
+        } : item);
+      });
+      return [...list, ...finalActivitiesToAdd];
+    });
 
-    const newActivities = selfCareList
-      .filter(sc => sc && (typeof sc === 'object' || typeof sc === 'string'))
-      .map(sc => {
-        const scObj = typeof sc === 'string' ? { title: sc } : sc;
-        const interval = parseInt(scObj.daysInterval, 10) || 2;
-        const rawSc = {
-          id: 'sc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-          title: typeof scObj.title === 'string' ? scObj.title : (scObj.title?.name || 'Actividad de Autocuidado'),
-          frequency: 'custom',
-          customValue: interval,
-          customUnit: 'days',
-          daysInterval: interval,
-          lastCompletedDate: new Date().toISOString().split('T')[0],
-          category: scObj.category === 'skincare' ? 'beauty' : (scObj.category || 'beauty'),
-          notes: typeof scObj.notes === 'string' ? scObj.notes : (Array.isArray(scObj.notes) ? scObj.notes.join('. ') : ''),
-          protocol: typeof scObj.protocol === 'string' ? scObj.protocol : 'Cadencia configurada por AURA Copilot.'
-        };
-        return sanitizeSelfCareItem(rawSc);
-      })
-      .filter(Boolean);
-
-    if (newActivities.length === 0) return;
-
-    setSelfCareActivities(prev => [...(Array.isArray(prev) ? prev : []), ...newActivities]);
     setMessages(prev => (Array.isArray(prev) ? prev : []).map(m => m.id === msgId ? {
       ...m,
       executedActions: { ...(m.executedActions || {}), selfCare: true }
     } : m));
 
-    showToast('success', 'Autocuidado Programado', `Se añadieron ${newActivities.length} actividades al Calendario de Autocuidado.`);
+    showToast('success', 'Autocuidado Actualizado', `Se procesaron ${finalActivitiesToAdd.length + itemsToReplace.length} actividades de autocuidado.`);
   };
 
-  const handleAddTimers = (msgId, timersList = []) => {
-    if (!timersList || !Array.isArray(timersList) || timersList.length === 0) return;
-
-    const newTimers = timersList
-      .filter(t => t && (typeof t === 'object' || typeof t === 'string'))
-      .map(t => {
-        const tObj = typeof t === 'string' ? { title: t } : t;
-        const durationSecs = parseInt(tObj.duration || tObj.durationSeconds, 10) || 600;
-        const tName = typeof tObj.name === 'string' ? tObj.name : (typeof tObj.title === 'string' ? tObj.title : 'Temporizador');
-        return {
-          id: 'timer-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-          title: tName,
-          name: tName,
-          duration: durationSecs,
-          durationSeconds: durationSecs,
-          category: typeof tObj.category === 'string' ? tObj.category : 'skincare',
-          description: typeof tObj.description === 'string' ? tObj.description : 'Configurado por AURA Copilot.'
+  const executeApplyTimers = (msgId, finalTimersToAdd, itemsToReplace = []) => {
+    setCustomTimers(prev => {
+      let list = Array.isArray(prev) ? [...prev] : [];
+      itemsToReplace.forEach(({ existingId, updatedItem }) => {
+        const exists = list.some(t => t && t.id === existingId);
+        const updated = {
+          id: existingId,
+          title: updatedItem.title,
+          duration: updatedItem.duration,
+          durationSeconds: updatedItem.duration,
+          category: updatedItem.category || 'skincare',
+          description: updatedItem.description || ''
         };
+        if (exists) {
+          list = list.map(t => t && t.id === existingId ? updated : t);
+        } else {
+          list.push(updated);
+        }
       });
+      return [...list, ...finalTimersToAdd];
+    });
 
-    if (newTimers.length === 0) return;
-
-    setCustomTimers(prev => [...(Array.isArray(prev) ? prev : []), ...newTimers]);
     setMessages(prev => (Array.isArray(prev) ? prev : []).map(m => m.id === msgId ? {
       ...m,
       executedActions: { ...(m.executedActions || {}), timers: true }
     } : m));
 
-    showToast('success', 'Temporizadores Listos', `Se crearon ${newTimers.length} temporizadores.`);
+    showToast('success', 'Temporizadores Listos', `Se procesaron ${finalTimersToAdd.length + itemsToReplace.length} temporizadores.`);
   };
 
-  const handleAddScheduleBlock = (msgId, scheduleList = []) => {
-    if (!scheduleList || !Array.isArray(scheduleList) || scheduleList.length === 0) return;
-
-    const newBlocks = scheduleList
-      .filter(s => s && (typeof s === 'object' || typeof s === 'string'))
-      .map(s => {
-        const sObj = typeof s === 'string' ? { title: s } : s;
-        const timeStr = typeof sObj.time === 'string' ? sObj.time : '10:00 PM';
-        // Infer category from time
-        let cat = 'night';
-        if (timeStr.includes('AM')) {
-          cat = 'morning';
-        } else {
-          const hour = parseInt(timeStr.split(':')[0], 10) || 12;
-          cat = (hour < 6 || hour === 12) ? 'afternoon' : 'night';
-        }
-
-        return {
-          id: 'sch-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-          time: timeStr,
-          title: typeof sObj.title === 'string' ? sObj.title : 'Bloque de Rutina',
-          desc: typeof sObj.desc === 'string' ? sObj.desc : (typeof sObj.notes === 'string' ? sObj.notes : 'Configurado por AURA Copilot'),
-          category: typeof sObj.category === 'string' ? sObj.category : cat,
-          completed: false,
-          tag: typeof sObj.tag === 'string' ? sObj.tag : 'beauty',
-          isRoutine: sObj.isRoutine !== undefined ? Boolean(sObj.isRoutine) : true
-        };
+  const executeApplySchedule = (msgId, finalScheduleToAdd, itemsToReplace = []) => {
+    setSchedule(prev => {
+      let list = Array.isArray(prev) ? [...prev] : [];
+      itemsToReplace.forEach(({ existingId, updatedItem }) => {
+        list = list.map(s => s && s.id === existingId ? {
+          ...s,
+          time: updatedItem.time || s.time,
+          title: updatedItem.title,
+          desc: updatedItem.desc || s.desc,
+          tag: updatedItem.tag || s.tag,
+          isRoutine: updatedItem.isRoutine !== undefined ? updatedItem.isRoutine : s.isRoutine
+        } : s);
       });
+      return [...list, ...finalScheduleToAdd];
+    });
 
-    if (newBlocks.length === 0) return;
-
-    setSchedule(prev => [...(Array.isArray(prev) ? prev : []), ...newBlocks]);
     setMessages(prev => (Array.isArray(prev) ? prev : []).map(m => m.id === msgId ? {
       ...m,
       executedActions: { ...(m.executedActions || {}), schedule: true }
     } : m));
 
-    showToast('success', 'Horario Actualizado', `Se integraron ${newBlocks.length} bloques a tu Horario Diario.`);
+    showToast('success', 'Horario Actualizado', `Se procesaron ${finalScheduleToAdd.length + itemsToReplace.length} bloques en el horario.`);
+  };
+
+  const handleConfirmConflictResolution = () => {
+    if (!conflictModal) return;
+
+    const { msgId, type, conflicts, cleanItems } = conflictModal;
+    const finalItemsToAdd = [...cleanItems];
+    const itemsToReplace = [];
+
+    conflicts.forEach(conf => {
+      if (conf.resolution === 'replace') {
+        itemsToReplace.push({
+          existingId: conf.existingItem.id,
+          updatedItem: conf.newItem
+        });
+      } else if (conf.resolution === 'keep_both') {
+        finalItemsToAdd.push(conf.newItem);
+      }
+      // If 'skip', do not add or replace
+    });
+
+    if (type === 'products') {
+      executeApplyProducts(msgId, finalItemsToAdd, itemsToReplace);
+    } else if (type === 'selfCare') {
+      executeApplySelfCare(msgId, finalItemsToAdd, itemsToReplace);
+    } else if (type === 'timers') {
+      executeApplyTimers(msgId, finalItemsToAdd, itemsToReplace);
+    } else if (type === 'schedule') {
+      executeApplySchedule(msgId, finalItemsToAdd, itemsToReplace);
+    }
+
+    setConflictModal(null);
   };
 
   const handleClearChat = () => {
@@ -339,6 +378,144 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
 
   return (
     <div className="space-y-6 animate-fade-in flex flex-col h-[calc(100vh-140px)] min-h-[600px]">
+      {/* Conflict / Duplication Resolution Modal */}
+      {conflictModal && (
+        <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[#171a24] border border-[#e0a96d]/40 p-6 rounded-2xl max-w-2xl w-full space-y-5 shadow-2xl max-h-[85vh] flex flex-col animate-scale-up">
+            <div className="flex items-start justify-between border-b border-slate-800 pb-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-100 font-outfit">
+                    Similitudes o Duplicados Detectados
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Encontramos elementos en <span className="text-[#e0a96d] font-semibold">{conflictModal.title}</span> que ya existen en tu sistema. ¿Cómo te gustaría gestionarlos?
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setConflictModal(null)}
+                className="text-slate-400 hover:text-slate-200 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+              {conflictModal.conflicts.map((conf, idx) => {
+                const newName = conf.newItem.title || conf.newItem.name;
+                const existName = conf.existingItem.title || conf.existingItem.name;
+                const newDetail = conf.newItem.protocol || conf.newItem.notes || (conf.newItem.duration ? `${Math.round(conf.newItem.duration / 60)} min` : conf.newItem.time);
+                const existDetail = conf.existingItem.protocol || conf.existingItem.notes || (conf.existingItem.duration ? `${Math.round(conf.existingItem.duration / 60)} min` : conf.existingItem.time);
+
+                return (
+                  <div key={conf.id || idx} className="bg-[#0b0c10] border border-slate-800 rounded-xl p-4 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
+                      <div className="p-3 rounded-lg bg-[#171a24]/80 border border-slate-700/60 flex flex-col justify-between">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                            Ya en tu Sistema
+                          </span>
+                          <p className="font-bold text-xs text-slate-200">{existName}</p>
+                        </div>
+                        {existDetail && <p className="text-[10px] text-slate-400 mt-2 truncate">{existDetail}</p>}
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-[#e0a96d]/10 border border-[#e0a96d]/30 flex flex-col justify-between">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-[#e0a96d] block mb-1">
+                            Nuevo de AURA Copilot
+                          </span>
+                          <p className="font-bold text-xs text-slate-100">{newName}</p>
+                        </div>
+                        {newDetail && <p className="text-[10px] text-[#f5d4af] mt-2 truncate">{newDetail}</p>}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800/80">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConflictModal(prev => ({
+                            ...prev,
+                            conflicts: prev.conflicts.map((c, i) => i === idx ? { ...c, resolution: 'replace' } : c)
+                          }));
+                        }}
+                        className={`text-[11px] font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                          conf.resolution === 'replace'
+                            ? 'bg-[#e0a96d] text-[#0b0c10] shadow-sm font-extrabold'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        }`}
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Reemplazar existente</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConflictModal(prev => ({
+                            ...prev,
+                            conflicts: prev.conflicts.map((c, i) => i === idx ? { ...c, resolution: 'keep_both' } : c)
+                          }));
+                        }}
+                        className={`text-[11px] font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                          conf.resolution === 'keep_both'
+                            ? 'bg-sky-500 text-slate-900 shadow-sm font-extrabold'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        }`}
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Conservar ambos</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConflictModal(prev => ({
+                            ...prev,
+                            conflicts: prev.conflicts.map((c, i) => i === idx ? { ...c, resolution: 'skip' } : c)
+                          }));
+                        }}
+                        className={`text-[11px] font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                          conf.resolution === 'skip'
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        }`}
+                      >
+                        <X className="w-3 h-3" />
+                        <span>Omitir</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-between items-center pt-4 border-t border-slate-800 shrink-0">
+              <button
+                type="button"
+                onClick={() => setConflictModal(null)}
+                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmConflictResolution}
+                className="btn-rose-gold text-xs font-bold py-2.5 px-6 rounded-lg cursor-pointer transition-all shadow-md flex items-center gap-2"
+              >
+                <Check className="w-4 h-4" />
+                <span>Confirmar y Aplicar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Bar */}
       <div className="glass-panel p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-3">
