@@ -158,6 +158,23 @@ export default function ExperiencesModule({
     }));
   };
 
+  const handleUpdateVerdict = (itemId, newVerdict) => {
+    setExperiences(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
+        return { ...item, verdict: newVerdict };
+      }
+      return item;
+    }));
+    const foundItem = experiences.find(e => e && e.id === itemId);
+    const isPlace = foundItem?.type === 'place';
+    const label = newVerdict === 'yes'
+      ? (isPlace ? '👍 Volvería' : '👍 Compraría de nuevo')
+      : newVerdict === 'maybe'
+      ? '🤔 Duda'
+      : (isPlace ? '👎 No volvería' : '👎 No compraría');
+    showToast('success', 'Veredicto Actualizado', `Marcado como "${label}".`);
+  };
+
   // Safe normalized experiences list & filter logic
   const safeExperiences = sanitizeExperienceList(experiences);
 
@@ -253,9 +270,9 @@ export default function ExperiencesModule({
               className="w-full bg-[#0b0c10] border border-slate-800 rounded py-1.5 px-2 text-xs text-slate-300 focus:outline-none"
             >
               <option value="all">Todos los veredictos</option>
-              <option value="yes">👍 Volvería / Repetiría</option>
-              <option value="maybe">🤔 Tal vez</option>
-              <option value="no">👎 No volvería</option>
+              <option value="yes">👍 Volvería / Compraría de nuevo</option>
+              <option value="maybe">🤔 Duda</option>
+              <option value="no">👎 No volvería / No compraría</option>
             </select>
           </div>
         </div>
@@ -263,7 +280,7 @@ export default function ExperiencesModule({
 
       {/* Add Entry Form */}
       {isAdding && (
-        <form onSubmit={handleAddExperience} className="bg-[#171a24] border border-[#e0a96d]/20 p-6 rounded-xl space-y-4 shadow-xl animate-fade-in">
+        <form onSubmit={handleAddItem} className="bg-[#171a24] border border-[#e0a96d]/20 p-6 rounded-xl space-y-4 shadow-xl animate-fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
             <h3 className="text-lg font-bold text-slate-100 font-outfit flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-[#e0a96d]" />
@@ -486,9 +503,9 @@ export default function ExperiencesModule({
                   onChange={(e) => setVerdict(e.target.value)}
                   className="w-full bg-[#171a24] border border-[#e0a96d]/10 rounded py-1.5 px-2 text-xs text-slate-300 focus:outline-none"
                 >
-                  <option value="yes">👍 Volvería / Repetiría</option>
-                  <option value="maybe">🤔 Tal vez</option>
-                  <option value="no">👎 No volvería</option>
+                  <option value="yes">{itemType === 'place' ? '👍 Volvería' : '👍 Compraría de nuevo'}</option>
+                  <option value="maybe">🤔 Duda</option>
+                  <option value="no">{itemType === 'place' ? '👎 No volvería' : '👎 No compraría'}</option>
                 </select>
               </div>
               <div>
@@ -553,7 +570,7 @@ export default function ExperiencesModule({
                   
                   {/* Delete button */}
                   <button
-                    onClick={() => handleDelete(item.id, item.name)}
+                    onClick={() => handleDeleteItem(item.id, item.name)}
                     className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded cursor-pointer transition-all"
                     aria-label={`Eliminar ${item.name}`}
                   >
@@ -574,28 +591,48 @@ export default function ExperiencesModule({
 
                 {/* Rating & Verdict for Completed, Wishlist toggle for Pending */}
                 {item.status === 'completed' ? (
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="flex gap-0.5">
+                  <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex gap-0.5" title={`Calificación: ${item.rating || 0}/5 estrellas`}>
                       {[1, 2, 3, 4, 5].map(v => (
                         <Star 
                           key={v} 
                           className={`w-3.5 h-3.5 cursor-pointer ${
-                            v <= item.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-600'
+                            v <= (item.rating || 0) ? 'fill-amber-400 text-amber-400' : 'text-slate-600'
                           }`}
                           onClick={() => handleRate(item.id, v)}
                         />
                       ))}
                     </div>
                     
-                    <span className={`text-[10px] font-bold py-0.5 px-2 rounded-full border ${
-                      item.verdict === 'yes'
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : item.verdict === 'maybe'
-                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                    }`}>
-                      {item.verdict === 'yes' ? '👍 Volvería' : item.verdict === 'maybe' ? '🤔 Duda' : '👎 No'}
-                    </span>
+                    {/* Direct Verdict Dropdown Selector */}
+                    <div className="relative">
+                      <select
+                        value={item.verdict || 'yes'}
+                        onChange={(e) => handleUpdateVerdict(item.id, e.target.value)}
+                        className={`text-[10px] font-bold py-1 pl-2.5 pr-6 rounded-lg border appearance-none cursor-pointer focus:outline-none transition-all ${
+                          item.verdict === 'yes'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:border-emerald-500/50'
+                            : item.verdict === 'maybe'
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:border-amber-500/50'
+                            : 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:border-rose-500/50'
+                        }`}
+                        title="Cambiar veredicto de la experiencia"
+                        aria-label="Veredicto de la experiencia"
+                      >
+                        <option value="yes" className="bg-[#171a24] text-emerald-400">
+                          {item.type === 'place' ? '👍 Volvería' : '👍 Compraría de nuevo'}
+                        </option>
+                        <option value="maybe" className="bg-[#171a24] text-amber-400">
+                          🤔 Duda
+                        </option>
+                        <option value="no" className="bg-[#171a24] text-rose-400">
+                          {item.type === 'place' ? '👎 No volvería' : '👎 No compraría'}
+                        </option>
+                      </select>
+                      <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-slate-400">
+                        ▼
+                      </span>
+                    </div>
                   </div>
                 ) : (
                   <div className="mt-3 bg-[#0b0c10] border border-[#e0a96d]/10 px-3 py-1.5 rounded flex items-center justify-between">
@@ -603,7 +640,7 @@ export default function ExperiencesModule({
                       <Heart className="w-3 h-3 text-[#e0a96d]" /> En Wishlist
                     </span>
                     <button
-                      onClick={() => handleToggleStatus(item.id, item)}
+                      onClick={() => handleToggleStatus(item.id)}
                       className="text-[10px] text-[#e0a96d] hover:text-[#f5d4af] font-bold cursor-pointer transition-colors"
                     >
                       Marcar como visitado/comprado
