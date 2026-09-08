@@ -22,6 +22,7 @@ import {
   Tag
 } from 'lucide-react';
 import { parseRoutineWithCopilot } from '../utils/geminiService';
+import { sanitizeHouseholdItem, sanitizeSelfCareItem } from '../utils/sanitizers';
 
 export default function CopilotModule({
   geminiApiKey = '',
@@ -169,93 +170,157 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
     }
   };
 
-  // Action Executers
+  // Action Executers with strict sanitization
   const handleAddProductsToComparator = (msgId, products = []) => {
-    if (!products || products.length === 0) return;
+    if (!products || !Array.isArray(products) || products.length === 0) return;
 
-    const newItems = products.map(p => ({
-      id: 'item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-      name: p.name,
-      category: p.category || 'Skincare',
-      stores: [
-        { storeName: 'Farmacias Guadalajara', price: '', quantity: '' },
-        { storeName: 'Amazon', price: '', quantity: '' }
-      ],
-      preferredStore: 'Farmacias Guadalajara',
-      repurchaseVerdict: 'yes',
-      notes: p.notes || 'Agregado automáticamente por AURA Copilot.'
-    }));
+    const newItems = products
+      .filter(p => p && (typeof p === 'object' || typeof p === 'string'))
+      .map(p => {
+        const itemObj = typeof p === 'string' ? { name: p } : p;
+        const validStores = (Array.isArray(itemObj.stores) ? itemObj.stores : [])
+          .filter(s => s && typeof s === 'object')
+          .map(s => {
+            const price = parseFloat(s.price) || 0;
+            const quantity = parseFloat(s.quantity) || 1;
+            return {
+              storeName: s.storeName || s.name || s.store || 'Amazon',
+              price: price,
+              quantity: quantity,
+              unitPrice: quantity > 0 ? price / quantity : 0
+            };
+          })
+          .filter(s => s.price > 0 && s.quantity > 0);
 
-    setHouseholdItems(prev => [...prev, ...newItems]);
-    setMessages(prev => prev.map(m => m.id === msgId ? {
+        const rawItem = {
+          id: 'item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          name: typeof itemObj.name === 'string' ? itemObj.name : (itemObj.name?.title || itemObj.name?.name || 'Producto'),
+          category: typeof itemObj.category === 'string' ? itemObj.category : 'Skincare',
+          stores: validStores,
+          preferredStore: validStores[0]?.storeName || '',
+          repurchaseVerdict: 'yes',
+          notes: typeof itemObj.notes === 'string' ? itemObj.notes : (Array.isArray(itemObj.notes) ? itemObj.notes.join('. ') : 'Agregado automáticamente por AURA Copilot.')
+        };
+
+        return sanitizeHouseholdItem(rawItem);
+      })
+      .filter(Boolean);
+
+    if (newItems.length === 0) return;
+
+    setHouseholdItems(prev => [...(Array.isArray(prev) ? prev : []), ...newItems]);
+    setMessages(prev => (Array.isArray(prev) ? prev : []).map(m => m.id === msgId ? {
       ...m,
-      executedActions: { ...m.executedActions, products: true }
+      executedActions: { ...(m.executedActions || {}), products: true }
     } : m));
 
-    showToast('success', 'Productos Agregados', `Se añadieron ${products.length} productos al Comparador de Precios.`);
+    showToast('success', 'Productos Agregados', `Se añadieron ${newItems.length} productos al Comparador de Precios.`);
   };
 
   const handleAddSelfCareToCalendar = (msgId, selfCareList = []) => {
-    if (!selfCareList || selfCareList.length === 0) return;
+    if (!selfCareList || !Array.isArray(selfCareList) || selfCareList.length === 0) return;
 
-    const newActivities = selfCareList.map(sc => ({
-      id: 'sc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-      title: sc.title,
-      frequency: sc.frequency || 'custom',
-      daysInterval: parseInt(sc.daysInterval, 10) || 2,
-      lastCompletedDate: new Date().toISOString().split('T')[0],
-      category: sc.category || 'skincare',
-      notes: sc.notes || '',
-      protocol: sc.protocol || 'Cadencia configurada por AURA Copilot.'
-    }));
+    const newActivities = selfCareList
+      .filter(sc => sc && (typeof sc === 'object' || typeof sc === 'string'))
+      .map(sc => {
+        const scObj = typeof sc === 'string' ? { title: sc } : sc;
+        const interval = parseInt(scObj.daysInterval, 10) || 2;
+        const rawSc = {
+          id: 'sc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          title: typeof scObj.title === 'string' ? scObj.title : (scObj.title?.name || 'Actividad de Autocuidado'),
+          frequency: 'custom',
+          customValue: interval,
+          customUnit: 'days',
+          daysInterval: interval,
+          lastCompletedDate: new Date().toISOString().split('T')[0],
+          category: scObj.category === 'skincare' ? 'beauty' : (scObj.category || 'beauty'),
+          notes: typeof scObj.notes === 'string' ? scObj.notes : (Array.isArray(scObj.notes) ? scObj.notes.join('. ') : ''),
+          protocol: typeof scObj.protocol === 'string' ? scObj.protocol : 'Cadencia configurada por AURA Copilot.'
+        };
+        return sanitizeSelfCareItem(rawSc);
+      })
+      .filter(Boolean);
 
-    setSelfCareActivities(prev => [...prev, ...newActivities]);
-    setMessages(prev => prev.map(m => m.id === msgId ? {
+    if (newActivities.length === 0) return;
+
+    setSelfCareActivities(prev => [...(Array.isArray(prev) ? prev : []), ...newActivities]);
+    setMessages(prev => (Array.isArray(prev) ? prev : []).map(m => m.id === msgId ? {
       ...m,
-      executedActions: { ...m.executedActions, selfCare: true }
+      executedActions: { ...(m.executedActions || {}), selfCare: true }
     } : m));
 
-    showToast('success', 'Autocuidado Programado', `Se añadieron ${selfCareList.length} actividades al Calendario de Autocuidado.`);
+    showToast('success', 'Autocuidado Programado', `Se añadieron ${newActivities.length} actividades al Calendario de Autocuidado.`);
   };
 
   const handleAddTimers = (msgId, timersList = []) => {
-    if (!timersList || timersList.length === 0) return;
+    if (!timersList || !Array.isArray(timersList) || timersList.length === 0) return;
 
-    const newTimers = timersList.map(t => ({
-      id: 'timer-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-      name: t.name,
-      durationSeconds: parseInt(t.durationSeconds, 10) || 600,
-      category: t.category || 'skincare',
-      description: t.description || 'Configurado por AURA Copilot.'
-    }));
+    const newTimers = timersList
+      .filter(t => t && (typeof t === 'object' || typeof t === 'string'))
+      .map(t => {
+        const tObj = typeof t === 'string' ? { title: t } : t;
+        const durationSecs = parseInt(tObj.duration || tObj.durationSeconds, 10) || 600;
+        const tName = typeof tObj.name === 'string' ? tObj.name : (typeof tObj.title === 'string' ? tObj.title : 'Temporizador');
+        return {
+          id: 'timer-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          title: tName,
+          name: tName,
+          duration: durationSecs,
+          durationSeconds: durationSecs,
+          category: typeof tObj.category === 'string' ? tObj.category : 'skincare',
+          description: typeof tObj.description === 'string' ? tObj.description : 'Configurado por AURA Copilot.'
+        };
+      });
 
-    setCustomTimers(prev => [...prev, ...newTimers]);
-    setMessages(prev => prev.map(m => m.id === msgId ? {
+    if (newTimers.length === 0) return;
+
+    setCustomTimers(prev => [...(Array.isArray(prev) ? prev : []), ...newTimers]);
+    setMessages(prev => (Array.isArray(prev) ? prev : []).map(m => m.id === msgId ? {
       ...m,
-      executedActions: { ...m.executedActions, timers: true }
+      executedActions: { ...(m.executedActions || {}), timers: true }
     } : m));
 
-    showToast('success', 'Temporizadores Listos', `Se crearon ${timersList.length} temporizadores.`);
+    showToast('success', 'Temporizadores Listos', `Se crearon ${newTimers.length} temporizadores.`);
   };
 
   const handleAddScheduleBlock = (msgId, scheduleList = []) => {
-    if (!scheduleList || scheduleList.length === 0) return;
+    if (!scheduleList || !Array.isArray(scheduleList) || scheduleList.length === 0) return;
 
-    const newBlocks = scheduleList.map(s => ({
-      id: 'sch-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-      time: s.time || '22:00',
-      title: s.title,
-      tag: s.tag || 'beauty',
-      isRoutine: s.isRoutine !== undefined ? s.isRoutine : true
-    }));
+    const newBlocks = scheduleList
+      .filter(s => s && (typeof s === 'object' || typeof s === 'string'))
+      .map(s => {
+        const sObj = typeof s === 'string' ? { title: s } : s;
+        const timeStr = typeof sObj.time === 'string' ? sObj.time : '10:00 PM';
+        // Infer category from time
+        let cat = 'night';
+        if (timeStr.includes('AM')) {
+          cat = 'morning';
+        } else {
+          const hour = parseInt(timeStr.split(':')[0], 10) || 12;
+          cat = (hour < 6 || hour === 12) ? 'afternoon' : 'night';
+        }
 
-    setSchedule(prev => [...prev, ...newBlocks]);
-    setMessages(prev => prev.map(m => m.id === msgId ? {
+        return {
+          id: 'sch-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          time: timeStr,
+          title: typeof sObj.title === 'string' ? sObj.title : 'Bloque de Rutina',
+          desc: typeof sObj.desc === 'string' ? sObj.desc : (typeof sObj.notes === 'string' ? sObj.notes : 'Configurado por AURA Copilot'),
+          category: typeof sObj.category === 'string' ? sObj.category : cat,
+          completed: false,
+          tag: typeof sObj.tag === 'string' ? sObj.tag : 'beauty',
+          isRoutine: sObj.isRoutine !== undefined ? Boolean(sObj.isRoutine) : true
+        };
+      });
+
+    if (newBlocks.length === 0) return;
+
+    setSchedule(prev => [...(Array.isArray(prev) ? prev : []), ...newBlocks]);
+    setMessages(prev => (Array.isArray(prev) ? prev : []).map(m => m.id === msgId ? {
       ...m,
-      executedActions: { ...m.executedActions, schedule: true }
+      executedActions: { ...(m.executedActions || {}), schedule: true }
     } : m));
 
-    showToast('success', 'Horario Actualizado', `Se integraron bloques a tu Horario Diario.`);
+    showToast('success', 'Horario Actualizado', `Se integraron ${newBlocks.length} bloques a tu Horario Diario.`);
   };
 
   const handleClearChat = () => {

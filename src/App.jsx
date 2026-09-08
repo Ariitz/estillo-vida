@@ -38,6 +38,8 @@ import HealthTrackerModule from './components/HealthTrackerModule';
 import CopilotModule from './components/CopilotModule';
 import SyncModule from './components/SyncModule';
 import Toast from './components/Toast';
+import ErrorBoundary from './components/ErrorBoundary';
+import { sanitizeHouseholdList, sanitizeSelfCareList } from './utils/sanitizers';
 
 // ==========================================
 // DEFAULT / MOCK DATASETS
@@ -398,7 +400,7 @@ export default function App() {
   );
 
   const [selfCareActivities, setSelfCareActivities] = useState(() =>
-    getSavedArray('aura-selfcare', initialSelfCareActivities)
+    sanitizeSelfCareList(getSavedArray('aura-selfcare', initialSelfCareActivities))
   );
 
   const [healthSymptoms, setHealthSymptoms] = useState(() =>
@@ -406,7 +408,7 @@ export default function App() {
   );
 
   const [householdItems, setHouseholdItems] = useState(() =>
-    getSavedArray('aura-household', initialHousehold)
+    sanitizeHouseholdList(getSavedArray('aura-household', initialHousehold))
   );
 
   const [experiences, setExperiences] = useState(() =>
@@ -564,16 +566,18 @@ export default function App() {
       localStorage.setItem('aura-schedule', JSON.stringify(data.schedule));
     }
     if (Array.isArray(data.selfCareActivities)) {
-      setSelfCareActivities(data.selfCareActivities);
-      localStorage.setItem('aura-selfcare', JSON.stringify(data.selfCareActivities));
+      const sanitized = sanitizeSelfCareList(data.selfCareActivities);
+      setSelfCareActivities(sanitized);
+      localStorage.setItem('aura-selfcare', JSON.stringify(sanitized));
     }
     if (Array.isArray(data.healthSymptoms)) {
       setHealthSymptoms(data.healthSymptoms);
       localStorage.setItem('aura-health-tracker', JSON.stringify(data.healthSymptoms));
     }
     if (Array.isArray(data.householdItems)) {
-      setHouseholdItems(data.householdItems);
-      localStorage.setItem('aura-household', JSON.stringify(data.householdItems));
+      const sanitized = sanitizeHouseholdList(data.householdItems);
+      setHouseholdItems(sanitized);
+      localStorage.setItem('aura-household', JSON.stringify(sanitized));
     }
     if (Array.isArray(data.experiences)) {
       setExperiences(data.experiences);
@@ -1023,108 +1027,126 @@ export default function App() {
         {/* PAGE CONTENT CONTAINER */}
         <div className="flex-1 p-6 max-w-7xl w-full mx-auto">
           {activeModule === 'schedule' && (
-            <ScheduleModule
-              weight={weight}
-              setWeight={setWeight}
-              height={height}
-              setHeight={setHeight}
-              waterIntake={waterIntake}
-              setWaterIntake={setWaterIntake}
-              schedule={schedule}
-              setSchedule={setSchedule}
-              selfCareActivities={selfCareActivities}
-              setSelfCareActivities={setSelfCareActivities}
-              showToast={showToast}
-            />
+            <ErrorBoundary>
+              <ScheduleModule
+                weight={weight}
+                setWeight={setWeight}
+                height={height}
+                setHeight={setHeight}
+                waterIntake={waterIntake}
+                setWaterIntake={setWaterIntake}
+                schedule={schedule}
+                setSchedule={setSchedule}
+                selfCareActivities={selfCareActivities}
+                setSelfCareActivities={setSelfCareActivities}
+                showToast={showToast}
+              />
+            </ErrorBoundary>
           )}
 
           {activeModule === 'copilot' && (
-            <CopilotModule
-              geminiApiKey={geminiApiKey}
-              householdItems={householdItems}
-              setHouseholdItems={setHouseholdItems}
-              selfCareActivities={selfCareActivities}
-              setSelfCareActivities={setSelfCareActivities}
-              customTimers={customTimers}
-              setCustomTimers={setCustomTimers}
-              schedule={schedule}
-              setSchedule={setSchedule}
-              showToast={showToast}
-              setActiveModule={setActiveModule}
-            />
+            <ErrorBoundary>
+              <CopilotModule
+                geminiApiKey={geminiApiKey}
+                householdItems={householdItems}
+                setHouseholdItems={setHouseholdItems}
+                selfCareActivities={selfCareActivities}
+                setSelfCareActivities={setSelfCareActivities}
+                customTimers={customTimers}
+                setCustomTimers={setCustomTimers}
+                schedule={schedule}
+                setSchedule={setSchedule}
+                showToast={showToast}
+                setActiveModule={setActiveModule}
+              />
+            </ErrorBoundary>
           )}
 
           {activeModule === 'health' && (
-            <HealthTrackerModule
-              healthSymptoms={healthSymptoms}
-              setHealthSymptoms={setHealthSymptoms}
-              geminiApiKey={geminiApiKey}
-              showToast={showToast}
-            />
+            <ErrorBoundary>
+              <HealthTrackerModule
+                healthSymptoms={healthSymptoms}
+                setHealthSymptoms={setHealthSymptoms}
+                geminiApiKey={geminiApiKey}
+                showToast={showToast}
+              />
+            </ErrorBoundary>
           )}
 
           {activeModule === 'comparator' && (
-            <PriceComparatorModule
-              householdItems={householdItems}
-              setHouseholdItems={setHouseholdItems}
-              showToast={showToast}
-              geminiApiKey={geminiApiKey}
-            />
+            <ErrorBoundary>
+              <PriceComparatorModule
+                householdItems={householdItems}
+                setHouseholdItems={setHouseholdItems}
+                showToast={showToast}
+                geminiApiKey={geminiApiKey}
+              />
+            </ErrorBoundary>
           )}
 
           {activeModule === 'experiences' && (
-            <ExperiencesModule
-              experiences={experiences}
-              setExperiences={setExperiences}
-              showToast={showToast}
-              geminiApiKey={geminiApiKey}
-            />
+            <ErrorBoundary>
+              <ExperiencesModule
+                experiences={experiences}
+                setExperiences={setExperiences}
+                showToast={showToast}
+                geminiApiKey={geminiApiKey}
+              />
+            </ErrorBoundary>
           )}
 
           {activeModule === 'wardrobe' && (
-            <WardrobeModule
-              wardrobe={wardrobe}
-              setWardrobe={setWardrobe}
-              customOutfits={customOutfits}
-              setCustomOutfits={setCustomOutfits}
-              showToast={showToast}
-              geminiApiKey={geminiApiKey}
-              setGeminiApiKey={setGeminiApiKey}
-            />
+            <ErrorBoundary>
+              <WardrobeModule
+                wardrobe={wardrobe}
+                setWardrobe={setWardrobe}
+                customOutfits={customOutfits}
+                setCustomOutfits={setCustomOutfits}
+                showToast={showToast}
+                geminiApiKey={geminiApiKey}
+                setGeminiApiKey={setGeminiApiKey}
+              />
+            </ErrorBoundary>
           )}
 
           {activeModule === 'manuals' && (
-            <ManualsModule
-              customManuals={customManuals}
-              setCustomManuals={setCustomManuals}
-              showToast={showToast}
-            />
+            <ErrorBoundary>
+              <ManualsModule
+                customManuals={customManuals}
+                setCustomManuals={setCustomManuals}
+                showToast={showToast}
+              />
+            </ErrorBoundary>
           )}
 
           {activeModule === 'timers' && (
-            <TimersModule
-              customTimers={customTimers}
-              setCustomTimers={setCustomTimers}
-              showToast={showToast}
-            />
+            <ErrorBoundary>
+              <TimersModule
+                customTimers={customTimers}
+                setCustomTimers={setCustomTimers}
+                showToast={showToast}
+              />
+            </ErrorBoundary>
           )}
 
           {activeModule === 'sync' && (
-            <SyncModule
-              firebaseConfig={firebaseConfig}
-              setFirebaseConfig={setFirebaseConfig}
-              isSyncActive={isSyncActive}
-              setIsSyncActive={setIsSyncActive}
-              onPull={handlePull}
-              onPush={handlePush}
-              showToast={showToast}
-              syncLoading={syncLoading}
-              lastSyncTime={lastSyncTime}
-              isAutoSyncEnabled={isAutoSyncEnabled}
-              setIsAutoSyncEnabled={setIsAutoSyncEnabled}
-              geminiApiKey={geminiApiKey}
-              setGeminiApiKey={setGeminiApiKey}
-            />
+            <ErrorBoundary>
+              <SyncModule
+                firebaseConfig={firebaseConfig}
+                setFirebaseConfig={setFirebaseConfig}
+                isSyncActive={isSyncActive}
+                setIsSyncActive={setIsSyncActive}
+                onPull={handlePull}
+                onPush={handlePush}
+                showToast={showToast}
+                syncLoading={syncLoading}
+                lastSyncTime={lastSyncTime}
+                isAutoSyncEnabled={isAutoSyncEnabled}
+                setIsAutoSyncEnabled={setIsAutoSyncEnabled}
+                geminiApiKey={geminiApiKey}
+                setGeminiApiKey={setGeminiApiKey}
+              />
+            </ErrorBoundary>
           )}
         </div>
 

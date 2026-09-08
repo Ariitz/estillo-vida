@@ -21,9 +21,10 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { compressImage, analyzeProductImage } from '../utils/geminiService';
+import { safeNumber, sanitizeHouseholdItem, sanitizeHouseholdList } from '../utils/sanitizers';
 
 export default function PriceComparatorModule({
-  householdItems,
+  householdItems = [],
   setHouseholdItems,
   showToast,
   geminiApiKey = ''
@@ -102,30 +103,34 @@ export default function PriceComparatorModule({
     if (!itemName.trim()) return;
 
     // Build stores list (only those with values)
-    const validStores = storePrices
-      .filter(s => s.price && s.quantity)
+    const validStores = (storePrices || [])
+      .filter(s => s && s.price && s.quantity)
       .map(s => {
-        const p = parseFloat(s.price);
-        const q = parseFloat(s.quantity);
+        const p = safeNumber(s.price, 0);
+        const q = safeNumber(s.quantity, 1);
         return {
-          storeName: s.storeName,
+          storeName: s.storeName || 'Tienda',
           price: p,
           quantity: q,
-          unitPrice: p / q
+          unitPrice: q > 0 ? p / q : 0
         };
-      });
+      })
+      .filter(s => s.price > 0 && s.quantity > 0);
 
     const newItem = {
       id: Date.now().toString(),
-      name: itemName,
-      category: itemCategory,
+      name: itemName.trim(),
+      category: itemCategory || 'Skincare',
       stores: validStores,
       preferredStore: validStores[0]?.storeName || '',
-      repurchaseVerdict: itemVerdict,
-      notes: itemNotes
+      repurchaseVerdict: itemVerdict || 'yes',
+      notes: itemNotes || ''
     };
 
-    setHouseholdItems([...householdItems, newItem]);
+    const sanitized = sanitizeHouseholdItem(newItem);
+    if (!sanitized) return;
+
+    setHouseholdItems(prev => [...(Array.isArray(prev) ? prev : []), sanitized]);
     setItemName('');
     setItemNotes('');
     setStorePrices([
@@ -137,28 +142,28 @@ export default function PriceComparatorModule({
   };
 
   const handleDeleteItem = (id, name) => {
-    setHouseholdItems(householdItems.filter(i => i.id !== id));
+    setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).filter(i => i && i.id !== id));
     showToast('warning', 'Insumo Eliminado', `Se eliminó "${name}"`);
   };
 
   const handleSetPreferred = (itemId, storeName) => {
-    const updated = householdItems.map(item => {
-      if (item.id === itemId) {
+    setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
         showToast('success', 'Preferencia Guardada', `Tienda preferida para ${item.name}: ${storeName}`);
         return { ...item, preferredStore: storeName };
       }
       return item;
-    });
-    setHouseholdItems(updated);
+    }));
   };
 
   const handleToggleVerdict = (itemId, current) => {
     const verdicts = ['yes', 'maybe', 'no'];
-    const nextIdx = (verdicts.indexOf(current) + 1) % verdicts.length;
+    const currentIdx = verdicts.indexOf(current);
+    const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % verdicts.length : 0;
     const nextVerdict = verdicts[nextIdx];
     
-    setHouseholdItems(householdItems.map(item => {
-      if (item.id === itemId) {
+    setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
         return { ...item, repurchaseVerdict: nextVerdict };
       }
       return item;
@@ -169,19 +174,22 @@ export default function PriceComparatorModule({
     e.preventDefault();
     if (!newStorePrice || !newStoreQty || !addingStoreToItem) return;
 
-    const p = parseFloat(newStorePrice);
-    const q = parseFloat(newStoreQty);
+    const p = safeNumber(newStorePrice, 0);
+    const q = safeNumber(newStoreQty, 1);
+    if (p <= 0 || q <= 0) return;
+
     const newStoreObj = {
-      storeName: newStoreName,
+      storeName: newStoreName || 'Tienda',
       price: p,
       quantity: q,
       unitPrice: p / q
     };
 
-    setHouseholdItems(householdItems.map(item => {
-      if (item.id === addingStoreToItem.id) {
+    setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === addingStoreToItem.id) {
+        const currentStores = (Array.isArray(item.stores) ? item.stores : []).filter(s => s && typeof s === 'object');
         // If store already exists, overwrite it. Else add it.
-        const filteredStores = item.stores.filter(s => s.storeName !== newStoreName);
+        const filteredStores = currentStores.filter(s => s.storeName !== newStoreName);
         const updatedStores = [...filteredStores, newStoreObj];
         return {
           ...item,
@@ -200,9 +208,10 @@ export default function PriceComparatorModule({
   };
 
   const removeStoreFromItem = (itemId, storeName) => {
-    setHouseholdItems(householdItems.map(item => {
-      if (item.id === itemId) {
-        const updatedStores = item.stores.filter(s => s.storeName !== storeName);
+    setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
+        const currentStores = (Array.isArray(item.stores) ? item.stores : []).filter(s => s && typeof s === 'object');
+        const updatedStores = currentStores.filter(s => s.storeName !== storeName);
         let newPref = item.preferredStore;
         if (newPref === storeName) {
           newPref = updatedStores[0]?.storeName || '';
@@ -219,26 +228,51 @@ export default function PriceComparatorModule({
   };
 
   const handleUpdateNotes = (itemId, notes) => {
-    setHouseholdItems(householdItems.map(item => {
-      if (item.id === itemId) {
-        return { ...item, notes };
+    setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
+        return { ...item, notes: String(notes || '') };
       }
       return item;
     }));
   };
 
-  // Filter list
-  const filteredItems = householdItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      item.notes.toLowerCase().includes(searchTerm.toLowerCase());
+  // Safe normalized list & Filter
+  const safeItemsList = sanitizeHouseholdList(householdItems);
+
+  const filteredItems = safeItemsList.filter(item => {
+    if (!item) return false;
+    const name = String(item.name || '');
+    const notes = String(item.notes || '');
+    const search = String(searchTerm || '').toLowerCase().trim();
+    const matchesSearch = !search || 
+      name.toLowerCase().includes(search) || 
+      notes.toLowerCase().includes(search);
     const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
   // Calculate cheapest store helper
   const getCheapestStore = (stores) => {
-    if (!stores || stores.length === 0) return null;
-    return stores.reduce((prev, curr) => (prev.unitPrice < curr.unitPrice) ? prev : curr);
+    if (!Array.isArray(stores) || stores.length === 0) return null;
+    const valid = stores
+      .filter(s => s && typeof s === 'object')
+      .map(s => {
+        const p = safeNumber(s.price, 0);
+        const q = safeNumber(s.quantity, 1);
+        const u = typeof s.unitPrice === 'number' && !isNaN(s.unitPrice)
+          ? s.unitPrice
+          : (q > 0 ? p / q : 0);
+        return {
+          ...s,
+          priceNum: p,
+          qtyNum: q,
+          unitPriceNum: u
+        };
+      })
+      .filter(s => s.priceNum > 0 && s.qtyNum > 0 && s.unitPriceNum > 0);
+
+    if (valid.length === 0) return null;
+    return valid.reduce((prev, curr) => (prev.unitPriceNum < curr.unitPriceNum ? prev : curr));
   };
 
   return (
@@ -550,90 +584,114 @@ export default function PriceComparatorModule({
 
                   {/* Stores pricing lists */}
                   <div className="space-y-2 mt-4">
-                    {item.stores.length === 0 ? (
-                      <p className="text-xs text-slate-500 italic py-2">No hay precios registrados. Registra precios abajo.</p>
+                    {!Array.isArray(item.stores) || item.stores.filter(s => s && safeNumber(s.price, 0) > 0 && safeNumber(s.quantity, 0) > 0).length === 0 ? (
+                      <div className="bg-[#0b0c10]/40 border border-slate-800/80 rounded-lg p-3 text-center">
+                        <p className="text-xs text-slate-400 italic">No hay precios registrados todavía.</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Usa el botón "Agregar Precio Tienda" abajo para registrar costos.</p>
+                      </div>
                     ) : (
-                      item.stores.map(store => {
-                        const isCheapest = cheapest && cheapest.storeName === store.storeName;
-                        const isPreferred = item.preferredStore === store.storeName;
-                        
-                        return (
-                          <div 
-                            key={store.storeName}
-                            className={`p-2.5 rounded-lg flex items-center justify-between border text-xs ${
-                              isPreferred 
-                                ? 'bg-[#0b0c10] border-[#e0a96d]/40 shadow-inner' 
-                                : 'bg-[#0b0c10]/50 border-slate-800'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              {/* Star icon for manual preference */}
-                              <button
-                                onClick={() => handleSetPreferred(item.id, store.storeName)}
-                                className={`p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer ${
-                                  isPreferred ? 'text-[#e0a96d]' : 'text-slate-600 hover:text-slate-400'
-                                }`}
-                                title="Marcar como predeterminado/favorito"
-                                aria-label={`Marcar ${store.storeName} como favorito`}
-                              >
-                                <Star className={`w-3.5 h-3.5 ${isPreferred ? 'fill-[#e0a96d]' : ''}`} />
-                              </button>
-                              <span className="font-semibold text-slate-300 truncate">{store.storeName}</span>
-                            </div>
-
-                            <div className="flex items-center gap-3 shrink-0 text-right">
-                              <div>
-                                <span className="text-slate-200 font-bold">${store.price.toFixed(2)}</span>
-                                <span className="text-slate-500 text-[10px] block">({store.quantity} Uds)</span>
-                              </div>
-                              <div className="w-20 pl-2 border-l border-slate-800">
-                                <span className="text-[#e0a96d] font-bold block">${store.unitPrice.toFixed(3)}</span>
-                                <span className="text-slate-500 text-[9px] block">por ud</span>
-                              </div>
-                              
-                              {/* Badges */}
-                              <div className="flex flex-col gap-0.5 items-end justify-center w-20">
-                                {isCheapest && (
-                                  <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                    <Award className="w-2.5 h-2.5 shrink-0" />
-                                    <span>Más Barato</span>
-                                  </span>
-                                )}
-                                {isPreferred && (
-                                  <span className="bg-[#e0a96d]/10 text-[#e0a96d] border border-[#e0a96d]/30 text-[8px] font-bold px-1.5 py-0.5 rounded">
-                                    Favorito
-                                  </span>
-                                )}
+                      item.stores
+                        .filter(s => s && typeof s === 'object' && safeNumber(s.price, 0) > 0 && safeNumber(s.quantity, 0) > 0)
+                        .map((store, sIdx) => {
+                          const p = safeNumber(store.price, 0);
+                          const q = safeNumber(store.quantity, 1);
+                          const u = typeof store.unitPrice === 'number' && !isNaN(store.unitPrice)
+                            ? store.unitPrice
+                            : (q > 0 ? p / q : 0);
+                          const isCheapest = cheapest && cheapest.storeName === store.storeName;
+                          const isPreferred = item.preferredStore === store.storeName;
+                          
+                          return (
+                            <div 
+                              key={store.storeName ? `${store.storeName}-${sIdx}` : sIdx}
+                              className={`p-2.5 rounded-lg flex items-center justify-between border text-xs ${
+                                isPreferred 
+                                  ? 'bg-[#0b0c10] border-[#e0a96d]/40 shadow-inner' 
+                                  : 'bg-[#0b0c10]/50 border-slate-800'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                {/* Star icon for manual preference */}
+                                <button
+                                  onClick={() => handleSetPreferred(item.id, store.storeName)}
+                                  className={`p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer ${
+                                    isPreferred ? 'text-[#e0a96d]' : 'text-slate-600 hover:text-slate-400'
+                                  }`}
+                                  title="Marcar como predeterminado/favorito"
+                                  aria-label={`Marcar ${store.storeName} como favorito`}
+                                >
+                                  <Star className={`w-3.5 h-3.5 ${isPreferred ? 'fill-[#e0a96d]' : ''}`} />
+                                </button>
+                                <span className="font-semibold text-slate-300 truncate">{store.storeName}</span>
                               </div>
 
-                              <button
-                                onClick={() => removeStoreFromItem(item.id, store.storeName)}
-                                className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer transition-colors"
-                                title="Remover este precio"
-                                aria-label={`Remover precio de ${store.storeName}`}
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-3 shrink-0 text-right">
+                                <div>
+                                  <span className="text-slate-200 font-bold">${p.toFixed(2)}</span>
+                                  <span className="text-slate-500 text-[10px] block">({q} Uds)</span>
+                                </div>
+                                <div className="w-20 pl-2 border-l border-slate-800">
+                                  <span className="text-[#e0a96d] font-bold block">${u.toFixed(3)}</span>
+                                  <span className="text-slate-500 text-[9px] block">por ud</span>
+                                </div>
+                                
+                                {/* Badges */}
+                                <div className="flex flex-col gap-0.5 items-end justify-center w-20">
+                                  {isCheapest && (
+                                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                      <Award className="w-2.5 h-2.5 shrink-0" />
+                                      <span>Más Barato</span>
+                                    </span>
+                                  )}
+                                  {isPreferred && (
+                                    <span className="bg-[#e0a96d]/10 text-[#e0a96d] border border-[#e0a96d]/30 text-[8px] font-bold px-1.5 py-0.5 rounded">
+                                      Favorito
+                                    </span>
+                                  )}
+                                </div>
+
+                                <button
+                                  onClick={() => removeStoreFromItem(item.id, store.storeName)}
+                                  className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer transition-colors"
+                                  title="Remover este precio"
+                                  aria-label={`Remover precio de ${store.storeName}`}
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })
+                          );
+                        })
                     )}
                   </div>
 
                   {/* Analysis note under preferred store */}
-                  {cheapest && item.preferredStore && item.preferredStore !== cheapest.storeName && (
-                    <div className="mt-3 bg-amber-500/5 border border-amber-500/10 p-2 rounded text-[10px] text-amber-300/80 leading-relaxed">
-                      💡 <strong>Análisis:</strong> El preferido ({item.preferredStore}) cuesta <strong>${(item.stores.find(s => s.storeName === item.preferredStore)?.unitPrice - cheapest.unitPrice).toFixed(3)}</strong> más por unidad que el más barato ({cheapest.storeName}).
-                    </div>
-                  )}
+                  {(() => {
+                    if (!cheapest || !item.preferredStore || item.preferredStore === cheapest.storeName) return null;
+                    const prefStore = (Array.isArray(item.stores) ? item.stores : []).find(s => s && s.storeName === item.preferredStore);
+                    if (!prefStore) return null;
+                    const prefPrice = safeNumber(prefStore.price, 0);
+                    const prefQty = safeNumber(prefStore.quantity, 1);
+                    const prefUnit = typeof prefStore.unitPrice === 'number' && !isNaN(prefStore.unitPrice)
+                      ? prefStore.unitPrice
+                      : (prefQty > 0 ? prefPrice / prefQty : 0);
+                    if (prefUnit <= 0 || !cheapest.unitPriceNum) return null;
+                    const diff = prefUnit - cheapest.unitPriceNum;
+                    if (diff <= 0.0001) return null;
+
+                    return (
+                      <div className="mt-3 bg-amber-500/5 border border-amber-500/10 p-2 rounded text-[10px] text-amber-300/80 leading-relaxed">
+                        💡 <strong>Análisis:</strong> El preferido ({item.preferredStore}) cuesta <strong>${diff.toFixed(3)}</strong> más por unidad que el más barato ({cheapest.storeName}).
+                      </div>
+                    );
+                  })()}
 
                   {/* Notes panel */}
                   <div className="mt-3">
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Notas de rendimiento</label>
                     <input
                       type="text"
-                      value={item.notes}
+                      value={item.notes || ''}
                       onChange={(e) => handleUpdateNotes(item.id, e.target.value)}
                       placeholder="Observaciones de rendimiento..."
                       className="w-full bg-[#0b0c10] border border-[#e0a96d]/10 rounded-lg py-1.5 px-3 text-slate-300 text-xs focus:outline-none focus:border-[#e0a96d]/30 mt-1 transition-colors"
