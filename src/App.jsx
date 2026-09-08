@@ -39,7 +39,18 @@ import CopilotModule from './components/CopilotModule';
 import SyncModule from './components/SyncModule';
 import Toast from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
-import { sanitizeHouseholdList, sanitizeSelfCareList } from './utils/sanitizers';
+import { 
+  safeNumber,
+  sanitizeHouseholdList, 
+  sanitizeSelfCareList,
+  sanitizeScheduleList,
+  sanitizeHealthSymptomList,
+  sanitizeExperienceList,
+  sanitizeWardrobeList,
+  sanitizeCustomOutfitList,
+  sanitizeManualList,
+  sanitizeTimerList
+} from './utils/sanitizers';
 
 // ==========================================
 // DEFAULT / MOCK DATASETS
@@ -396,7 +407,7 @@ export default function App() {
   };
 
   const [schedule, setSchedule] = useState(() =>
-    getSavedArray('aura-schedule', initialSchedule)
+    sanitizeScheduleList(getSavedArray('aura-schedule', initialSchedule))
   );
 
   const [selfCareActivities, setSelfCareActivities] = useState(() =>
@@ -404,7 +415,7 @@ export default function App() {
   );
 
   const [healthSymptoms, setHealthSymptoms] = useState(() =>
-    getSavedArray('aura-health-tracker', initialHealthSymptoms)
+    sanitizeHealthSymptomList(getSavedArray('aura-health-tracker', initialHealthSymptoms))
   );
 
   const [householdItems, setHouseholdItems] = useState(() =>
@@ -412,23 +423,23 @@ export default function App() {
   );
 
   const [experiences, setExperiences] = useState(() =>
-    getSavedArray('aura-experiences', initialExperiences)
+    sanitizeExperienceList(getSavedArray('aura-experiences', initialExperiences))
   );
 
   const [wardrobe, setWardrobe] = useState(() =>
-    getSavedArray('aura-wardrobe', initialWardrobe)
+    sanitizeWardrobeList(getSavedArray('aura-wardrobe', initialWardrobe))
   );
 
   const [customOutfits, setCustomOutfits] = useState(() =>
-    getSavedArray('aura-outfits', [])
+    sanitizeCustomOutfitList(getSavedArray('aura-outfits', []))
   );
 
   const [customManuals, setCustomManuals] = useState(() =>
-    getSavedArray('aura-manuals', [])
+    sanitizeManualList(getSavedArray('aura-manuals', []))
   );
 
   const [customTimers, setCustomTimers] = useState(() =>
-    getSavedArray('aura-timers', [])
+    sanitizeTimerList(getSavedArray('aura-timers', []))
   );
 
   // Sync health symptoms to localStorage
@@ -550,20 +561,24 @@ export default function App() {
   const setAllStatesFromData = (data) => {
     if (!data) return;
     if (data.weight !== undefined) {
-      setWeight(data.weight);
-      localStorage.setItem('aura-weight', data.weight.toString());
+      const w = safeNumber(data.weight, 92.0);
+      setWeight(w);
+      localStorage.setItem('aura-weight', w.toString());
     }
     if (data.height !== undefined) {
-      setHeight(data.height);
-      localStorage.setItem('aura-height', data.height.toString());
+      const h = safeNumber(data.height, 1.60);
+      setHeight(h);
+      localStorage.setItem('aura-height', h.toString());
     }
     if (data.waterIntake !== undefined) {
-      setWaterIntake(data.waterIntake);
-      localStorage.setItem('aura-water', data.waterIntake.toString());
+      const wt = safeNumber(data.waterIntake, 0);
+      setWaterIntake(wt);
+      localStorage.setItem('aura-water', wt.toString());
     }
     if (Array.isArray(data.schedule)) {
-      setSchedule(data.schedule);
-      localStorage.setItem('aura-schedule', JSON.stringify(data.schedule));
+      const sanitized = sanitizeScheduleList(data.schedule);
+      setSchedule(sanitized);
+      localStorage.setItem('aura-schedule', JSON.stringify(sanitized));
     }
     if (Array.isArray(data.selfCareActivities)) {
       const sanitized = sanitizeSelfCareList(data.selfCareActivities);
@@ -571,8 +586,9 @@ export default function App() {
       localStorage.setItem('aura-selfcare', JSON.stringify(sanitized));
     }
     if (Array.isArray(data.healthSymptoms)) {
-      setHealthSymptoms(data.healthSymptoms);
-      localStorage.setItem('aura-health-tracker', JSON.stringify(data.healthSymptoms));
+      const sanitized = sanitizeHealthSymptomList(data.healthSymptoms);
+      setHealthSymptoms(sanitized);
+      localStorage.setItem('aura-health-tracker', JSON.stringify(sanitized));
     }
     if (Array.isArray(data.householdItems)) {
       const sanitized = sanitizeHouseholdList(data.householdItems);
@@ -580,24 +596,29 @@ export default function App() {
       localStorage.setItem('aura-household', JSON.stringify(sanitized));
     }
     if (Array.isArray(data.experiences)) {
-      setExperiences(data.experiences);
-      localStorage.setItem('aura-experiences', JSON.stringify(data.experiences));
+      const sanitized = sanitizeExperienceList(data.experiences);
+      setExperiences(sanitized);
+      localStorage.setItem('aura-experiences', JSON.stringify(sanitized));
     }
     if (Array.isArray(data.wardrobe)) {
-      setWardrobe(data.wardrobe);
-      localStorage.setItem('aura-wardrobe', JSON.stringify(data.wardrobe));
+      const sanitized = sanitizeWardrobeList(data.wardrobe);
+      setWardrobe(sanitized);
+      localStorage.setItem('aura-wardrobe', JSON.stringify(sanitized));
     }
     if (Array.isArray(data.customOutfits)) {
-      setCustomOutfits(data.customOutfits);
-      localStorage.setItem('aura-outfits', JSON.stringify(data.customOutfits));
+      const sanitized = sanitizeCustomOutfitList(data.customOutfits);
+      setCustomOutfits(sanitized);
+      localStorage.setItem('aura-outfits', JSON.stringify(sanitized));
     }
     if (Array.isArray(data.customManuals)) {
-      setCustomManuals(data.customManuals);
-      localStorage.setItem('aura-manuals', JSON.stringify(data.customManuals));
+      const sanitized = sanitizeManualList(data.customManuals);
+      setCustomManuals(sanitized);
+      localStorage.setItem('aura-manuals', JSON.stringify(sanitized));
     }
     if (Array.isArray(data.customTimers)) {
-      setCustomTimers(data.customTimers);
-      localStorage.setItem('aura-timers', JSON.stringify(data.customTimers));
+      const sanitized = sanitizeTimerList(data.customTimers);
+      setCustomTimers(sanitized);
+      localStorage.setItem('aura-timers', JSON.stringify(sanitized));
     }
     if (typeof data.geminiApiKey === 'string' && data.geminiApiKey.trim()) {
       setGeminiApiKey(data.geminiApiKey.trim());

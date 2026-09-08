@@ -28,6 +28,7 @@ import {
   Layers
 } from 'lucide-react';
 import { compressImage, analyzeClothingImage, recommendOutfitForOccasion } from '../utils/geminiService';
+import { sanitizeWardrobeList, sanitizeCustomOutfitList } from '../utils/sanitizers';
 
 export default function WardrobeModule({
   wardrobe,
@@ -38,6 +39,9 @@ export default function WardrobeModule({
   geminiApiKey,
   setGeminiApiKey
 }) {
+  const safeWardrobe = sanitizeWardrobeList(wardrobe);
+  const safeCustomOutfits = sanitizeCustomOutfitList(customOutfits);
+
   const [activeTab, setActiveTab] = useState('closet'); // 'closet' | 'stylist' | 'outfits'
   const [categoryFilter, setCategoryFilter] = useState('all');
   
@@ -86,13 +90,13 @@ export default function WardrobeModule({
     { id: 'gala', label: 'Evento Especial / Gala', icon: '✨', desc: 'Impecable y distinguido' }
   ];
 
-  const cleanGarments = wardrobe.filter(item => item.isClean);
+  const cleanGarments = safeWardrobe.filter(item => item && item.isClean);
   const cleanCountByCategory = {
-    tops: cleanGarments.filter(g => g.category === 'tops').length,
-    bottoms: cleanGarments.filter(g => g.category === 'bottoms').length,
-    outerwear: cleanGarments.filter(g => g.category === 'outerwear').length,
-    footwear: cleanGarments.filter(g => g.category === 'footwear').length,
-    accessories: cleanGarments.filter(g => g.category === 'accessories').length
+    tops: cleanGarments.filter(g => g && g.category === 'tops').length,
+    bottoms: cleanGarments.filter(g => g && g.category === 'bottoms').length,
+    outerwear: cleanGarments.filter(g => g && g.category === 'outerwear').length,
+    footwear: cleanGarments.filter(g => g && g.category === 'footwear').length,
+    accessories: cleanGarments.filter(g => g && g.category === 'accessories').length
   };
 
   const categories = {
@@ -228,13 +232,13 @@ export default function WardrobeModule({
   };
 
   const handleToggleClean = (id) => {
-    setWardrobe(wardrobe.map(item => {
-      if (item.id === id) {
+    setWardrobe(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === id) {
         const nextState = !item.isClean;
         showToast(
           'info', 
           nextState ? 'Prenda Limpia' : 'En Lavandería', 
-          `"${item.name}" cambió de estado.`
+          `"${item.name || 'Prenda'}" cambió de estado.`
         );
         return { ...item, isClean: nextState };
       }
@@ -243,8 +247,8 @@ export default function WardrobeModule({
   };
 
   const handleDeleteGarment = (id, name) => {
-    setWardrobe(wardrobe.filter(item => item.id !== id));
-    showToast('warning', 'Prenda Eliminada', `Se retiró "${name}" de tu inventario.`);
+    setWardrobe(prev => (Array.isArray(prev) ? prev : []).filter(item => item && item.id !== id));
+    showToast('warning', 'Prenda Eliminada', `Se retiró "${name || 'Prenda'}" de tu inventario.`);
   };
 
   // Add custom outfit
@@ -254,11 +258,11 @@ export default function WardrobeModule({
 
     const newOutfit = {
       id: Date.now().toString(),
-      name: outfitName,
-      garmentIds: selectedGarments
+      name: outfitName.trim(),
+      garmentIds: [...selectedGarments]
     };
 
-    setCustomOutfits([...customOutfits, newOutfit]);
+    setCustomOutfits(prev => [...(Array.isArray(prev) ? prev : []), newOutfit]);
     setOutfitName('');
     setSelectedGarments([]);
     setIsAddingOutfit(false);
@@ -266,8 +270,8 @@ export default function WardrobeModule({
   };
 
   const handleDeleteOutfit = (id, name) => {
-    setCustomOutfits(customOutfits.filter(o => o.id !== id));
-    showToast('warning', 'Outfit Eliminado', `Se eliminó la combinación "${name}"`);
+    setCustomOutfits(prev => (Array.isArray(prev) ? prev : []).filter(o => o && o.id !== id));
+    showToast('warning', 'Outfit Eliminado', `Se eliminó la combinación "${name || 'Outfit'}"`);
   };
 
   const handleSelectGarmentForOutfit = (id) => {
@@ -309,10 +313,10 @@ export default function WardrobeModule({
     if (!recommendedOutfit || !recommendedOutfit.selectedGarmentIds?.length) return;
     const newOutfit = {
       id: Date.now().toString(),
-      name: recommendedOutfit.outfitName,
-      garmentIds: recommendedOutfit.selectedGarmentIds
+      name: recommendedOutfit.outfitName || 'Outfit Recomendado',
+      garmentIds: Array.isArray(recommendedOutfit.selectedGarmentIds) ? [...recommendedOutfit.selectedGarmentIds] : []
     };
-    setCustomOutfits([...customOutfits, newOutfit]);
+    setCustomOutfits(prev => [...(Array.isArray(prev) ? prev : []), newOutfit]);
     showToast('success', 'Outfit Guardado', `"${recommendedOutfit.outfitName}" se guardó en tus combinaciones.`);
   };
 
@@ -320,14 +324,13 @@ export default function WardrobeModule({
     if (!recommendedOutfit || !recommendedOutfit.selectedGarmentIds?.length) return;
     
     const count = recommendedOutfit.selectedGarmentIds.length;
-    const updated = wardrobe.map(g => {
-      if (recommendedOutfit.selectedGarmentIds.includes(g.id)) {
+    setWardrobe(prev => (Array.isArray(prev) ? prev : []).map(g => {
+      if (g && recommendedOutfit.selectedGarmentIds.includes(g.id)) {
         return { ...g, isClean: false };
       }
       return g;
-    });
+    }));
 
-    setWardrobe(updated);
     showToast('info', '¡Que tengas excelente reunión!', `${count} prendas del outfit pasaron a "En Lavandería / Sucia".`);
   };
 
@@ -337,25 +340,29 @@ export default function WardrobeModule({
     let allAvailable = true;
     let anyDirty = false;
 
-    lookItems.forEach(reqItem => {
-      // Find matches in wardrobe
-      // Try exact name or category match
-      const match = wardrobe.find(w => 
-        w.name.toLowerCase().includes(reqItem.name.toLowerCase()) || 
-        (w.category === reqItem.category && w.name.toLowerCase().includes(reqItem.name.split(' ')[0].toLowerCase()))
-      );
+    (Array.isArray(lookItems) ? lookItems : []).forEach(reqItem => {
+      if (!reqItem) return;
+      const reqName = String(reqItem.name || '').toLowerCase();
+      const reqCat = String(reqItem.category || '');
+      const reqFirstWord = reqName.split(' ')[0] || '';
+
+      const match = safeWardrobe.find(w => {
+        if (!w || !w.name) return false;
+        const wName = String(w.name).toLowerCase();
+        return wName.includes(reqName) || (w.category === reqCat && reqFirstWord && wName.includes(reqFirstWord));
+      });
 
       if (match) {
         resolved.push({
-          required: reqItem.name,
+          required: reqItem.name || 'Prenda',
           found: match.name,
-          isClean: match.isClean,
+          isClean: !!match.isClean,
           available: true
         });
         if (!match.isClean) anyDirty = true;
       } else {
         resolved.push({
-          required: reqItem.name,
+          required: reqItem.name || 'Prenda',
           found: 'No se encontró prenda similar',
           isClean: false,
           available: false
@@ -368,7 +375,8 @@ export default function WardrobeModule({
   };
 
   // Filter garments
-  const filteredGarments = wardrobe.filter(item => {
+  const filteredGarments = safeWardrobe.filter(item => {
+    if (!item) return false;
     return categoryFilter === 'all' || item.category === categoryFilter;
   });
 
@@ -386,7 +394,7 @@ export default function WardrobeModule({
           }`}
         >
           <span>👚</span>
-          <span>Mi Armario ({wardrobe.length})</span>
+          <span>Mi Armario ({safeWardrobe.length})</span>
         </button>
 
         <button
@@ -769,8 +777,8 @@ export default function WardrobeModule({
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-1">
-                      {item.tags.map(t => (
-                        <span key={t} className="text-[9px] text-[#e0a96d] bg-[#e0a96d]/5 px-2 py-0.5 rounded-full border border-[#e0a96d]/10">
+                      {(Array.isArray(item.tags) ? item.tags : []).map((t, idx) => (
+                        <span key={idx} className="text-[9px] text-[#e0a96d] bg-[#e0a96d]/5 px-2 py-0.5 rounded-full border border-[#e0a96d]/10">
                           #{t}
                         </span>
                       ))}
@@ -1256,7 +1264,8 @@ export default function WardrobeModule({
                 <div className="space-y-2">
                   <label className="block text-xs font-semibold text-slate-400">Selecciona prendas de tu armario:</label>
                   <div className="max-h-60 overflow-y-auto bg-[#171a24] p-3 rounded-lg border border-slate-800 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                    {wardrobe.map(item => {
+                    {safeWardrobe.map(item => {
+                      if (!item) return null;
                       const isSelected = selectedGarments.includes(item.id);
                       return (
                         <button
@@ -1269,7 +1278,7 @@ export default function WardrobeModule({
                               : 'bg-[#0b0c10] border-slate-800 text-slate-400 hover:border-slate-700'
                           }`}
                         >
-                          <span className="truncate pr-2">{item.name}</span>
+                          <span className="truncate pr-2">{item.name || 'Prenda'}</span>
                           <span className={`text-[9px] shrink-0 font-semibold px-1.5 py-0.5 rounded ${
                             item.isClean ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
                           }`}>
@@ -1285,14 +1294,17 @@ export default function WardrobeModule({
 
             {/* Custom Outfits Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {customOutfits.length === 0 ? (
+              {safeCustomOutfits.length === 0 ? (
                 <div className="col-span-full bg-[#0b0c10]/40 p-8 text-center rounded-xl border border-slate-800/80">
                   <p className="text-slate-500 text-xs italic">Aún no has diseñado combinaciones personalizadas.</p>
                 </div>
               ) : (
-                customOutfits.map(outfit => {
+                safeCustomOutfits.map(outfit => {
+                  if (!outfit) return null;
                   // Find all garments mapped
-                  const gList = outfit.garmentIds.map(id => wardrobe.find(w => w.id === id)).filter(Boolean);
+                  const gList = (Array.isArray(outfit.garmentIds) ? outfit.garmentIds : [])
+                    .map(id => safeWardrobe.find(w => w && w.id === id))
+                    .filter(Boolean);
                   const anyDirty = gList.some(g => !g.isClean);
                   
                   return (

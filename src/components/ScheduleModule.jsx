@@ -28,6 +28,7 @@ import {
   Layers,
   CalendarCheck
 } from 'lucide-react';
+import { sanitizeScheduleList, sanitizeSelfCareList } from '../utils/sanitizers';
 
 export default function ScheduleModule({
   weight,
@@ -36,7 +37,7 @@ export default function ScheduleModule({
   setHeight,
   waterIntake,
   setWaterIntake,
-  schedule,
+  schedule = [],
   setSchedule,
   selfCareActivities = [],
   setSelfCareActivities,
@@ -182,24 +183,25 @@ export default function ScheduleModule({
     setEditingItem(null);
   };
 
-  // Group by category and sort chronologically
+  // Group by category and sort chronologically (with sanitized safety)
+  const safeSchedule = sanitizeScheduleList(schedule);
   const dailySections = {
     morning: { 
       label: 'Mañana (05:00 AM - 11:59 AM)', 
-      items: schedule
-        .filter(i => i.category === 'morning' || i.category === 'hygiene')
+      items: safeSchedule
+        .filter(i => i && (i.category === 'morning' || i.category === 'hygiene'))
         .sort((a, b) => getMinutesFromMidnight(a.time) - getMinutesFromMidnight(b.time))
     },
     afternoon: { 
       label: 'Tarde (12:00 PM - 06:59 PM)', 
-      items: schedule
-        .filter(i => i.category === 'afternoon')
+      items: safeSchedule
+        .filter(i => i && i.category === 'afternoon')
         .sort((a, b) => getMinutesFromMidnight(a.time) - getMinutesFromMidnight(b.time))
     },
     night: { 
       label: 'Noche (07:00 PM - 04:59 AM)', 
-      items: schedule
-        .filter(i => i.category === 'night')
+      items: safeSchedule
+        .filter(i => i && i.category === 'night')
         .sort((a, b) => getMinutesFromMidnight(a.time) - getMinutesFromMidnight(b.time))
     }
   };
@@ -424,8 +426,12 @@ export default function ScheduleModule({
     setEditingSelfCareItem(null);
   };
 
+  // Safe normalized self-care list & filters
+  const safeSelfCare = sanitizeSelfCareList(selfCareActivities);
+
   // Filter self-care activities
-  const filteredSelfCare = (selfCareActivities || []).filter(item => {
+  const filteredSelfCare = safeSelfCare.filter(item => {
+    if (!item) return false;
     if (selfCareFilter === 'all') return true;
     if (selfCareFilter === 'weekly') return item.frequency === 'weekly' || item.frequency === 'biweekly';
     if (selfCareFilter === 'monthly') return item.frequency === 'monthly' || item.frequency === 'bimonthly';
@@ -436,7 +442,8 @@ export default function ScheduleModule({
   });
 
   // Calculate self-care global metrics
-  const pendingSelfCareAlerts = (selfCareActivities || []).filter(a => {
+  const pendingSelfCareAlerts = safeSelfCare.filter(a => {
+    if (!a) return false;
     const st = getSelfCareStatus(a);
     return st.isUrgent || st.isDueSoon || st.status === 'pending_first';
   });

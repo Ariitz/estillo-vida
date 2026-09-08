@@ -18,9 +18,10 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { compressImage, analyzeExperienceImage } from '../utils/geminiService';
+import { sanitizeExperienceList, sanitizeExperienceItem } from '../utils/sanitizers';
 
 export default function ExperiencesModule({
-  experiences,
+  experiences = [],
   setExperiences,
   showToast,
   geminiApiKey = ''
@@ -50,10 +51,12 @@ export default function ExperiencesModule({
   const categories = [
     'Cafeterías',
     'Restaurantes',
+    'Skincare & Cosmética',
     'Cuidado Personal',
-    'Gourmet/Despensa',
-    'Entretenimiento al aire libre',
-    'Tiendas Especializadas'
+    'Tiendas Especializadas',
+    'Viajes & Hoteles',
+    'Libros & Entretenimiento',
+    'Otros'
   ];
 
   // Handle Photo Upload with Multimodal AI Vision
@@ -86,63 +89,60 @@ export default function ExperiencesModule({
     }
   };
 
-  const handleAddExperience = (e) => {
+  const handleAddItem = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
 
     const newItem = {
-      id: Date.now().toString(),
-      name,
+      id: 'exp-' + Date.now(),
+      name: name.trim(),
       type: itemType,
       category,
       status,
-      rating: status === 'completed' ? rating : 0,
+      rating: status === 'completed' ? parseInt(rating, 10) : 0,
       cost,
-      verdict,
-      placeOrBrand,
-      date: status === 'completed' ? date : '',
-      notes
+      verdict: status === 'completed' ? verdict : 'maybe',
+      placeOrBrand: placeOrBrand.trim(),
+      date,
+      notes: notes.trim(),
+      image: placeImage || null
     };
 
-    setExperiences([newItem, ...experiences]);
-    
-    // Reset
+    const sanitized = sanitizeExperienceItem(newItem);
+    if (!sanitized) return;
+
+    setExperiences(prev => [...(Array.isArray(prev) ? prev : []), sanitized]);
     setName('');
     setPlaceOrBrand('');
     setNotes('');
+    setPlaceImage('');
     setIsAdding(false);
-    showToast('success', 'Registro Guardado', `"${name}" se agregó correctamente.`);
+    showToast('success', 'Registro Guardado', `Se guardó "${name}" en tu bitácora.`);
   };
 
-  const handleDelete = (id, name) => {
-    setExperiences(experiences.filter(exp => exp.id !== id));
-    showToast('warning', 'Registro Eliminado', `Se eliminó "${name}" de la bitácora.`);
+  const handleDeleteItem = (id, itemName) => {
+    setExperiences(prev => (Array.isArray(prev) ? prev : []).filter(item => item && item.id !== id));
+    showToast('warning', 'Elemento Eliminado', `Se retiró "${itemName}" de tu bitácora.`);
   };
 
-  const handleToggleStatus = (itemId, exp) => {
-    const nextStatus = exp.status === 'pending' ? 'completed' : 'pending';
-    setExperiences(experiences.map(item => {
-      if (item.id === itemId) {
+  const handleToggleStatus = (itemId) => {
+    setExperiences(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
+        const nextStatus = item.status === 'completed' ? 'pending' : 'completed';
         showToast(
-          'success', 
-          nextStatus === 'completed' ? '¡Visitado / Comprado!' : 'Agregado a Wishlist',
-          `Se actualizó el estado de "${item.name}"`
+          'info', 
+          nextStatus === 'completed' ? '¡Experiencia Probada!' : 'Pendiente por Probar', 
+          `"${item.name}" cambió de estado.`
         );
-        return {
-          ...item,
-          status: nextStatus,
-          date: nextStatus === 'completed' ? new Date().toISOString().split('T')[0] : '',
-          // Add default rating when marked completed
-          rating: nextStatus === 'completed' && item.rating === 0 ? 5 : item.rating
-        };
+        return { ...item, status: nextStatus };
       }
       return item;
     }));
   };
 
   const handleRate = (itemId, val) => {
-    setExperiences(experiences.map(item => {
-      if (item.id === itemId) {
+    setExperiences(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
         return { ...item, rating: val };
       }
       return item;
@@ -150,24 +150,28 @@ export default function ExperiencesModule({
   };
 
   const handleUpdateNotes = (itemId, val) => {
-    setExperiences(experiences.map(item => {
-      if (item.id === itemId) {
-        return { ...item, notes: val };
+    setExperiences(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
+        return { ...item, notes: String(val || '') };
       }
       return item;
     }));
   };
 
-  // Filter logic with safety guards for undefined/legacy properties
-  const filtered = Array.isArray(experiences) ? experiences.filter(item => {
-    if (!item) return false;
-    const nameStr = item.name || '';
-    const placeOrBrandStr = item.placeOrBrand || '';
-    const notesStr = item.notes || '';
+  // Safe normalized experiences list & filter logic
+  const safeExperiences = sanitizeExperienceList(experiences);
 
-    const matchesSearch = nameStr.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      placeOrBrandStr.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      notesStr.toLowerCase().includes(searchTerm.toLowerCase());
+  const filtered = safeExperiences.filter(item => {
+    if (!item) return false;
+    const nameStr = String(item.name || '');
+    const placeOrBrandStr = String(item.placeOrBrand || '');
+    const notesStr = String(item.notes || '');
+    const search = String(searchTerm || '').toLowerCase().trim();
+
+    const matchesSearch = !search ||
+      nameStr.toLowerCase().includes(search) || 
+      placeOrBrandStr.toLowerCase().includes(search) ||
+      notesStr.toLowerCase().includes(search);
     
     const matchesType = typeFilter === 'all' || item.type === typeFilter;
     const matchesCat = catFilter === 'all' || item.category === catFilter;
@@ -175,7 +179,7 @@ export default function ExperiencesModule({
     const matchesVerdict = verdictFilter === 'all' || item.verdict === verdictFilter;
 
     return matchesSearch && matchesType && matchesCat && matchesStatus && matchesVerdict;
-  }) : [];
+  });
 
   return (
     <div className="space-y-6 animate-fade-in">

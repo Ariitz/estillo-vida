@@ -38,12 +38,14 @@ export default function CopilotModule({
   setActiveModule
 }) {
   const [messages, setMessages] = useState(() => {
-    const saved = localStorage.getItem('aura-copilot-messages');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Error parsing copilot history:", e);
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('aura-copilot-messages');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error("Error parsing copilot history:", e);
+        }
       }
     }
     return [
@@ -108,7 +110,9 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    localStorage.setItem('aura-copilot-messages', JSON.stringify(messages));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('aura-copilot-messages', JSON.stringify(messages));
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -325,7 +329,9 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
 
   const handleClearChat = () => {
     if (window.confirm("¿Deseas reiniciar la conversación con AURA Copilot?")) {
-      localStorage.removeItem('aura-copilot-messages');
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('aura-copilot-messages');
+      }
       setMessages([]);
       showToast('info', 'Chat Reiniciado', 'Historial de conversación despejado.');
     }

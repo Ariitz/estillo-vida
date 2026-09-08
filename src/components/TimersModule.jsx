@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Plus, Trash2, Clock, Volume2, X } from 'lucide-react';
+import { sanitizeTimerList } from '../utils/sanitizers';
 
 export default function TimersModule({
   customTimers,
@@ -17,7 +18,8 @@ export default function TimersModule({
     { id: 't-cold', title: 'Compresa Fría / Antifaz de Gel', duration: 3 * 60 }
   ];
 
-  const allTimers = [...defaultTimers, ...customTimers];
+  const safeCustomTimers = sanitizeTimerList(customTimers);
+  const allTimers = [...defaultTimers, ...safeCustomTimers];
 
   const playSynthesizedChime = () => {
     try {
@@ -60,19 +62,19 @@ export default function TimersModule({
 
     const newTimer = {
       id: 'custom-' + Date.now(),
-      title: timerTitle,
+      title: timerTitle.trim(),
       duration: totalSecs
     };
 
-    setCustomTimers([...customTimers, newTimer]);
+    setCustomTimers(prev => [...(Array.isArray(prev) ? prev : []), newTimer]);
     setTimerTitle('');
     setIsAdding(false);
     showToast('success', 'Temporizador Creado', `Se añadió "${timerTitle}" (${timerMins}m ${timerSecs}s)`);
   };
 
   const handleDeleteCustom = (id, title) => {
-    setCustomTimers(customTimers.filter(t => t.id !== id));
-    showToast('warning', 'Temporizador Eliminado', `Se removió "${title}"`);
+    setCustomTimers(prev => (Array.isArray(prev) ? prev : []).filter(t => t && t.id !== id));
+    showToast('warning', 'Temporizador Eliminado', `Se removió "${title || 'Temporizador'}".`);
   };
 
   return (
@@ -156,9 +158,9 @@ export default function TimersModule({
 
       {/* Timers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {allTimers.map(timer => (
+        {allTimers.map((timer, idx) => (
           <TimerCard
-            key={timer.id}
+            key={timer?.id || `timer-${idx}`}
             timer={timer}
             onDelete={handleDeleteCustom}
             playChime={playSynthesizedChime}
@@ -172,16 +174,21 @@ export default function TimersModule({
 }
 
 function TimerCard({ timer, onDelete, playChime, showToast }) {
-  const [timeLeft, setTimeLeft] = useState(timer.duration);
+  const duration = Math.max(1, Number(timer?.duration) || 60);
+  const title = String(timer?.title || 'Temporizador');
+  const timerId = String(timer?.id || 'custom-0');
+  
+  const [timeLeft, setTimeLeft] = useState(duration);
   const [isRunning, setIsRunning] = useState(false);
   const timerRef = useRef(null);
 
-  const isCustom = timer.id.startsWith('custom-');
+  const isCustom = timerId.startsWith('custom-');
 
   // Format time display MM:SS
   const formatTime = (secs) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, '0');
-    const s = (secs % 60).toString().padStart(2, '0');
+    const sVal = Math.max(0, parseInt(secs) || 0);
+    const m = Math.floor(sVal / 60).toString().padStart(2, '0');
+    const s = (sVal % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
   };
 
@@ -193,7 +200,7 @@ function TimerCard({ timer, onDelete, playChime, showToast }) {
             clearInterval(timerRef.current);
             setIsRunning(false);
             playChime();
-            showToast('success', '¡Tiempo Completado!', `Tratamiento finalizado: ${timer.title}`);
+            showToast('success', '¡Tiempo Completado!', `Tratamiento finalizado: ${title}`);
             return 0;
           }
           return prev - 1;
@@ -204,17 +211,17 @@ function TimerCard({ timer, onDelete, playChime, showToast }) {
     }
 
     return () => clearInterval(timerRef.current);
-  }, [isRunning, timer.title, playChime, showToast]);
+  }, [isRunning, title, playChime, showToast]);
 
   // Reset time left if duration changes
   useEffect(() => {
-    setTimeLeft(timer.duration);
+    setTimeLeft(duration);
     setIsRunning(false);
-  }, [timer.duration]);
+  }, [duration]);
 
   const handlePlayPause = () => {
     if (timeLeft <= 0) {
-      setTimeLeft(timer.duration);
+      setTimeLeft(duration);
       setIsRunning(true);
     } else {
       setIsRunning(!isRunning);
@@ -223,11 +230,11 @@ function TimerCard({ timer, onDelete, playChime, showToast }) {
 
   const handleReset = () => {
     setIsRunning(false);
-    setTimeLeft(timer.duration);
+    setTimeLeft(duration);
   };
 
   // Progress percentage
-  const pct = Math.round((timeLeft / timer.duration) * 100);
+  const pct = duration > 0 ? Math.round((Math.max(0, timeLeft) / duration) * 100) : 0;
 
   return (
     <div className="bg-[#171a24] border border-[#e0a96d]/15 p-5 rounded-xl shadow-lg flex flex-col justify-between space-y-5">

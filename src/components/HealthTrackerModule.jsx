@@ -32,6 +32,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { analyzeHealthSymptomWithGemini, generateFallbackHealthTriage, compressImage, analyzeHealthImage } from '../utils/geminiService';
+import { sanitizeHealthSymptomList } from '../utils/sanitizers';
 
 export default function HealthTrackerModule({
   healthSymptoms = [],
@@ -40,6 +41,8 @@ export default function HealthTrackerModule({
   showToast,
   onAddSelfCareActivity
 }) {
+  const safeSymptoms = sanitizeHealthSymptomList(healthSymptoms);
+
   // Navigation & Filter states
   const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'pain_posture' | 'aesthetic_skin' | 'metabolism' | 'general'
   const [statusFilter, setStatusFilter] = useState('active'); // 'all' | 'active' | 'treatment' | 'resolved'
@@ -143,14 +146,15 @@ export default function HealthTrackerModule({
   ];
 
   // Statistics
-  const totalCount = healthSymptoms.length;
-  const activeCount = healthSymptoms.filter(s => s.status === 'active').length;
-  const treatmentCount = healthSymptoms.filter(s => s.status === 'treatment').length;
-  const resolvedCount = healthSymptoms.filter(s => s.status === 'resolved').length;
-  const analyzedCount = healthSymptoms.filter(s => s.aiTriage && s.aiTriage.specialist).length;
+  const totalCount = safeSymptoms.length;
+  const activeCount = safeSymptoms.filter(s => s && s.status === 'active').length;
+  const treatmentCount = safeSymptoms.filter(s => s && s.status === 'treatment').length;
+  const resolvedCount = safeSymptoms.filter(s => s && s.status === 'resolved').length;
+  const analyzedCount = safeSymptoms.filter(s => s && s.aiTriage && s.aiTriage.specialist).length;
 
   // Filtered symptoms
-  const filteredSymptoms = healthSymptoms.filter((item) => {
+  const filteredSymptoms = safeSymptoms.filter((item) => {
+    if (!item) return false;
     const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
     const matchesStatus =
       statusFilter === 'all' ||
@@ -158,14 +162,20 @@ export default function HealthTrackerModule({
       (statusFilter === 'treatment' && item.status === 'treatment') ||
       (statusFilter === 'resolved' && item.status === 'resolved');
 
-    const q = searchQuery.toLowerCase().trim();
+    const q = String(searchQuery || '').toLowerCase().trim();
+    const titleStr = String(item.title || '');
+    const bodyZoneStr = String(item.bodyZone || item.bodyPart || '');
+    const triggerStr = String(item.trigger || (Array.isArray(item.triggers) ? item.triggers.join(', ') : ''));
+    const notesStr = String(item.notes || '');
+    const specStr = String(item.aiTriage?.specialist || '');
+
     const matchesSearch =
       !q ||
-      (item.title && item.title.toLowerCase().includes(q)) ||
-      (item.bodyZone && item.bodyZone.toLowerCase().includes(q)) ||
-      (item.trigger && item.trigger.toLowerCase().includes(q)) ||
-      (item.notes && item.notes.toLowerCase().includes(q)) ||
-      (item.aiTriage?.specialist && item.aiTriage.specialist.toLowerCase().includes(q));
+      titleStr.toLowerCase().includes(q) ||
+      bodyZoneStr.toLowerCase().includes(q) ||
+      triggerStr.toLowerCase().includes(q) ||
+      notesStr.toLowerCase().includes(q) ||
+      specStr.toLowerCase().includes(q);
 
     return matchesCategory && matchesStatus && matchesSearch;
   });
@@ -241,8 +251,8 @@ export default function HealthTrackerModule({
       showToast('info', 'Analizando con IA', `Evaluando especialista y ergonomía para "${symptom.title}"...`);
       const triage = await analyzeHealthSymptomWithGemini(symptom, geminiApiKey);
       
-      const updated = healthSymptoms.map((item) => {
-        if (item.id === symptom.id) {
+      setHealthSymptoms(prev => (Array.isArray(prev) ? prev : []).map((item) => {
+        if (item && item.id === symptom.id) {
           return {
             ...item,
             aiTriage: triage,
@@ -250,9 +260,7 @@ export default function HealthTrackerModule({
           };
         }
         return item;
-      });
-
-      setHealthSymptoms(updated);
+      }));
       showToast('success', 'Diagnóstico Listo', `Especialista recomendado: ${triage.specialist}`);
 
       // If modal is currently inspecting this symptom, update it
@@ -309,8 +317,7 @@ export default function HealthTrackerModule({
         }
       }
 
-      const updated = [newSymptomObj, ...healthSymptoms];
-      setHealthSymptoms(updated);
+      setHealthSymptoms(prev => [newSymptomObj, ...(Array.isArray(prev) ? prev : [])]);
       showToast('success', 'Molestia Registrada', `Se guardó "${newTitle.trim()}" en tu bitácora de salud.`);
 
       // Reset form
@@ -353,11 +360,9 @@ export default function HealthTrackerModule({
         }
       }
 
-      const updated = healthSymptoms.map((item) =>
-        item.id === updatedSymptom.id ? updatedSymptom : item
-      );
-
-      setHealthSymptoms(updated);
+      setHealthSymptoms(prev => (Array.isArray(prev) ? prev : []).map((item) =>
+        item && item.id === updatedSymptom.id ? updatedSymptom : item
+      ));
       showToast(
         'success',
         shouldReAnalyze ? 'Actualizado & Re-evaluado' : 'Actualizado',
@@ -377,8 +382,8 @@ export default function HealthTrackerModule({
   // Toggle Status Handler
   const handleToggleStatus = (symptom) => {
     const nextStatus = symptom.status === 'resolved' ? 'active' : 'resolved';
-    const updated = healthSymptoms.map((item) => {
-      if (item.id === symptom.id) {
+    setHealthSymptoms(prev => (Array.isArray(prev) ? prev : []).map((item) => {
+      if (item && item.id === symptom.id) {
         return {
           ...item,
           status: nextStatus,
@@ -386,22 +391,20 @@ export default function HealthTrackerModule({
         };
       }
       return item;
-    });
+    }));
 
-    setHealthSymptoms(updated);
     showToast(
       'info',
       nextStatus === 'resolved' ? 'Molestia Resuelta' : 'Molestia Reactivada',
-      `"${symptom.title}" marcado como ${nextStatus === 'resolved' ? 'resuelto' : 'activo'}.`
+      `"${symptom.title || 'Molestia'}" marcado como ${nextStatus === 'resolved' ? 'resuelto' : 'activo'}.`
     );
   };
 
   // Delete Symptom Handler
   const handleDeleteSymptom = (id, title) => {
     if (window.confirm(`¿Estás segura de eliminar el registro "${title}"?`)) {
-      const updated = healthSymptoms.filter((item) => item.id !== id);
-      setHealthSymptoms(updated);
-      showToast('info', 'Registro Eliminado', `Se eliminó "${title}" de tu bitácora.`);
+      setHealthSymptoms(prev => (Array.isArray(prev) ? prev : []).filter((item) => item && item.id !== id));
+      showToast('info', 'Registro Eliminado', `Se eliminó "${title || 'Registro'}" de tu bitácora.`);
       if (selectedTriageSymptom?.id === id) {
         setSelectedTriageSymptom(null);
       }

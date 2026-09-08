@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BookOpen, ChevronDown, ChevronUp, Plus, Search, Trash2, Heart, HelpCircle, Save } from 'lucide-react';
+import { sanitizeManualList } from '../utils/sanitizers';
 
 export default function ManualsModule({
   customManuals,
@@ -86,7 +87,8 @@ export default function ManualsModule({
     }
   ];
 
-  const allManuals = [...defaultManuals, ...customManuals];
+  const safeCustomManuals = sanitizeManualList(customManuals);
+  const allManuals = [...defaultManuals, ...safeCustomManuals];
 
   const handleToggle = (id) => {
     setOpenSections(prev => ({
@@ -101,12 +103,12 @@ export default function ManualsModule({
 
     const newManual = {
       id: 'custom-' + Date.now(),
-      category: manualCategory,
-      title: manualTitle,
-      content: manualContent
+      category: manualCategory.trim() || 'General',
+      title: manualTitle.trim(),
+      content: manualContent.trim()
     };
 
-    setCustomManuals([...customManuals, newManual]);
+    setCustomManuals(prev => [...(Array.isArray(prev) ? prev : []), newManual]);
     setManualTitle('');
     setManualContent('');
     setIsAdding(false);
@@ -114,16 +116,20 @@ export default function ManualsModule({
   };
 
   const handleDeleteCustomManual = (id, title) => {
-    setCustomManuals(customManuals.filter(m => m.id !== id));
-    showToast('warning', 'Manual Eliminado', `Se retiró el manual "${title}".`);
+    setCustomManuals(prev => (Array.isArray(prev) ? prev : []).filter(m => m && m.id !== id));
+    showToast('warning', 'Manual Eliminado', `Se retiró el manual "${title || 'Manual'}".`);
   };
 
   // Filter manuals
   const filtered = allManuals.filter(m => {
-    const term = searchTerm.toLowerCase();
-    return m.title.toLowerCase().includes(term) || 
-      m.category.toLowerCase().includes(term) || 
-      m.content.toLowerCase().includes(term);
+    if (!m) return false;
+    const term = (searchTerm || '').toLowerCase();
+    const title = String(m.title || '').toLowerCase();
+    const category = String(m.category || '').toLowerCase();
+    const content = String(m.content || '').toLowerCase();
+    return title.includes(term) || 
+      category.includes(term) || 
+      content.includes(term);
   });
 
   return (
@@ -217,13 +223,15 @@ export default function ManualsModule({
             <p className="text-slate-400 text-sm">No hay manuales que coincidan con la búsqueda.</p>
           </div>
         ) : (
-          filtered.map(manual => {
-            const isOpen = !!openSections[manual.id];
-            const isCustom = manual.id.startsWith('custom-');
+          filtered.map((manual, idx) => {
+            if (!manual) return null;
+            const mid = manual.id || `m-idx-${idx}`;
+            const isOpen = !!openSections[mid];
+            const isCustom = String(mid).startsWith('custom-');
             
             return (
               <div 
-                key={manual.id} 
+                key={mid} 
                 className={`bg-[#171a24] border rounded-xl overflow-hidden shadow-md transition-all ${
                   isOpen ? 'border-[#e0a96d]/40' : 'border-[#e0a96d]/10'
                 }`}
