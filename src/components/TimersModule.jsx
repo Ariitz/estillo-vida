@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Plus, Trash2, Clock, Volume2, X, Edit3 } from 'lucide-react';
 import { sanitizeTimerList } from '../utils/sanitizers';
+import { findSimilarity } from '../utils/similarity';
+import { AlertTriangle } from 'lucide-react';
 
 export default function TimersModule({
   customTimers,
@@ -67,24 +69,42 @@ export default function TimersModule({
 
   const handleAddTimer = (e) => {
     e.preventDefault();
-    if (!timerTitle.trim()) return;
+    const trimmedTitle = timerTitle.trim();
+    if (!trimmedTitle) return;
+
+    // Scan for duplicate/similar timers before adding manually
+    const similar = findSimilarity(trimmedTitle, allTimers, 'title');
+    if (similar) {
+      const simMins = Math.floor((similar.duration || 0) / 60);
+      const simSecs = (similar.duration || 0) % 60;
+      const proceed = window.confirm(
+        `⚠️ Detectamos un temporizador similar:\n\n` +
+        `• Ya existente: "${similar.title}" (${simMins}m ${simSecs}s)\n` +
+        `• Nuevo a crear: "${trimmedTitle}" (${timerMins}m ${timerSecs}s)\n\n` +
+        `¿Estás seguro de que deseas agregarlo de todos modos?`
+      );
+      if (!proceed) return;
+    }
 
     const totalSecs = (parseInt(timerMins) || 0) * 60 + (parseInt(timerSecs) || 0);
     if (totalSecs <= 0) return;
 
     const newTimer = {
       id: 'custom-' + Date.now(),
-      title: timerTitle.trim(),
+      title: trimmedTitle,
       duration: totalSecs
     };
 
     setCustomTimers(prev => [...(Array.isArray(prev) ? prev : []), newTimer]);
     setTimerTitle('');
     setIsAdding(false);
-    showToast('success', 'Temporizador Creado', `Se añadió "${timerTitle}" (${timerMins}m ${timerSecs}s)`);
+    showToast('success', 'Temporizador Creado', `Se añadió "${trimmedTitle}" (${timerMins}m ${timerSecs}s)`);
   };
 
   const handleDeleteCustom = (id, title) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar el temporizador "${title || 'este temporizador'}"?`)) {
+      return;
+    }
     setCustomTimers(prev => (Array.isArray(prev) ? prev : []).filter(t => t && t.id !== id));
     showToast('warning', 'Temporizador Eliminado', `Se removió "${title || 'Temporizador'}".`);
   };
@@ -245,6 +265,20 @@ export default function TimersModule({
                 className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                 required
               />
+              {(() => {
+                const sim = findSimilarity(timerTitle, allTimers, 'title');
+                if (!sim) return null;
+                const simM = Math.floor((sim.duration || 0) / 60);
+                const simS = (sim.duration || 0) % 60;
+                return (
+                  <div className="mt-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-1.5 animate-fade-in">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+                    <span>
+                      Probablemente ya existe: <strong>"{sim.title}"</strong> ({simM}m {simS}s).
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Minutos</label>

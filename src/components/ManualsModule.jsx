@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { BookOpen, ChevronDown, ChevronUp, Plus, Search, Trash2, Heart, HelpCircle, Save } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronUp, Plus, Search, Trash2, Heart, HelpCircle, Save, AlertTriangle } from 'lucide-react';
 import { sanitizeManualList } from '../utils/sanitizers';
+import { findSimilarity } from '../utils/similarity';
 
 export default function ManualsModule({
   customManuals,
@@ -99,12 +100,25 @@ export default function ManualsModule({
 
   const handleAddManual = (e) => {
     e.preventDefault();
-    if (!manualTitle.trim() || !manualContent.trim()) return;
+    const trimmedTitle = manualTitle.trim();
+    if (!trimmedTitle || !manualContent.trim()) return;
+
+    // Scan for duplicate/similar manuals before adding manually
+    const similar = findSimilarity(trimmedTitle, allManuals, 'title');
+    if (similar) {
+      const proceed = window.confirm(
+        `⚠️ Ya existe un protocolo o manual con un tema similar:\n\n` +
+        `• Existente: "${similar.title}" (${similar.category})\n` +
+        `• Nuevo: "${trimmedTitle}"\n\n` +
+        `¿Estás seguro de que deseas guardarlo de todos modos?`
+      );
+      if (!proceed) return;
+    }
 
     const newManual = {
       id: 'custom-' + Date.now(),
       category: manualCategory.trim() || 'General',
-      title: manualTitle.trim(),
+      title: trimmedTitle,
       content: manualContent.trim()
     };
 
@@ -112,10 +126,13 @@ export default function ManualsModule({
     setManualTitle('');
     setManualContent('');
     setIsAdding(false);
-    showToast('success', 'Manual Guardado', `Se guardó "${manualTitle}" en tu biblioteca.`);
+    showToast('success', 'Manual Guardado', `Se guardó "${trimmedTitle}" en tu biblioteca.`);
   };
 
   const handleDeleteCustomManual = (id, title) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar el manual "${title || 'este manual'}"?`)) {
+      return;
+    }
     setCustomManuals(prev => (Array.isArray(prev) ? prev : []).filter(m => m && m.id !== id));
     showToast('warning', 'Manual Eliminado', `Se retiró el manual "${title || 'Manual'}".`);
   };
@@ -172,6 +189,18 @@ export default function ManualsModule({
                 className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                 required
               />
+              {(() => {
+                const sim = findSimilarity(manualTitle, allManuals, 'title');
+                if (!sim) return null;
+                return (
+                  <div className="mt-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-1.5 animate-fade-in">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+                    <span>
+                      Probablemente ya existe: <strong>"{sim.title}"</strong> ({sim.category}).
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Categoría</label>

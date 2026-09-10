@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { compressImage, analyzeClothingImage, recommendOutfitForOccasion } from '../utils/geminiService';
 import { sanitizeWardrobeList, sanitizeCustomOutfitList } from '../utils/sanitizers';
+import { findSimilarity } from '../utils/similarity';
 
 export default function WardrobeModule({
   wardrobe,
@@ -209,12 +210,25 @@ export default function WardrobeModule({
 
   const handleAddGarment = (e) => {
     e.preventDefault();
-    if (!gName.trim()) return;
+    const trimmedName = gName.trim();
+    if (!trimmedName) return;
+
+    // Scan for duplicate/similar garments before adding manually
+    const similar = findSimilarity(trimmedName, wardrobe, 'name');
+    if (similar) {
+      const proceed = window.confirm(
+        `⚠️ Detectamos una prenda similar en tu armario:\n\n` +
+        `• Ya registrada: "${similar.name}" (${similar.color || ''} - ${categories[similar.category] || similar.category})\n` +
+        `• Nueva a registrar: "${trimmedName}"\n\n` +
+        `¿Estás seguro de que deseas agregarla de todos modos?`
+      );
+      if (!proceed) return;
+    }
 
     const tagsArr = gTags.split(',').map(t => t.trim()).filter(t => t.length > 0);
     const newGarment = {
       id: Date.now().toString(),
-      name: gName,
+      name: trimmedName,
       category: gCategory,
       isClean: true,
       color: gColor || 'Varios',
@@ -228,7 +242,7 @@ export default function WardrobeModule({
     setGTags('');
     setGImage('');
     setIsAddingGarment(false);
-    showToast('success', 'Prenda Registrada', `Se añadió "${gName}" a tu Armario.`);
+    showToast('success', 'Prenda Registrada', `Se añadió "${trimmedName}" a tu Armario.`);
   };
 
   const handleToggleClean = (id) => {
@@ -247,6 +261,9 @@ export default function WardrobeModule({
   };
 
   const handleDeleteGarment = (id, name) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar la prenda "${name || 'esta prenda'}" de tu armario?`)) {
+      return;
+    }
     setWardrobe(prev => (Array.isArray(prev) ? prev : []).filter(item => item && item.id !== id));
     showToast('warning', 'Prenda Eliminada', `Se retiró "${name || 'Prenda'}" de tu inventario.`);
   };
@@ -254,11 +271,24 @@ export default function WardrobeModule({
   // Add custom outfit
   const handleAddOutfit = (e) => {
     e.preventDefault();
-    if (!outfitName.trim() || selectedGarments.length === 0) return;
+    const trimmedOutfitName = outfitName.trim();
+    if (!trimmedOutfitName || selectedGarments.length === 0) return;
+
+    // Scan for duplicate/similar outfits before adding manually
+    const similar = findSimilarity(trimmedOutfitName, customOutfits, 'name');
+    if (similar) {
+      const proceed = window.confirm(
+        `⚠️ Ya tienes un outfit con un nombre similar:\n\n` +
+        `• Guardado: "${similar.name}"\n` +
+        `• Nuevo: "${trimmedOutfitName}"\n\n` +
+        `¿Estás seguro de que deseas guardarlo de todos modos?`
+      );
+      if (!proceed) return;
+    }
 
     const newOutfit = {
       id: Date.now().toString(),
-      name: outfitName.trim(),
+      name: trimmedOutfitName,
       garmentIds: [...selectedGarments]
     };
 
@@ -266,10 +296,13 @@ export default function WardrobeModule({
     setOutfitName('');
     setSelectedGarments([]);
     setIsAddingOutfit(false);
-    showToast('success', 'Outfit Creado', `Se guardó tu combinación "${outfitName}"`);
+    showToast('success', 'Outfit Creado', `Se guardó tu combinación "${trimmedOutfitName}"`);
   };
 
   const handleDeleteOutfit = (id, name) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar el outfit "${name || 'este outfit'}"?`)) {
+      return;
+    }
     setCustomOutfits(prev => (Array.isArray(prev) ? prev : []).filter(o => o && o.id !== id));
     showToast('warning', 'Outfit Eliminado', `Se eliminó la combinación "${name || 'Outfit'}"`);
   };
@@ -672,6 +705,18 @@ export default function WardrobeModule({
                     className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                     required
                   />
+                  {(() => {
+                    const sim = findSimilarity(gName, wardrobe, 'name');
+                    if (!sim) return null;
+                    return (
+                      <div className="mt-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-1.5 animate-fade-in">
+                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+                        <span>
+                          Probablemente ya existe: <strong>"{sim.name}"</strong> ({sim.color || ''} {categories[sim.category] || sim.category}).
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Categoría</label>
@@ -1243,6 +1288,18 @@ export default function WardrobeModule({
                       className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                       required
                     />
+                    {(() => {
+                      const sim = findSimilarity(outfitName, customOutfits, 'name');
+                      if (!sim) return null;
+                      return (
+                        <div className="mt-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-1.5 animate-fade-in">
+                          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+                          <span>
+                            Probablemente ya existe: <strong>"{sim.name}"</strong>.
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="flex gap-2 items-end justify-end">
                     <button

@@ -24,6 +24,7 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { compressImage, analyzeProductImage } from '../utils/geminiService';
+import { findSimilarity } from '../utils/similarity';
 import { safeNumber, sanitizeHouseholdItem, sanitizeHouseholdList } from '../utils/sanitizers';
 
 export default function PriceComparatorModule({
@@ -103,7 +104,20 @@ export default function PriceComparatorModule({
 
   const handleAddItem = (e) => {
     e.preventDefault();
-    if (!itemName.trim()) return;
+    const trimmedName = itemName.trim();
+    if (!trimmedName) return;
+
+    // Scan for duplicate/similar items before adding manually
+    const similarProduct = findSimilarity(trimmedName, householdItems, 'name');
+    if (similarProduct) {
+      const proceed = window.confirm(
+        `⚠️ Detectamos un producto similar en tu lista:\n\n` +
+        `• Ya registrado: "${similarProduct.name}" (${similarProduct.category})\n` +
+        `• Nuevo a agregar: "${trimmedName}"\n\n` +
+        `¿Estás seguro de que deseas agregarlo de todos modos como un nuevo producto?`
+      );
+      if (!proceed) return;
+    }
 
     // Build stores list (only those with values)
     const validStores = (storePrices || [])
@@ -122,7 +136,7 @@ export default function PriceComparatorModule({
 
     const newItem = {
       id: Date.now().toString(),
-      name: itemName.trim(),
+      name: trimmedName,
       category: itemCategory || 'Skincare',
       stores: validStores,
       preferredStore: validStores[0]?.storeName || '',
@@ -141,10 +155,13 @@ export default function PriceComparatorModule({
       { storeName: "Sam's Club", price: '', quantity: '' }
     ]);
     setIsAddingItem(false);
-    showToast('success', 'Insumo Registrado', `Se guardó "${itemName}" en el comparador.`);
+    showToast('success', 'Insumo Registrado', `Se guardó "${trimmedName}" en el comparador.`);
   };
 
   const handleDeleteItem = (id, name) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar "${name || 'este producto'}" del comparador de precios?`)) {
+      return;
+    }
     setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).filter(i => i && i.id !== id));
     showToast('warning', 'Insumo Eliminado', `Se eliminó "${name}"`);
   };
@@ -214,6 +231,9 @@ export default function PriceComparatorModule({
   };
 
   const removeStoreFromItem = (itemId, storeName) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar la tienda "${storeName}" de este producto?`)) {
+      return;
+    }
     setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
       if (item && item.id === itemId) {
         const currentStores = (Array.isArray(item.stores) ? item.stores : []).filter(s => s && typeof s === 'object');
@@ -443,6 +463,18 @@ export default function PriceComparatorModule({
                 className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                 required
               />
+              {itemName.trim().length >= 3 && (() => {
+                const sim = findSimilarity(itemName.trim(), householdItems, 'name');
+                if (sim) {
+                  return (
+                    <div className="mt-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-1.5 text-[11px] text-amber-300">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                      <span>Probablemente similar a <strong className="text-slate-100 font-bold">"{sim.name}"</strong> ({sim.category}).</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Categoría</label>

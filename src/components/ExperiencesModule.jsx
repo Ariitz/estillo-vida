@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { compressImage, analyzeExperienceImage } from '../utils/geminiService';
 import { sanitizeExperienceList, sanitizeExperienceItem } from '../utils/sanitizers';
+import { findSimilarity } from '../utils/similarity';
+import { AlertTriangle } from 'lucide-react';
 
 export default function ExperiencesModule({
   experiences = [],
@@ -91,11 +93,24 @@ export default function ExperiencesModule({
 
   const handleAddItem = (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+
+    // Scan for duplicate/similar experiences before adding manually
+    const similar = findSimilarity(trimmedName, experiences, 'name');
+    if (similar) {
+      const proceed = window.confirm(
+        `⚠️ Detectamos una experiencia o lugar similar en tu bitácora:\n\n` +
+        `• Registrado: "${similar.name}" (${similar.placeOrBrand || similar.category || ''})\n` +
+        `• Nuevo registro: "${trimmedName}"\n\n` +
+        `¿Estás seguro de que deseas agregarlo de todos modos?`
+      );
+      if (!proceed) return;
+    }
 
     const newItem = {
       id: 'exp-' + Date.now(),
-      name: name.trim(),
+      name: trimmedName,
       type: itemType,
       category,
       status,
@@ -117,10 +132,13 @@ export default function ExperiencesModule({
     setNotes('');
     setPlaceImage('');
     setIsAdding(false);
-    showToast('success', 'Registro Guardado', `Se guardó "${name}" en tu bitácora.`);
+    showToast('success', 'Registro Guardado', `Se guardó "${trimmedName}" en tu bitácora.`);
   };
 
   const handleDeleteItem = (id, itemName) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar "${itemName || 'este registro'}" de tu bitácora?`)) {
+      return;
+    }
     setExperiences(prev => (Array.isArray(prev) ? prev : []).filter(item => item && item.id !== id));
     showToast('warning', 'Elemento Eliminado', `Se retiró "${itemName}" de tu bitácora.`);
   };
@@ -377,6 +395,18 @@ export default function ExperiencesModule({
                 className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                 required
               />
+              {(() => {
+                const sim = findSimilarity(name, experiences, 'name');
+                if (!sim) return null;
+                return (
+                  <div className="mt-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-1.5 animate-fade-in">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+                    <span>
+                      Probablemente ya existe: <strong>"{sim.name}"</strong> ({sim.placeOrBrand || sim.category}).
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Tipo de Registro</label>

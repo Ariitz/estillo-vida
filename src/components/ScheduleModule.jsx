@@ -29,6 +29,7 @@ import {
   CalendarCheck
 } from 'lucide-react';
 import { sanitizeScheduleList, sanitizeSelfCareList } from '../utils/sanitizers';
+import { findSimilarity } from '../utils/similarity';
 
 export default function ScheduleModule({
   weight,
@@ -139,7 +140,20 @@ export default function ScheduleModule({
 
   const handleAddActivity = (e) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
+    const trimmedTitle = newTitle.trim();
+    if (!trimmedTitle) return;
+
+    // Scan for duplicate/similar items before adding manually
+    const similar = findSimilarity(trimmedTitle, schedule, 'title');
+    if (similar) {
+      const proceed = window.confirm(
+        `⚠️ Detectamos una actividad similar en tu horario:\n\n` +
+        `• Ya programada: "${similar.title}" (${similar.time || ''})\n` +
+        `• Nueva a agregar: "${trimmedTitle}"\n\n` +
+        `¿Estás seguro de que deseas agregarla de todos modos?`
+      );
+      if (!proceed) return;
+    }
 
     const timeStr = `${newHour}:${newMinute} ${newPeriod}`;
     const cat = calculateCategory(newHour, newMinute, newPeriod);
@@ -147,7 +161,7 @@ export default function ScheduleModule({
     const newItem = {
       id: Date.now(),
       time: timeStr,
-      title: newTitle,
+      title: trimmedTitle,
       desc: newDesc,
       category: cat,
       completed: false
@@ -157,7 +171,7 @@ export default function ScheduleModule({
     setNewTitle('');
     setNewDesc('');
     setIsAdding(false);
-    showToast('success', 'Actividad Añadida', `Se ha programado "${newTitle}"`);
+    showToast('success', 'Actividad Añadida', `Se ha programado "${trimmedTitle}"`);
   };
 
   const handleToggleComplete = (id) => {
@@ -175,6 +189,9 @@ export default function ScheduleModule({
   };
 
   const handleDeleteItem = (id, title) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar "${title || 'esta actividad'}" del horario?`)) {
+      return;
+    }
     setSchedule(schedule.filter(item => item.id !== id));
     showToast('info', 'Actividad Eliminada', `Se eliminó "${title}"`);
   };
@@ -387,7 +404,20 @@ export default function ScheduleModule({
 
   const handleAddSelfCare = (e) => {
     e.preventDefault();
-    if (!scTitle.trim()) return;
+    const trimmedTitle = scTitle.trim();
+    if (!trimmedTitle) return;
+
+    // Scan for duplicate/similar activities before adding manually
+    const similar = findSimilarity(trimmedTitle, selfCareActivities, 'title');
+    if (similar) {
+      const proceed = window.confirm(
+        `⚠️ Ya tienes una actividad similar en tu calendario de autocuidado:\n\n` +
+        `• Existente: "${similar.title}" (${similar.protocol || 'Cada ' + (similar.daysInterval || 2) + ' días'})\n` +
+        `• Nueva a registrar: "${trimmedTitle}"\n\n` +
+        `¿Estás seguro de que deseas agregarla de todos modos?`
+      );
+      if (!proceed) return;
+    }
 
     let days = 30;
     if (scFrequency === 'custom') {
@@ -402,7 +432,7 @@ export default function ScheduleModule({
 
     const newItem = {
       id: 'sc-' + Date.now(),
-      title: scTitle.trim(),
+      title: trimmedTitle,
       frequency: scFrequency,
       daysInterval: days,
       customValue: scFrequency === 'custom' ? (parseInt(scCustomValue, 10) || 1) : null,
@@ -425,6 +455,9 @@ export default function ScheduleModule({
   };
 
   const handleDeleteSelfCare = (id, title) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar la actividad de autocuidado "${title || 'esta actividad'}"?`)) {
+      return;
+    }
     setSelfCareActivities(selfCareActivities.filter(a => a.id !== id));
     showToast('info', 'Actividad Eliminada', `Se eliminó "${title}" del calendario.`);
   };
@@ -788,6 +821,18 @@ export default function ScheduleModule({
                       className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                       required
                     />
+                    {(() => {
+                      const sim = findSimilarity(newTitle, schedule, 'title');
+                      if (!sim) return null;
+                      return (
+                        <div className="mt-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-1.5 animate-fade-in">
+                          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+                          <span>
+                            Probablemente esta actividad ya existe como <strong>"{sim.title}"</strong> ({sim.time}).
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div>
@@ -1005,6 +1050,18 @@ export default function ScheduleModule({
                     className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2.5 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                     required
                   />
+                  {(() => {
+                    const sim = findSimilarity(scTitle, selfCareActivities, 'title');
+                    if (!sim) return null;
+                    return (
+                      <div className="mt-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-1.5 animate-fade-in">
+                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+                        <span>
+                          Probablemente esta actividad ya existe como <strong>"{sim.title}"</strong> ({sim.protocol || 'Ciclo de ' + (sim.daysInterval || 7) + 'd'}).
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div>
