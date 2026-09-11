@@ -21,7 +21,9 @@ import {
   Image as ImageIcon,
   ChevronDown,
   ShoppingCart,
-  ShoppingBag
+  ShoppingBag,
+  Pencil,
+  Store
 } from 'lucide-react';
 import { compressImage, analyzeProductImage } from '../utils/geminiService';
 import { findSimilarity } from '../utils/similarity';
@@ -52,11 +54,14 @@ export default function PriceComparatorModule({
     { storeName: "Sam's Club", price: '', quantity: '' }
   ]);
   
-  // Add store modal/inline state
+  // Quick Add store modal state
   const [addingStoreToItem, setAddingStoreToItem] = useState(null);
   const [newStoreName, setNewStoreName] = useState('Costco');
   const [newStorePrice, setNewStorePrice] = useState('');
   const [newStoreQty, setNewStoreQty] = useState('');
+
+  // Full item editing state
+  const [editingItem, setEditingItem] = useState(null);
 
   // Handle Photo Upload with Multimodal AI Vision
   const handlePhotoUpload = async (e) => {
@@ -88,19 +93,34 @@ export default function PriceComparatorModule({
     }
   };
 
-  // Body scroll lock on modal open
+  // Body scroll lock on modals open
   useEffect(() => {
-    if (addingStoreToItem) {
+    if (addingStoreToItem || editingItem) {
       const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => {
         document.body.style.overflow = prevOverflow;
       };
     }
-  }, [addingStoreToItem]);
+  }, [addingStoreToItem, editingItem]);
 
   const categories = ['All', 'Skincare', 'Dental', 'Higiene', 'Despensa', 'Limpieza', 'Otros'];
-  const storesPreset = ["Costco", "Sam's Club", "Bodega Aurrera", "Tiendas 3B", "Farmacias Guadalajara", "Amazon"];
+  const storesPreset = [
+    "Costco",
+    "Sam's Club",
+    "Bodega Aurrera",
+    "Tiendas 3B",
+    "Walmart",
+    "Soriana",
+    "Chedraui",
+    "HEB",
+    "Farmacias Guadalajara",
+    "Farmacia Benavides",
+    "Farmacia del Ahorro",
+    "Amazon",
+    "Mercado Libre",
+    "Liverpool"
+  ];
 
   const handleAddItem = (e) => {
     e.preventDefault();
@@ -121,12 +141,12 @@ export default function PriceComparatorModule({
 
     // Build stores list (only those with values)
     const validStores = (storePrices || [])
-      .filter(s => s && s.price && s.quantity)
+      .filter(s => s && s.storeName && s.price && s.quantity)
       .map(s => {
         const p = safeNumber(s.price, 0);
         const q = safeNumber(s.quantity, 1);
         return {
-          storeName: s.storeName || 'Tienda',
+          storeName: String(s.storeName).trim() || 'Tienda',
           price: p,
           quantity: q,
           unitPrice: q > 0 ? p / q : 0
@@ -150,6 +170,7 @@ export default function PriceComparatorModule({
     setHouseholdItems(prev => [...(Array.isArray(prev) ? prev : []), sanitized]);
     setItemName('');
     setItemNotes('');
+    setProductImage('');
     setStorePrices([
       { storeName: "Costco", price: '', quantity: '' },
       { storeName: "Sam's Club", price: '', quantity: '' }
@@ -164,6 +185,77 @@ export default function PriceComparatorModule({
     }
     setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).filter(i => i && i.id !== id));
     showToast('warning', 'Insumo Eliminado', `Se eliminó "${name}"`);
+  };
+
+  // Open item editor modal
+  const handleOpenEdit = (item) => {
+    const currentStores = Array.isArray(item.stores) ? item.stores : [];
+    setEditingItem({
+      id: item.id,
+      name: item.name || '',
+      category: item.category || 'Higiene',
+      repurchaseVerdict: item.repurchaseVerdict || 'yes',
+      preferredStore: item.preferredStore || '',
+      notes: item.notes || '',
+      stores: currentStores.length > 0
+        ? currentStores.map(s => ({
+            storeName: s.storeName || '',
+            price: s.price !== undefined && s.price !== null ? s.price : '',
+            quantity: s.quantity !== undefined && s.quantity !== null ? s.quantity : '',
+            unitPrice: s.unitPrice || 0
+          }))
+        : [{ storeName: 'Costco', price: '', quantity: '' }]
+    });
+  };
+
+  // Save edited item
+  const handleSaveEdit = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!editingItem || !editingItem.name?.trim()) {
+      showToast('warning', 'Campo Requerido', 'El nombre del insumo no puede estar vacío.');
+      return;
+    }
+
+    const trimmedName = editingItem.name.trim();
+
+    // Validate stores list
+    const validStores = (editingItem.stores || [])
+      .filter(s => s && String(s.storeName || '').trim() && s.price !== '' && s.quantity !== '')
+      .map(s => {
+        const p = safeNumber(s.price, 0);
+        const q = safeNumber(s.quantity, 1);
+        return {
+          storeName: String(s.storeName).trim() || 'Tienda',
+          price: p,
+          quantity: q,
+          unitPrice: q > 0 ? p / q : 0
+        };
+      })
+      .filter(s => s.price > 0 && s.quantity > 0);
+
+    let prefStore = editingItem.preferredStore;
+    if (prefStore && !validStores.some(s => s.storeName === prefStore)) {
+      prefStore = validStores[0]?.storeName || '';
+    } else if (!prefStore && validStores.length > 0) {
+      prefStore = validStores[0]?.storeName || '';
+    }
+
+    const updatedObj = {
+      id: editingItem.id,
+      name: trimmedName,
+      category: editingItem.category || 'Higiene',
+      stores: validStores,
+      preferredStore: prefStore,
+      repurchaseVerdict: editingItem.repurchaseVerdict || 'yes',
+      notes: editingItem.notes || ''
+    };
+
+    const sanitized = sanitizeHouseholdItem(updatedObj);
+    if (!sanitized) return;
+
+    setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(i => (i && i.id === sanitized.id ? sanitized : i)));
+    showToast('success', 'Insumo Actualizado', `Se guardaron los cambios para "${trimmedName}".`);
+    setEditingItem(null);
   };
 
   const handleSetPreferred = (itemId, storeName) => {
@@ -197,12 +289,13 @@ export default function PriceComparatorModule({
     e.preventDefault();
     if (!newStorePrice || !newStoreQty || !addingStoreToItem) return;
 
+    const trimmedStore = String(newStoreName || '').trim() || 'Tienda';
     const p = safeNumber(newStorePrice, 0);
     const q = safeNumber(newStoreQty, 1);
     if (p <= 0 || q <= 0) return;
 
     const newStoreObj = {
-      storeName: newStoreName || 'Tienda',
+      storeName: trimmedStore,
       price: p,
       quantity: q,
       unitPrice: p / q
@@ -212,19 +305,19 @@ export default function PriceComparatorModule({
       if (item && item.id === addingStoreToItem.id) {
         const currentStores = (Array.isArray(item.stores) ? item.stores : []).filter(s => s && typeof s === 'object');
         // If store already exists, overwrite it. Else add it.
-        const filteredStores = currentStores.filter(s => s.storeName !== newStoreName);
+        const filteredStores = currentStores.filter(s => s.storeName !== trimmedStore);
         const updatedStores = [...filteredStores, newStoreObj];
         return {
           ...item,
           stores: updatedStores,
           // Update preferredStore if empty
-          preferredStore: item.preferredStore || newStoreName
+          preferredStore: item.preferredStore || trimmedStore
         };
       }
       return item;
     }));
 
-    showToast('success', 'Precio Agregado', `Se añadió costo para ${newStoreName}`);
+    showToast('success', 'Precio Agregado', `Se añadió costo para ${trimmedStore}`);
     setNewStorePrice('');
     setNewStoreQty('');
     setAddingStoreToItem(null);
@@ -311,6 +404,13 @@ export default function PriceComparatorModule({
   return (
     <div className="space-y-6 animate-fade-in">
       
+      {/* Shared Stores Datalist for Autocomplete */}
+      <datalist id="stores-preset-list">
+        {storesPreset.map(st => (
+          <option key={st} value={st} />
+        ))}
+      </datalist>
+
       {/* Search, Filter & Add Row */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#171a24] p-4 rounded-xl border border-[#e0a96d]/15">
         <div className="flex flex-col sm:flex-row gap-3 flex-1 items-stretch sm:items-center">
@@ -506,24 +606,23 @@ export default function PriceComparatorModule({
           <div className="space-y-3">
             <label className="block text-xs font-semibold text-slate-400">Precios por Establecimiento (opcional al inicio)</label>
             {storePrices.map((sp, idx) => (
-              <div key={idx} className="grid grid-cols-3 gap-3 bg-[#0b0c10] p-3 rounded-lg border border-slate-800">
-                <div className="flex flex-col gap-1">
+              <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-[#0b0c10] p-3 rounded-lg border border-slate-800">
+                <div className="sm:col-span-5 flex flex-col gap-1">
                   <span className="text-[10px] text-slate-400 font-semibold">Tienda</span>
-                  <select
+                  <input
+                    type="text"
+                    list="stores-preset-list"
+                    placeholder="Ej. Costco, Walmart..."
                     value={sp.storeName}
                     onChange={(e) => {
                       const updated = [...storePrices];
                       updated[idx].storeName = e.target.value;
                       setStorePrices(updated);
                     }}
-                    className="bg-[#171a24] border border-[#e0a96d]/10 rounded py-1 px-2 text-slate-300 text-xs focus:outline-none"
-                  >
-                    {storesPreset.map(st => (
-                      <option key={st} value={st}>{st}</option>
-                    ))}
-                  </select>
+                    className="bg-[#171a24] border border-[#e0a96d]/10 rounded py-1 px-2 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                  />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="sm:col-span-3 flex flex-col gap-1">
                   <span className="text-[10px] text-slate-400 font-semibold">Precio Total ($)</span>
                   <input
                     type="number"
@@ -538,7 +637,7 @@ export default function PriceComparatorModule({
                     className="bg-[#171a24] border border-[#e0a96d]/10 rounded py-1 px-2 text-slate-100 text-xs focus:outline-none"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="sm:col-span-3 flex flex-col gap-1">
                   <span className="text-[10px] text-slate-400 font-semibold">Cantidad (Uds/Rollos/Grs)</span>
                   <input
                     type="number"
@@ -552,6 +651,18 @@ export default function PriceComparatorModule({
                     }}
                     className="bg-[#171a24] border border-[#e0a96d]/10 rounded py-1 px-2 text-slate-100 text-xs focus:outline-none"
                   />
+                </div>
+                <div className="sm:col-span-1 flex items-end justify-center pb-1">
+                  {storePrices.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setStorePrices(storePrices.filter((_, i) => i !== idx))}
+                      className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                      title="Eliminar fila"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -606,17 +717,19 @@ export default function PriceComparatorModule({
             const cheapest = getCheapestStore(item.stores);
             
             return (
-              <div key={item.id} className="bg-[#171a24] border border-[#e0a96d]/15 p-5 rounded-xl flex flex-col justify-between shadow-lg relative">
+              <div key={item.id} className="bg-[#171a24] border border-[#e0a96d]/15 p-5 rounded-xl flex flex-col justify-between shadow-lg relative group/card">
                 <div>
                   <div className="flex justify-between items-start gap-4 mb-3">
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <span className="text-[10px] uppercase font-bold text-[#e0a96d] px-2.5 py-0.5 rounded bg-[#e0a96d]/10 border border-[#e0a96d]/10">
                         {item.category}
                       </span>
-                      <h4 className="text-base font-bold text-slate-100 font-outfit mt-1.5">{item.name}</h4>
+                      <h4 className="text-base font-bold text-slate-100 font-outfit mt-1.5 truncate" title={item.name}>
+                        {item.name}
+                      </h4>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {/* Direct Dropdown Verdict Selector */}
                       <div className="relative">
                         <select
@@ -641,10 +754,20 @@ export default function PriceComparatorModule({
                         <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
                       </div>
 
+                      {/* Edit Item Button */}
+                      <button
+                        onClick={() => handleOpenEdit(item)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-[#e0a96d] hover:bg-[#e0a96d]/10 transition-all cursor-pointer"
+                        title="Editar insumo y precios"
+                        aria-label={`Editar ${item.name}`}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+
                       {/* Delete item */}
                       <button
                         onClick={() => handleDeleteItem(item.id, item.name)}
-                        className="p-1.5 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
                         title="Eliminar insumo"
                         aria-label={`Eliminar ${item.name}`}
                       >
@@ -658,7 +781,7 @@ export default function PriceComparatorModule({
                     {!Array.isArray(item.stores) || item.stores.filter(s => s && safeNumber(s.price, 0) > 0 && safeNumber(s.quantity, 0) > 0).length === 0 ? (
                       <div className="bg-[#0b0c10]/40 border border-slate-800/80 rounded-lg p-3 text-center">
                         <p className="text-xs text-slate-400 italic">No hay precios registrados todavía.</p>
-                        <p className="text-[10px] text-slate-500 mt-0.5">Usa el botón "Agregar Precio Tienda" abajo para registrar costos.</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Usa "Agregar Precio Tienda" o "Editar Insumo" para registrar costos.</p>
                       </div>
                     ) : (
                       item.stores
@@ -675,10 +798,10 @@ export default function PriceComparatorModule({
                           return (
                             <div 
                               key={store.storeName ? `${store.storeName}-${sIdx}` : sIdx}
-                              className={`p-2.5 rounded-lg flex items-center justify-between border text-xs ${
+                              className={`p-2.5 rounded-lg flex items-center justify-between border text-xs transition-colors ${
                                 isPreferred 
-                                  ? 'bg-[#0b0c10] border-[#e0a96d]/40 shadow-inner' 
-                                  : 'bg-[#0b0c10]/50 border-slate-800'
+                                    ? 'bg-[#0b0c10] border-[#e0a96d]/40 shadow-inner' 
+                                    : 'bg-[#0b0c10]/50 border-slate-800 hover:border-slate-700'
                               }`}
                             >
                               <div className="flex items-center gap-2 min-w-0">
@@ -721,14 +844,25 @@ export default function PriceComparatorModule({
                                   )}
                                 </div>
 
-                                <button
-                                  onClick={() => removeStoreFromItem(item.id, store.storeName)}
-                                  className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer transition-colors"
-                                  title="Remover este precio"
-                                  aria-label={`Remover precio de ${store.storeName}`}
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleOpenEdit(item)}
+                                    className="text-slate-500 hover:text-[#e0a96d] p-1 cursor-pointer transition-colors"
+                                    title="Modificar precio o tienda"
+                                    aria-label={`Editar ${store.storeName}`}
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+
+                                  <button
+                                    onClick={() => removeStoreFromItem(item.id, store.storeName)}
+                                    className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer transition-colors"
+                                    title="Remover este precio"
+                                    aria-label={`Remover precio de ${store.storeName}`}
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           );
@@ -770,13 +904,21 @@ export default function PriceComparatorModule({
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
                   <button
                     onClick={() => setAddingStoreToItem(item)}
                     className="text-xs text-[#e0a96d] hover:text-[#f5d4af] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Agregar Precio Tienda</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleOpenEdit(item)}
+                    className="text-xs text-slate-300 hover:text-slate-100 font-semibold flex items-center gap-1.5 cursor-pointer transition-colors px-2.5 py-1.5 rounded-lg bg-[#0b0c10] border border-[#e0a96d]/20 hover:border-[#e0a96d]/50"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-[#e0a96d]" />
+                    <span>Editar Insumo</span>
                   </button>
                 </div>
               </div>
@@ -785,7 +927,262 @@ export default function PriceComparatorModule({
         )}
       </div>
 
-      {/* Add Price Store Modal Dialog */}
+      {/* Full Edit Item Modal Dialog */}
+      {editingItem && createPortal(
+        <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <form onSubmit={handleSaveEdit} className="bg-[#171a24] border border-[#e0a96d]/25 rounded-2xl p-6 max-w-xl w-full shadow-2xl animate-modal-pop my-auto max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-800/80 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#e0a96d]/15 flex items-center justify-center text-[#e0a96d] border border-[#e0a96d]/30">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-100 font-outfit">Editar Insumo / Producto</h3>
+                  <p className="text-[11px] text-slate-400">Modifica detalles, tiendas y precios registrados</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+                aria-label="Cerrar modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto pr-1 flex-1 py-1 custom-scrollbar">
+              {/* Name and Category */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre del Insumo / Producto *</label>
+                  <input
+                    type="text"
+                    value={editingItem.name}
+                    onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Categoría</label>
+                  <select
+                    value={editingItem.category}
+                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
+                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                  >
+                    {categories.filter(c => c !== 'All' && c !== 'need_to_buy').map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Purchase Verdict */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Estado de Compra / Intención</label>
+                <select
+                  value={editingItem.repurchaseVerdict || 'yes'}
+                  onChange={(e) => setEditingItem({ ...editingItem, repurchaseVerdict: e.target.value })}
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                >
+                  <option value="yes">✓ Compraría / Aprobado</option>
+                  <option value="need_to_buy">🛒 Necesito Comprar</option>
+                  <option value="maybe">? Duda / En Evaluación</option>
+                  <option value="no">✕ No volver a comprar</option>
+                </select>
+              </div>
+
+              {/* Stores and Prices Management */}
+              <div className="space-y-2.5 pt-2 border-t border-slate-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-200">Tiendas y Precios Registrados</label>
+                    <span className="text-[10px] text-slate-400">Puedes escribir cualquier tienda personalizada o seleccionar de la lista</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingItem({
+                        ...editingItem,
+                        stores: [...(editingItem.stores || []), { storeName: '', price: '', quantity: '' }]
+                      });
+                    }}
+                    className="text-xs text-[#e0a96d] hover:text-[#f5d4af] font-bold flex items-center gap-1 cursor-pointer bg-[#e0a96d]/10 hover:bg-[#e0a96d]/20 border border-[#e0a96d]/30 px-2.5 py-1 rounded-lg transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Añadir Tienda</span>
+                  </button>
+                </div>
+
+                {(!editingItem.stores || editingItem.stores.length === 0) ? (
+                  <div className="p-4 bg-[#0b0c10] border border-dashed border-slate-800 rounded-xl text-center">
+                    <p className="text-xs text-slate-400">No hay tiendas registradas para este producto.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingItem({
+                          ...editingItem,
+                          stores: [{ storeName: 'Costco', price: '', quantity: '' }]
+                        });
+                      }}
+                      className="mt-2 text-xs text-[#e0a96d] font-semibold underline cursor-pointer"
+                    >
+                      + Agregar primer precio
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                    {editingItem.stores.map((st, idx) => {
+                      const p = safeNumber(st.price, 0);
+                      const q = safeNumber(st.quantity, 0);
+                      const u = q > 0 && p > 0 ? p / q : 0;
+                      const isPref = editingItem.preferredStore === st.storeName && st.storeName;
+
+                      return (
+                        <div key={idx} className="bg-[#0b0c10] border border-slate-800 hover:border-slate-700 p-3 rounded-xl space-y-2 transition-colors">
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                            {/* Store Name Input with Datalist */}
+                            <div className="sm:col-span-5">
+                              <label className="block text-[10px] text-slate-400 font-medium mb-0.5">Tienda / Establecimiento</label>
+                              <input
+                                type="text"
+                                list="stores-preset-list"
+                                placeholder="Ej. Costco, Walmart, Local..."
+                                value={st.storeName}
+                                onChange={(e) => {
+                                  const updated = [...editingItem.stores];
+                                  updated[idx].storeName = e.target.value;
+                                  setEditingItem({ ...editingItem, stores: updated });
+                                }}
+                                className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-1.5 px-2.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                              />
+                            </div>
+
+                            {/* Total Price */}
+                            <div className="sm:col-span-3">
+                              <label className="block text-[10px] text-slate-400 font-medium mb-0.5">Precio Total ($)</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={st.price}
+                                onChange={(e) => {
+                                  const updated = [...editingItem.stores];
+                                  updated[idx].price = e.target.value;
+                                  setEditingItem({ ...editingItem, stores: updated });
+                                }}
+                                className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-1.5 px-2.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                              />
+                            </div>
+
+                            {/* Quantity */}
+                            <div className="sm:col-span-3">
+                              <label className="block text-[10px] text-slate-400 font-medium mb-0.5">Cantidad (Uds/Kg/etc)</label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                placeholder="1"
+                                value={st.quantity}
+                                onChange={(e) => {
+                                  const updated = [...editingItem.stores];
+                                  updated[idx].quantity = e.target.value;
+                                  setEditingItem({ ...editingItem, stores: updated });
+                                }}
+                                className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-1.5 px-2.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                              />
+                            </div>
+
+                            {/* Actions (Delete) */}
+                            <div className="sm:col-span-1 flex items-end justify-center pt-2 sm:pt-4">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = editingItem.stores.filter((_, i) => i !== idx);
+                                  let newPref = editingItem.preferredStore;
+                                  if (newPref === st.storeName) {
+                                    newPref = updated[0]?.storeName || '';
+                                  }
+                                  setEditingItem({ ...editingItem, stores: updated, preferredStore: newPref });
+                                }}
+                                className="p-1.5 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer transition-colors"
+                                title="Eliminar tienda"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Calculated Unit Price and Preferred Button */}
+                          <div className="flex items-center justify-between pt-1 text-[11px] border-t border-slate-800/60">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-400">Unitario:</span>
+                              {u > 0 ? (
+                                <span className="font-bold text-[#e0a96d]">${u.toFixed(3)} / ud</span>
+                              ) : (
+                                <span className="text-slate-500 italic">Ingresa precio y cantidad</span>
+                              )}
+                            </div>
+
+                            {st.storeName && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingItem({ ...editingItem, preferredStore: st.storeName });
+                                }}
+                                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                                  isPref
+                                    ? 'bg-[#e0a96d]/20 text-[#e0a96d] border border-[#e0a96d]/40'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-transparent'
+                                }`}
+                              >
+                                <Star className={`w-3 h-3 ${isPref ? 'fill-[#e0a96d] text-[#e0a96d]' : ''}`} />
+                                <span>{isPref ? 'Tienda Preferida' : 'Marcar preferida'}</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Notes */}
+              <div className="pt-2 border-t border-slate-800">
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Notas de Rendimiento / Observaciones</label>
+                <textarea
+                  rows="2"
+                  value={editingItem.notes || ''}
+                  onChange={(e) => setEditingItem({ ...editingItem, notes: e.target.value })}
+                  placeholder="Ej. Rinde 2 meses, consistencia ligera, comprar solo en oferta..."
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 mt-3 border-t border-slate-800/80 shrink-0">
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2.5 px-4 rounded-lg cursor-pointer transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="btn-rose-gold text-xs font-bold py-2.5 px-5 rounded-lg cursor-pointer transition-all shadow-md flex items-center gap-1.5"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Guardar Cambios</span>
+              </button>
+            </div>
+          </form>
+        </div>,
+        document.body
+      )}
+
+      {/* Quick Add Price Store Modal Dialog */}
       {addingStoreToItem && createPortal(
         <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
           <form onSubmit={handleAddStorePrice} className="bg-[#171a24] border border-[#e0a96d]/25 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-modal-pop my-auto max-h-[90vh] flex flex-col">
@@ -806,16 +1203,16 @@ export default function PriceComparatorModule({
             
             <div className="space-y-3.5 overflow-y-auto pr-1 flex-1 py-1">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Establecimiento</label>
-                <select
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Establecimiento / Tienda</label>
+                <input
+                  type="text"
+                  list="stores-preset-list"
+                  placeholder="Ej. Costco, Walmart, Farmacia..."
                   value={newStoreName}
                   onChange={(e) => setNewStoreName(e.target.value)}
-                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
-                >
-                  {storesPreset.map(st => (
-                    <option key={st} value={st}>{st}</option>
-                  ))}
-                </select>
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                  required
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Precio Total ($)</label>
