@@ -1228,4 +1228,263 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
   return generateFallbackCopilotResponse(userMessage);
 };
 
+// ==========================================
+// 8. AI NUTRITION & CALORIE VISION SCANNER
+// ==========================================
+
+/**
+ * Fallback nutrition generator when offline, no API key or image reading fails
+ */
+export const generateFallbackMealAnalysis = (customName = '') => {
+  const name = customName && customName.trim() ? customName.trim() : 'Platillo Nutritivo Balanceado';
+  
+  return {
+    dishName: name,
+    mealType: 'lunch',
+    calories: 460,
+    confidenceRange: '420 - 500 kcal',
+    macros: {
+      protein: 34,
+      carbs: 40,
+      fat: 14,
+      fiber: 6
+    },
+    ingredients: [
+      { name: 'Porción principal de proteína (ej. pollo/pescado/huevo/tofu)', kcal: 230, portion: '150g' },
+      { name: 'Carbohidrato complejo / guarnición', kcal: 130, portion: '1/2 taza' },
+      { name: 'Vegetales mixtos y ensalada', kcal: 45, portion: '1 taza' },
+      { name: 'Grasa saludable / aderezo ligero', kcal: 55, portion: '1 cda' }
+    ],
+    satietyScore: 8.2,
+    glycemicImpact: 'low',
+    weightLossVerdict: 'Muy favorable para déficit calórico con buen balance proteico.',
+    weightLossTips: [
+      'Orden metabólico sugerido: Inicia con las verduras y ensalada para llenar el estómago con fibra, continúa con la proteína y termina con los carbohidratos.',
+      'Acompaña con 1 o 2 vasos de agua (350-500ml) para mejorar la digestión y potenciar la saciedad gástrica.',
+      'Una caminata suave de 10-15 min después de comer ayuda a regular la glucosa en sangre y aumentar tu gasto energético.'
+    ],
+    healthySwaps: [
+      'Si quieres reducir 80-100 kcal extra, reduce a la mitad la porción de carbohidratos y duplica los vegetales verdes.'
+    ]
+  };
+};
+
+/**
+ * Analyzes a meal photo using Gemini Multimodal Vision to extract calories,
+ * macronutrients (protein, carbs, fat, fiber), ingredients, glycemic impact,
+ * and weight loss recommendations.
+ */
+export const analyzeMealImage = async (base64Data, mimeType, apiKey) => {
+  if (!apiKey || !apiKey.trim()) {
+    return generateFallbackMealAnalysis('Comida Analizada');
+  }
+
+  const prompt = `
+Eres una nutrióloga clínica especialista en pérdida de grasa corporal, déficit calórico sostenible y composición corporal.
+Analiza la comida o bebida que se observa en esta fotografía con el objetivo de ayudar a la usuaria a BAJAR DE PESO de forma saludable.
+
+Responde EXCLUSIVAMENTE con un objeto JSON válido (sin markdown, sin bloques de código ni texto antes o después) con la siguiente estructura:
+
+{
+  "dishName": "Nombre descriptivo y apetitoso del platillo (ej. 'Pechuga de Pollo a la Plancha con Ensalada Verde y Arroz Integral')",
+  "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+  "calories": 480,
+  "confidenceRange": "440 - 520 kcal",
+  "macros": {
+    "protein": 38,
+    "carbs": 35,
+    "fat": 15,
+    "fiber": 7
+  },
+  "ingredients": [
+    { "name": "Pechuga de pollo (150g)", "kcal": 240, "portion": "150g" },
+    { "name": "Arroz integral cocido", "kcal": 120, "portion": "1/2 taza" },
+    { "name": "Ensalada verde con jitomate", "kcal": 40, "portion": "1.5 tazas" },
+    { "name": "Aceite de oliva en preparación", "kcal": 80, "portion": "1 cda" }
+  ],
+  "satietyScore": 8.5,
+  "glycemicImpact": "low" | "medium" | "high",
+  "weightLossVerdict": "Excelente opción para pérdida de peso: alto en proteína y fibra que mantendrán tu apetito controlado por 3-4 horas.",
+  "weightLossTips": [
+    "Consejo 1 específico para esta comida sobre saciedad, digestión o reducción de calorías ocultas.",
+    "Consejo 2 sobre orden de ingesta de alimentos (ej. fibra primero, proteína después, carbohidratos al final) o timing.",
+    "Consejo 3 sobre hidratación o caminata post-comida para regular glucosa."
+  ],
+  "healthySwaps": [
+    "Sustitución inteligente para restar 100-200 kcal si desea acelerar el déficit (ej. cambiar aderezo por limón/vinagre o sustituir mitad del cereal por vegetales)."
+  ]
+}
+
+Reglas estrictas:
+1. "calories" debe ser un número entero realista en kcal.
+2. "protein", "carbs", "fat", "fiber" deben ser números enteros en gramos.
+3. "satietyScore" debe ser un número decimal del 1.0 al 10.0 (donde 10 es máxima saciedad duradera).
+4. "glycemicImpact" debe ser 'low', 'medium' o 'high'.
+5. Los consejos deben ser amables, científicos, empáticos y directamente enfocados en déficit calórico y control de glucosa.
+`;
+
+  const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
+  let lastError = null;
+
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const payload = {
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: mimeType || 'image/jpeg',
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.2
+        }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) throw new Error('Respuesta vacía del modelo Gemini.');
+
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
+      const parsed = JSON.parse(cleaned);
+
+      return {
+        dishName: parsed.dishName || 'Platillo Identificado',
+        mealType: ['breakfast', 'lunch', 'dinner', 'snack'].includes(parsed.mealType) ? parsed.mealType : 'lunch',
+        calories: Math.max(0, parseInt(parsed.calories, 10) || 450),
+        confidenceRange: parsed.confidenceRange || `${Math.max(0, parseInt(parsed.calories, 10) || 450)} kcal`,
+        macros: {
+          protein: Math.max(0, parseInt(parsed.macros?.protein, 10) || 30),
+          carbs: Math.max(0, parseInt(parsed.macros?.carbs, 10) || 40),
+          fat: Math.max(0, parseInt(parsed.macros?.fat, 10) || 15),
+          fiber: Math.max(0, parseInt(parsed.macros?.fiber, 10) || 5)
+        },
+        ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+        satietyScore: typeof parsed.satietyScore === 'number' ? Math.min(10, Math.max(1, parsed.satietyScore)) : 8.0,
+        glycemicImpact: ['low', 'medium', 'high'].includes(parsed.glycemicImpact) ? parsed.glycemicImpact : 'medium',
+        weightLossVerdict: parsed.weightLossVerdict || 'Comida balanceada para déficit calórico.',
+        weightLossTips: Array.isArray(parsed.weightLossTips) && parsed.weightLossTips.length > 0 
+          ? parsed.weightLossTips 
+          : ['Bebe un vaso de agua antes y camina 15 min para regular la glucosa.'],
+        healthySwaps: Array.isArray(parsed.healthySwaps) ? parsed.healthySwaps : []
+      };
+    } catch (err) {
+      console.warn(`Vision meal analysis with ${model} failed:`, err.message);
+      lastError = err;
+    }
+  }
+
+  // Fallback if all models failed
+  console.warn('All Vision models failed, using intelligent fallback:', lastError?.message);
+  return generateFallbackMealAnalysis('Comida Registrada');
+};
+
+/**
+ * Generates dynamic educated coaching advice based on current meal, daily total,
+ * hydration level, and calorie balance.
+ */
+export const generateAdaptiveCoachingAdvice = ({
+  latestMeal,
+  todayCalories = 0,
+  dailyCalorieTarget = 1500,
+  waterIntake = 0,
+  waterGoal = 2000,
+  tdee = 1900
+}) => {
+  const tips = [];
+  const deficit = tdee - todayCalories;
+  const remaining = dailyCalorieTarget - todayCalories;
+
+  // 1. Hydration recommendation
+  if (waterIntake < waterGoal * 0.5) {
+    const needed = Math.max(250, Math.round((waterGoal - waterIntake) * 0.4));
+    tips.push({
+      type: 'water',
+      icon: 'droplet',
+      title: 'Hidratación Pendiente 💧',
+      text: `Has registrado ${waterIntake} ml de tu meta de ${waterGoal} ml. Beber ${needed} ml de agua ahora mejorará tu digestión y activará tu gasto metabólico.`
+    });
+  } else if (waterIntake >= waterGoal) {
+    tips.push({
+      type: 'water_success',
+      icon: 'check',
+      title: '¡Meta de Agua Cumplida! 🌟',
+      text: `Excelente nivel de hidratación (${waterIntake} ml). Tu cuerpo tiene el balance óptimo para la termogénesis y quema de grasa.`
+    });
+  }
+
+  // 2. Meal Timing & Fasting Window recommendation
+  if (latestMeal) {
+    const mealKcal = latestMeal.calories || 400;
+    if (mealKcal >= 500) {
+      tips.push({
+        type: 'timing',
+        icon: 'clock',
+        title: 'Ventana de Digestión Óptima ⏳',
+        text: `Dado el aporte calórico y de saciedad de esta comida (${mealKcal} kcal), te sugerimos esperar de 3.5 a 4.5 horas antes de tu siguiente comida o snack para permitir un descenso saludable de insulina.`
+      });
+    } else {
+      tips.push({
+        type: 'timing',
+        icon: 'sparkles',
+        title: 'Snack Ligero / Digestión Rápida ⚡',
+        text: `Esta comida ligera (${mealKcal} kcal) se digiere con facilidad. Si sientes apetito en 2-3 horas, una infusión de té verde o frutos secos te mantendrá en tu meta.`
+      });
+    }
+
+    // 3. Post-meal activity suggestion
+    if (latestMeal.carbs >= 35 || latestMeal.glycemicImpact === 'high') {
+      tips.push({
+        type: 'exercise',
+        icon: 'activity',
+        title: 'Caminata Post-Comida Sugerida 🚶‍♀️',
+        text: `Una caminata suave de 12 a 20 minutos post-comida transportará la glucosa directamente a los músculos sin disparar picos de insulina, acelerando tu pérdida de grasa.`
+      });
+    }
+  }
+
+  // 4. Deficit & Calorie Progress Tip
+  if (remaining > 300) {
+    tips.push({
+      type: 'calorie',
+      icon: 'flame',
+      title: `Te quedan ${remaining} kcal para tu meta diaria 🔥`,
+      text: `Vas en excelente ritmo para mantener un déficit calórico controlado y sostenible hoy.`
+    });
+  } else if (remaining < 0) {
+    const surplus = Math.abs(remaining);
+    tips.push({
+      type: 'warning',
+      icon: 'info',
+      title: `Has superado tu meta diaria por ${surplus} kcal`,
+      text: `¡No te preocupes! El balance semanal es lo que cuenta. Una caminata de 30 min o una cena rica en vegetales y proteína magra compensará el día perfectamente.`
+    });
+  }
+
+  return tips;
+};
+
+
 

@@ -261,3 +261,104 @@ export const sanitizeTimerList = (list) => {
   if (!Array.isArray(list)) return [];
   return list.map(sanitizeTimerItem).filter(Boolean);
 };
+
+// 10. Nutrition Meals (Scanner de Comida & Calorías IA)
+export const sanitizeNutritionMeal = (m) => {
+  if (!m || typeof m !== 'object') return null;
+
+  const now = new Date();
+  const defaultDate = now.toISOString().split('T')[0];
+  const defaultTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+  const rawMealType = safeString(m.mealType || 'lunch').toLowerCase();
+  const mealType = ['breakfast', 'lunch', 'dinner', 'snack'].includes(rawMealType) ? rawMealType : 'lunch';
+
+  const rawGlycemic = safeString(m.glycemicImpact || 'medium').toLowerCase();
+  const glycemicImpact = ['low', 'medium', 'high'].includes(rawGlycemic) ? rawGlycemic : 'medium';
+
+  const ingredients = Array.isArray(m.ingredients)
+    ? m.ingredients
+        .filter(i => i && typeof i === 'object')
+        .map(i => ({
+          name: safeString(i.name || 'Ingrediente'),
+          kcal: safeNumber(i.kcal, 0),
+          portion: safeString(i.portion || '1 porción')
+        }))
+    : [];
+
+  const weightLossTips = Array.isArray(m.weightLossTips)
+    ? m.weightLossTips.map(t => safeString(t)).filter(Boolean)
+    : (typeof m.weightLossTips === 'string' && m.weightLossTips ? [m.weightLossTips] : []);
+
+  return {
+    id: safeString(m.id || 'meal-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
+    date: safeString(m.date || defaultDate),
+    time: safeString(m.time || defaultTime),
+    name: safeString(m.name || m.dishName || 'Comida Registrada'),
+    mealType: mealType,
+    calories: Math.max(0, Math.round(safeNumber(m.calories || m.estimatedCalories, 0))),
+    protein: Math.max(0, Math.round(safeNumber(m.protein, 0))),
+    carbs: Math.max(0, Math.round(safeNumber(m.carbs, 0))),
+    fat: Math.max(0, Math.round(safeNumber(m.fat, 0))),
+    fiber: Math.max(0, Math.round(safeNumber(m.fiber, 0))),
+    image: safeString(m.image || m.photo || m.productImage || ''),
+    satietyScore: Math.min(10, Math.max(1, safeNumber(m.satietyScore, 7))),
+    glycemicImpact: glycemicImpact,
+    weightLossVerdict: safeString(m.weightLossVerdict || 'Bueno para déficit calórico'),
+    weightLossTips: weightLossTips,
+    ingredients: ingredients,
+    notes: safeString(m.notes || ''),
+    portionMultiplier: Math.max(0.1, safeNumber(m.portionMultiplier, 1))
+  };
+};
+
+export const sanitizeNutritionList = (list) => {
+  if (!Array.isArray(list)) return [];
+  return list.map(sanitizeNutritionMeal).filter(Boolean);
+};
+
+// 11. Nutrition Profile (Metas de Pérdida de Peso & Déficit)
+export const sanitizeNutritionProfile = (p) => {
+  const obj = p && typeof p === 'object' ? p : {};
+
+  const activityLevel = ['sedentary', 'light', 'moderate', 'active', 'very_active'].includes(obj.activityLevel)
+    ? obj.activityLevel
+    : 'light';
+
+  return {
+    dailyCalorieTarget: Math.max(800, Math.round(safeNumber(obj.dailyCalorieTarget, 1500))),
+    targetProtein: Math.max(30, Math.round(safeNumber(obj.targetProtein, 110))),
+    targetCarbs: Math.max(20, Math.round(safeNumber(obj.targetCarbs, 130))),
+    targetFat: Math.max(15, Math.round(safeNumber(obj.targetFat, 45))),
+    targetFiber: Math.max(10, Math.round(safeNumber(obj.targetFiber, 25))),
+    activityLevel: activityLevel,
+    weightGoal: safeString(obj.weightGoal || 'lose_weight'),
+    customDeficit: safeNumber(obj.customDeficit, 450)
+  };
+};
+
+// 12. Daily Nutrition Logs (Cierres de Día & Historial de Balance)
+export const sanitizeDailyNutritionLog = (log) => {
+  if (!log || typeof log !== 'object') return null;
+
+  return {
+    id: safeString(log.id || 'log-' + (log.date || Date.now())),
+    date: safeString(log.date || new Date().toISOString().split('T')[0]),
+    caloriesConsumed: Math.max(0, Math.round(safeNumber(log.caloriesConsumed, 0))),
+    caloriesBurned: Math.max(0, Math.round(safeNumber(log.caloriesBurned, 0))),
+    tdee: Math.max(0, Math.round(safeNumber(log.tdee, 1800))),
+    netBalance: Math.round(safeNumber(log.netBalance, 0)),
+    projectedGramsDelta: parseFloat(safeNumber(log.projectedGramsDelta, 0).toFixed(1)),
+    waterMl: Math.max(0, Math.round(safeNumber(log.waterMl, 0))),
+    mealsCount: Math.max(0, Math.round(safeNumber(log.mealsCount, 0))),
+    summaryNotes: safeString(log.summaryNotes || ''),
+    improvementTip: safeString(log.improvementTip || ''),
+    closedAt: safeString(log.closedAt || new Date().toISOString())
+  };
+};
+
+export const sanitizeDailyNutritionLogList = (list) => {
+  if (!Array.isArray(list)) return [];
+  return list.map(sanitizeDailyNutritionLog).filter(Boolean);
+};
+

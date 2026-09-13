@@ -20,7 +20,10 @@ import {
   Activity,
   Bot,
   Sparkles,
-  MessageSquare
+  MessageSquare,
+  Utensils,
+  Flame,
+  Scale
 } from 'lucide-react';
 
 // Firebase Client SDK
@@ -29,6 +32,7 @@ import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestor
 
 // Import modules
 import ScheduleModule from './components/ScheduleModule';
+import NutritionModule from './components/NutritionModule';
 import PriceComparatorModule from './components/PriceComparatorModule';
 import ExperiencesModule from './components/ExperiencesModule';
 import WardrobeModule from './components/WardrobeModule';
@@ -49,7 +53,10 @@ import {
   sanitizeWardrobeList,
   sanitizeCustomOutfitList,
   sanitizeManualList,
-  sanitizeTimerList
+  sanitizeTimerList,
+  sanitizeNutritionList,
+  sanitizeNutritionProfile,
+  sanitizeDailyNutritionLogList
 } from './utils/sanitizers';
 
 // ==========================================
@@ -442,6 +449,36 @@ export default function App() {
     sanitizeTimerList(getSavedArray('aura-timers', []))
   );
 
+  const [nutritionMeals, setNutritionMeals] = useState(() =>
+    sanitizeNutritionList(getSavedArray('aura-nutrition-meals', []))
+  );
+
+  const [nutritionProfile, setNutritionProfile] = useState(() => {
+    const saved = localStorage.getItem('aura-nutrition-profile');
+    try {
+      return saved ? sanitizeNutritionProfile(JSON.parse(saved)) : sanitizeNutritionProfile({});
+    } catch (e) {
+      return sanitizeNutritionProfile({});
+    }
+  });
+
+  const [dailyNutritionLogs, setDailyNutritionLogs] = useState(() =>
+    sanitizeDailyNutritionLogList(getSavedArray('aura-nutrition-logs', []))
+  );
+
+  // Sync nutrition to localStorage
+  useEffect(() => {
+    localStorage.setItem('aura-nutrition-meals', JSON.stringify(nutritionMeals));
+  }, [nutritionMeals]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-nutrition-profile', JSON.stringify(nutritionProfile));
+  }, [nutritionProfile]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-nutrition-logs', JSON.stringify(dailyNutritionLogs));
+  }, [dailyNutritionLogs]);
+
   // Sync health symptoms to localStorage
   useEffect(() => {
     localStorage.setItem('aura-health-tracker', JSON.stringify(healthSymptoms));
@@ -553,6 +590,9 @@ export default function App() {
       customOutfits,
       customManuals,
       customTimers,
+      nutritionMeals: nutritionMeals || [],
+      nutritionProfile: nutritionProfile || {},
+      dailyNutritionLogs: dailyNutritionLogs || [],
       geminiApiKey: (geminiApiKey || localStorage.getItem('aura-gemini-key') || '').trim(),
       lastUpdated: Date.now()
     };
@@ -619,6 +659,21 @@ export default function App() {
       const sanitized = sanitizeTimerList(data.customTimers);
       setCustomTimers(sanitized);
       localStorage.setItem('aura-timers', JSON.stringify(sanitized));
+    }
+    if (Array.isArray(data.nutritionMeals)) {
+      const sanitized = sanitizeNutritionList(data.nutritionMeals);
+      setNutritionMeals(sanitized);
+      localStorage.setItem('aura-nutrition-meals', JSON.stringify(sanitized));
+    }
+    if (data.nutritionProfile && typeof data.nutritionProfile === 'object') {
+      const sanitized = sanitizeNutritionProfile(data.nutritionProfile);
+      setNutritionProfile(sanitized);
+      localStorage.setItem('aura-nutrition-profile', JSON.stringify(sanitized));
+    }
+    if (Array.isArray(data.dailyNutritionLogs)) {
+      const sanitized = sanitizeDailyNutritionLogList(data.dailyNutritionLogs);
+      setDailyNutritionLogs(sanitized);
+      localStorage.setItem('aura-nutrition-logs', JSON.stringify(sanitized));
     }
     if (typeof data.geminiApiKey === 'string' && data.geminiApiKey.trim()) {
       setGeminiApiKey(data.geminiApiKey.trim());
@@ -831,6 +886,7 @@ export default function App() {
   // Breadcrumbs title mapper
   const moduleTitles = {
     schedule: 'Rutina Diaria & Cronograma',
+    nutrition: 'Nutrición, Scanner Calórico IA & Control de Peso',
     copilot: 'AURA Copilot & Conversor de Rutinas IA',
     health: 'Tracker de Dolor, Postura & Diagnóstico IA',
     comparator: 'Comparador de Precios & Alacena',
@@ -844,6 +900,7 @@ export default function App() {
   // Menu items list
   const menuItems = [
     { id: 'schedule', label: 'Rutina Diaria', icon: <Calendar className="w-5 h-5" /> },
+    { id: 'nutrition', label: 'Nutrición & Calorías IA', icon: <Utensils className="w-5 h-5 text-[#e0a96d]" /> },
     { id: 'copilot', label: 'Chat Copilot IA', icon: <Bot className="w-5 h-5 text-[#e0a96d]" /> },
     { id: 'health', label: 'Dolor & Salud IA', icon: <HeartPulse className="w-5 h-5" /> },
     { id: 'comparator', label: 'Comparador de Precios', icon: <Tag className="w-5 h-5" /> },
@@ -1060,6 +1117,27 @@ export default function App() {
                 setSchedule={setSchedule}
                 selfCareActivities={selfCareActivities}
                 setSelfCareActivities={setSelfCareActivities}
+                showToast={showToast}
+              />
+            </ErrorBoundary>
+          )}
+
+          {activeModule === 'nutrition' && (
+            <ErrorBoundary>
+              <NutritionModule
+                nutritionMeals={nutritionMeals}
+                setNutritionMeals={setNutritionMeals}
+                nutritionProfile={nutritionProfile}
+                setNutritionProfile={setNutritionProfile}
+                dailyNutritionLogs={dailyNutritionLogs}
+                setDailyNutritionLogs={setDailyNutritionLogs}
+                weight={weight}
+                setWeight={setWeight}
+                height={height}
+                waterIntake={waterIntake}
+                setWaterIntake={setWaterIntake}
+                schedule={schedule}
+                geminiApiKey={geminiApiKey}
                 showToast={showToast}
               />
             </ErrorBoundary>
