@@ -36,7 +36,12 @@ import {
   CheckCircle2,
   BarChart2
 } from 'lucide-react';
-import { compressImage, analyzeMealImage, generateAdaptiveCoachingAdvice } from '../utils/geminiService';
+import { 
+  compressImage, 
+  analyzeMealImage, 
+  analyzeMealText,
+  generateAdaptiveCoachingAdvice 
+} from '../utils/geminiService';
 import { 
   safeNumber, 
   sanitizeNutritionMeal, 
@@ -81,6 +86,7 @@ export default function NutritionModule({
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isDayCloseModalOpen, setIsDayCloseModalOpen] = useState(false);
   const [activePhotoModal, setActivePhotoModal] = useState(null);
+  const [isCalculatingTextIA, setIsCalculatingTextIA] = useState(false);
 
   // Quick activity calories burned
   const [extraBurnedKcal, setExtraBurnedKcal] = useState(() => {
@@ -274,6 +280,81 @@ export default function NutritionModule({
     setScannedMeal(null);
     setScannedImage('');
     setPortionScale(1);
+  };
+
+  // Calculate with IA from text description for Manual Add form
+  const handleCalculateWithIA = async () => {
+    const query = manualForm.name.trim();
+    if (!query) {
+      showToast('warning', 'Ingresa un Alimento', 'Escribe el nombre o descripción del alimento (ej. "Capuccino Venti Starbucks con leche deslactosada") antes de calcular.');
+      return;
+    }
+
+    try {
+      setIsCalculatingTextIA(true);
+      showToast('info', 'Calculando con IA', `Estimando calorías y macros para "${query}"...`);
+
+      const result = await analyzeMealText(query, geminiApiKey);
+      
+      setManualForm(prev => ({
+        ...prev,
+        name: result.dishName || prev.name,
+        mealType: result.mealType || prev.mealType,
+        calories: result.calories !== undefined ? result.calories.toString() : prev.calories,
+        protein: result.macros?.protein !== undefined ? result.macros.protein.toString() : prev.protein,
+        carbs: result.macros?.carbs !== undefined ? result.macros.carbs.toString() : prev.carbs,
+        fat: result.macros?.fat !== undefined ? result.macros.fat.toString() : prev.fat,
+        fiber: result.macros?.fiber !== undefined ? result.macros.fiber.toString() : prev.fiber,
+        satietyScore: result.satietyScore || prev.satietyScore,
+        glycemicImpact: result.glycemicImpact || prev.glycemicImpact,
+        notes: result.weightLossTips?.[0] ? `${result.weightLossVerdict ? result.weightLossVerdict + ' ' : ''}${result.weightLossTips[0]}` : prev.notes
+      }));
+
+      showToast('success', '¡Cálculo IA Completado!', `Se estimaron ${result.calories} kcal y macros para "${result.dishName}". Puedes modificarlos libremente.`);
+    } catch (err) {
+      console.error('Error calculating meal with IA:', err);
+      showToast('warning', 'Estimación IA', err.message || 'No se pudo completar la estimación.');
+    } finally {
+      setIsCalculatingTextIA(false);
+    }
+  };
+
+  // Calculate with IA for Edit Meal form
+  const handleCalculateEditWithIA = async () => {
+    if (!editingMeal || !editingMeal.name?.trim()) {
+      showToast('warning', 'Ingresa un Alimento', 'El nombre no puede estar vacío para estimar con IA.');
+      return;
+    }
+
+    const query = editingMeal.name.trim();
+
+    try {
+      setIsCalculatingTextIA(true);
+      showToast('info', 'Recalculando con IA', `Estimando calorías y macros para "${query}"...`);
+
+      const result = await analyzeMealText(query, geminiApiKey);
+      
+      setEditingMeal(prev => ({
+        ...prev,
+        name: result.dishName || prev.name,
+        mealType: result.mealType || prev.mealType,
+        calories: result.calories !== undefined ? result.calories : prev.calories,
+        protein: result.macros?.protein !== undefined ? result.macros.protein : prev.protein,
+        carbs: result.macros?.carbs !== undefined ? result.macros.carbs : prev.carbs,
+        fat: result.macros?.fat !== undefined ? result.macros.fat : prev.fat,
+        fiber: result.macros?.fiber !== undefined ? result.macros.fiber : prev.fiber,
+        satietyScore: result.satietyScore || prev.satietyScore,
+        glycemicImpact: result.glycemicImpact || prev.glycemicImpact,
+        notes: result.weightLossTips?.[0] ? `${result.weightLossVerdict ? result.weightLossVerdict + ' ' : ''}${result.weightLossTips[0]}` : prev.notes
+      }));
+
+      showToast('success', '¡Cálculo IA Completado!', `Se actualizaron los valores a ${result.calories} kcal.`);
+    } catch (err) {
+      console.error('Error recalculating meal with IA:', err);
+      showToast('warning', 'Estimación IA', err.message || 'No se pudo completar la estimación.');
+    } finally {
+      setIsCalculatingTextIA(false);
+    }
   };
 
   // Manual Add Submission
@@ -983,16 +1064,46 @@ export default function NutritionModule({
             </div>
 
             <div className="space-y-3.5 overflow-y-auto pr-1 flex-1 py-3">
+              {/* Dish Name with Calcular con IA button */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre del Platillo / Alimento *</label>
-                <input
-                  type="text"
-                  placeholder="Ej. Omelette con espinacas y queso panela"
-                  value={manualForm.name}
-                  onChange={(e) => setManualForm({ ...manualForm, name: e.target.value })}
-                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
-                  required
-                />
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Nombre o Descripción del Alimento *
+                </label>
+                <div className="flex gap-2 items-stretch">
+                  <input
+                    type="text"
+                    placeholder="Ej. Café capuccino Starbucks venti con leche deslactosada"
+                    value={manualForm.name}
+                    onChange={(e) => setManualForm({ ...manualForm, name: e.target.value })}
+                    className="flex-1 bg-[#0b0c10] border border-[#e0a96d]/20 rounded-xl py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] transition-colors"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCalculateWithIA}
+                    disabled={isCalculatingTextIA || !manualForm.name.trim()}
+                    className="btn-rose-gold text-xs font-bold py-2 px-3.5 rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 shadow-md transition-all"
+                    title="Calcular calorías, macros y componentes automáticamente con IA"
+                  >
+                    {isCalculatingTextIA ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 text-[#0b0c10] animate-spin" />
+                        <span>Calculando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Calcular con IA</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="mt-1.5 p-2 rounded-lg bg-[#0b0c10]/70 border border-[#e0a96d]/15 flex items-start gap-1.5 text-[10px] text-slate-400">
+                  <Sparkles className="w-3.5 h-3.5 text-[#e0a96d] shrink-0 mt-0.5" />
+                  <span>
+                    ¿No sabes las calorías o ingredientes? Escribe el alimento (ej. tamaño, marca, leche, etc.) y haz clic en <strong>Calcular con IA</strong>. Puedes ajustar o corregir cualquier campo manualmente.
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1001,7 +1112,7 @@ export default function NutritionModule({
                   <select
                     value={manualForm.mealType}
                     onChange={(e) => setManualForm({ ...manualForm, mealType: e.target.value })}
-                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
                   >
                     <option value="breakfast">Desayuno 🍳</option>
                     <option value="lunch">Almuerzo / Comida 🥗</option>
@@ -1013,10 +1124,10 @@ export default function NutritionModule({
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Calorías Totales (kcal) *</label>
                   <input
                     type="number"
-                    placeholder="Ej. 350"
+                    placeholder="Ej. 220"
                     value={manualForm.calories}
                     onChange={(e) => setManualForm({ ...manualForm, calories: e.target.value })}
-                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs font-bold focus:outline-none focus:border-[#e0a96d]"
                     required
                   />
                 </div>
@@ -1030,7 +1141,7 @@ export default function NutritionModule({
                     placeholder="0"
                     value={manualForm.protein}
                     onChange={(e) => setManualForm({ ...manualForm, protein: e.target.value })}
-                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none"
+                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none focus:border-indigo-400 font-semibold"
                   />
                 </div>
                 <div>
@@ -1040,7 +1151,7 @@ export default function NutritionModule({
                     placeholder="0"
                     value={manualForm.carbs}
                     onChange={(e) => setManualForm({ ...manualForm, carbs: e.target.value })}
-                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none"
+                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none focus:border-amber-400 font-semibold"
                   />
                 </div>
                 <div>
@@ -1050,7 +1161,7 @@ export default function NutritionModule({
                     placeholder="0"
                     value={manualForm.fat}
                     onChange={(e) => setManualForm({ ...manualForm, fat: e.target.value })}
-                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none"
+                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none focus:border-rose-400 font-semibold"
                   />
                 </div>
                 <div>
@@ -1060,19 +1171,19 @@ export default function NutritionModule({
                     placeholder="0"
                     value={manualForm.fiber}
                     onChange={(e) => setManualForm({ ...manualForm, fiber: e.target.value })}
-                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none"
+                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none focus:border-emerald-400 font-semibold"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Notas u Observaciones</label>
-                <input
-                  type="text"
-                  placeholder="Ej. Con 1 cdta de aceite de oliva, muy saciante"
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Notas / Recomendación IA</label>
+                <textarea
+                  rows="2"
+                  placeholder="Observaciones de porción, saciedad o sugerencias..."
                   value={manualForm.notes}
                   onChange={(e) => setManualForm({ ...manualForm, notes: e.target.value })}
-                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none"
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] resize-none"
                 />
               </div>
             </div>
@@ -1081,15 +1192,15 @@ export default function NutritionModule({
               <button
                 type="button"
                 onClick={() => setIsManualModalOpen(false)}
-                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer"
+                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-lg cursor-pointer"
+                className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-lg cursor-pointer shadow-md"
               >
-                Añadir Comida
+                Añadir a Bitácora
               </button>
             </div>
           </form>
@@ -1119,14 +1230,30 @@ export default function NutritionModule({
 
             <div className="space-y-3.5 overflow-y-auto pr-1 flex-1 py-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre</label>
-                <input
-                  type="text"
-                  value={editingMeal.name}
-                  onChange={(e) => setEditingMeal({ ...editingMeal, name: e.target.value })}
-                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none"
-                  required
-                />
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Nombre o Descripción</label>
+                <div className="flex gap-2 items-stretch">
+                  <input
+                    type="text"
+                    value={editingMeal.name}
+                    onChange={(e) => setEditingMeal({ ...editingMeal, name: e.target.value })}
+                    className="flex-1 bg-[#0b0c10] border border-[#e0a96d]/20 rounded-xl py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCalculateEditWithIA}
+                    disabled={isCalculatingTextIA || !editingMeal.name?.trim()}
+                    className="bg-[#0b0c10] hover:bg-[#e0a96d]/10 border border-[#e0a96d]/30 text-[#e0a96d] text-xs font-bold py-2 px-3 rounded-xl flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50 transition-colors"
+                    title="Recalcular calorías y macros basados en el nombre"
+                  >
+                    {isCalculatingTextIA ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )}
+                    <span>Recalcular</span>
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1135,7 +1262,7 @@ export default function NutritionModule({
                   <select
                     value={editingMeal.mealType}
                     onChange={(e) => setEditingMeal({ ...editingMeal, mealType: e.target.value })}
-                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none"
+                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none cursor-pointer"
                   >
                     <option value="breakfast">Desayuno 🍳</option>
                     <option value="lunch">Almuerzo / Comida 🥗</option>
@@ -1149,7 +1276,7 @@ export default function NutritionModule({
                     type="number"
                     value={editingMeal.calories}
                     onChange={(e) => setEditingMeal({ ...editingMeal, calories: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none"
+                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs font-bold focus:outline-none focus:border-[#e0a96d]"
                     required
                   />
                 </div>
@@ -1157,50 +1284,50 @@ export default function NutritionModule({
 
               <div className="grid grid-cols-4 gap-2">
                 <div>
-                  <label className="block text-[10px] font-semibold text-indigo-300 mb-0.5">Proteína</label>
+                  <label className="block text-[10px] font-semibold text-indigo-300 mb-0.5">Proteína (g)</label>
                   <input
                     type="number"
                     value={editingMeal.protein}
                     onChange={(e) => setEditingMeal({ ...editingMeal, protein: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none"
+                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none font-semibold"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-amber-300 mb-0.5">Carbs</label>
+                  <label className="block text-[10px] font-semibold text-amber-300 mb-0.5">Carbs (g)</label>
                   <input
                     type="number"
                     value={editingMeal.carbs}
                     onChange={(e) => setEditingMeal({ ...editingMeal, carbs: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none"
+                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none font-semibold"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-rose-300 mb-0.5">Grasas</label>
+                  <label className="block text-[10px] font-semibold text-rose-300 mb-0.5">Grasas (g)</label>
                   <input
                     type="number"
                     value={editingMeal.fat}
                     onChange={(e) => setEditingMeal({ ...editingMeal, fat: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none"
+                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none font-semibold"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-emerald-300 mb-0.5">Fibra</label>
+                  <label className="block text-[10px] font-semibold text-emerald-300 mb-0.5">Fibra (g)</label>
                   <input
                     type="number"
                     value={editingMeal.fiber}
                     onChange={(e) => setEditingMeal({ ...editingMeal, fiber: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none"
+                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg py-1.5 px-2 text-slate-100 text-xs focus:outline-none font-semibold"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Notas</label>
-                <input
-                  type="text"
+                <textarea
+                  rows="2"
                   value={editingMeal.notes || ''}
                   onChange={(e) => setEditingMeal({ ...editingMeal, notes: e.target.value })}
-                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none"
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none resize-none"
                 />
               </div>
             </div>

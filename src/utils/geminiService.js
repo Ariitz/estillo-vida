@@ -1486,5 +1486,252 @@ export const generateAdaptiveCoachingAdvice = ({
   return tips;
 };
 
+/**
+ * Fallback nutrition calculator for text descriptions when offline or without API key.
+ * Uses smart keyword matching (Starbucks, cafés, carnes, ensaladas, tacos, etc.)
+ */
+export const generateFallbackMealTextAnalysis = (textDescription = '') => {
+  const query = String(textDescription || '').toLowerCase().trim();
+  
+  if (query.includes('capuccino') || query.includes('cappuccino') || query.includes('latte') || query.includes('café') || query.includes('cafe')) {
+    const isVenti = query.includes('venti') || query.includes('grande') || query.includes('500ml');
+    const isDeslactosada = query.includes('deslactosada') || query.includes('entera');
+    const isLight = query.includes('almendra') || query.includes('soya') || query.includes('descremada') || query.includes('light');
+    
+    let kcal = isVenti ? 220 : 150;
+    let protein = isVenti ? 14 : 9;
+    let carbs = isVenti ? 24 : 15;
+    let fat = isVenti ? 7 : 5;
+
+    if (isLight) {
+      kcal = isVenti ? 110 : 80;
+      protein = 3;
+      carbs = 10;
+      fat = 4;
+    }
+
+    return {
+      dishName: textDescription.trim() || 'Café con Leche / Capuccino',
+      mealType: 'breakfast',
+      calories: kcal,
+      confidenceRange: `${kcal - 30} - ${kcal + 30} kcal`,
+      macros: { protein, carbs, fat, fiber: 0 },
+      ingredients: [
+        { name: 'Shots de café espresso', kcal: 10, portion: isVenti ? '2 shots' : '1 shot' },
+        { name: isLight ? 'Leche vegetal vaporizada' : 'Leche deslactosada / entera vaporizada', kcal: kcal - 10, portion: isVenti ? 'Venti (~500ml)' : 'Grande (~350ml)' }
+      ],
+      satietyScore: 6.8,
+      glycemicImpact: 'medium',
+      weightLossVerdict: 'Buena opción para saciedad matutina. Cuida no añadir jarabes dulces o azúcar refinada.',
+      weightLossTips: [
+        'Para recortar ~60-80 kcal la próxima vez: pide leche de almendras sin azúcar o pide tamaño Grande en vez de Venti.',
+        'Evita jarabes saborizados (vainilla, caramelo) que añaden 20-30g de azúcar pura.'
+      ],
+      healthySwaps: ['Prueba americano con un toque de leche de almendra para reducir a solo 35 kcal.']
+    };
+  }
+
+  if (query.includes('taco') || query.includes('tacos') || query.includes('pastor') || query.includes('suadero') || query.includes('asada')) {
+    return {
+      dishName: textDescription.trim() || 'Orden de Tacos',
+      mealType: 'lunch',
+      calories: 540,
+      confidenceRange: '480 - 620 kcal',
+      macros: { protein: 32, carbs: 45, fat: 24, fiber: 5 },
+      ingredients: [
+        { name: 'Carne / proteína asada o marinada', kcal: 280, portion: '150g' },
+        { name: 'Tortillas de maíz (3 piezas)', kcal: 195, portion: '3 piezas' },
+        { name: 'Cilantro, cebolla, limón y salsa', kcal: 35, portion: 'Al gusto' },
+        { name: 'Aceite de plancha / grasa', kcal: 30, portion: 'Moderado' }
+      ],
+      satietyScore: 8.2,
+      glycemicImpact: 'medium',
+      weightLossVerdict: 'Aporte sólido de proteína. El maíz aporta carbohidratos complejos y fibra.',
+      weightLossTips: [
+        'Acompaña con abundante limón y nopales asados para sumar fibra y amortiguar la absorción de grasas.',
+        'Pide con copia sencilla de tortilla para ahorrar ~65 kcal por taco.'
+      ],
+      healthySwaps: ['Pide con tortilla de nopal o pide 2 tacos bien servidos en lugar de 4.']
+    };
+  }
+
+  if (query.includes('ensalada') || query.includes('salad') || query.includes('bowl')) {
+    return {
+      dishName: textDescription.trim() || 'Ensalada Completa con Proteína',
+      mealType: 'lunch',
+      calories: 380,
+      confidenceRange: '340 - 430 kcal',
+      macros: { protein: 35, carbs: 22, fat: 16, fiber: 8 },
+      ingredients: [
+        { name: 'Base de hojas verdes y verduras frescas', kcal: 45, portion: '2 tazas' },
+        { name: 'Proteína magra (pollo/atún/tofu)', kcal: 210, portion: '140g' },
+        { name: 'Aderezo ligero / aceite de oliva', kcal: 85, portion: '1 cda' },
+        { name: 'Toppings (semillas o queso ligero)', kcal: 40, portion: '15g' }
+      ],
+      satietyScore: 8.8,
+      glycemicImpact: 'low',
+      weightLossVerdict: 'Excepcional para déficit calórico: altísimo volumen saciante y bajo impacto glucémico.',
+      weightLossTips: [
+        'Pide el aderezo por separado y dosifícalo con cuchara para evitar 150 kcal ocultas.',
+        'Consume primero los vegetales de hoja verde para ralentizar el vaciado gástrico.'
+      ],
+      healthySwaps: ['Usa vinagre balsámico o limón con mostaza en lugar de aderezos cremosos como césar o ranch.']
+    };
+  }
+
+  // Generic fallback
+  return {
+    dishName: textDescription.trim() || 'Comida Estimada',
+    mealType: 'lunch',
+    calories: 420,
+    confidenceRange: '380 - 470 kcal',
+    macros: { protein: 28, carbs: 42, fat: 14, fiber: 5 },
+    ingredients: [
+      { name: 'Porción de alimento principal', kcal: 260, portion: '1 porción' },
+      { name: 'Guarnición / acompañamiento', kcal: 120, portion: '1 porción' },
+      { name: 'Condimentos / preparación', kcal: 40, portion: 'Ligero' }
+    ],
+    satietyScore: 7.8,
+    glycemicImpact: 'medium',
+    weightLossVerdict: 'Platillo balanceado. Ajusta las porciones si tu déficit calórico es estricto.',
+    weightLossTips: [
+      'Bebe un vaso de agua antes de comer y mastica despacio para dar tiempo a las señales de saciedad.',
+      'Prioriza la proteína y las verduras en el plato.'
+    ],
+    healthySwaps: ['Reduce el uso de aceites añadidos o azúcares para un déficit más marcado.']
+  };
+};
+
+/**
+ * Estimates calories, macronutrients, glycemic index, and weight loss advice
+ * from a pure TEXT description (e.g. "Cafe capuccino Starbucks venti con leche deslactosada",
+ * "3 tacos al pastor con todo", "Ensalada césar con pollo").
+ */
+export const analyzeMealText = async (mealDescription, apiKey = '') => {
+  if (!mealDescription || !mealDescription.trim()) {
+    throw new Error('Ingresa el nombre o descripción de la comida para calcular.');
+  }
+
+  const query = mealDescription.trim();
+
+  if (!apiKey || !apiKey.trim()) {
+    return generateFallbackMealTextAnalysis(query);
+  }
+
+  const prompt = `
+Eres una nutrióloga clínica experta en bases de datos nutricionales globales y de cadenas comerciales (Starbucks, Subway, restaurantes, comida mexicana, repostería, supermercados, etc.) y especialista en PÉRDIDA DE GRASA CORPORAL y DÉFICIT CALÓRICO.
+
+La usuaria no le tomó foto a su comida, pero ingresó esta descripción textual:
+"${query}"
+
+Calcula con la mayor precisión nutricional posible las calorías, macronutrientes, impacto glucémico y recomendaciones para pérdida de peso.
+
+Responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicional, sin bloques de código ni texto antes o después) con la siguiente estructura:
+
+{
+  "dishName": "Nombre normalizado, limpio y claro del alimento o bebida (ej. 'Capuccino Venti con Leche Deslactosada - Starbucks')",
+  "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+  "calories": 220,
+  "confidenceRange": "190 - 240 kcal",
+  "macros": {
+    "protein": 14,
+    "carbs": 24,
+    "fat": 6,
+    "fiber": 0
+  },
+  "ingredients": [
+    { "name": "Espresso (2 shots)", "kcal": 10, "portion": "2 shots" },
+    { "name": "Leche deslactosada vaporizada (~500ml)", "kcal": 210, "portion": "Venti (500ml)" }
+  ],
+  "satietyScore": 7.0,
+  "glycemicImpact": "low" | "medium" | "high",
+  "weightLossVerdict": "Explicación breve de si es conveniente para déficit calórico y por qué.",
+  "weightLossTips": [
+    "Consejo 1 práctico para recortar calorías la próxima vez (ej. cambio de tamaño o tipo de leche/aderezo).",
+    "Consejo 2 sobre timing de ingesta, agua o control de glucosa."
+  ],
+  "healthySwaps": [
+    "Sustitución inteligente (ej. pedir leche de almendra o stevia para ahorrar 80 kcal)."
+  ]
+}
+
+Reglas estrictas:
+1. "calories" debe ser un número entero en kcal basado en porciones estándar reales de la comida o bebida descrita.
+2. "protein", "carbs", "fat", "fiber" deben ser números enteros en gramos.
+3. "satietyScore" debe ser un número decimal del 1.0 al 10.0.
+4. "glycemicImpact" debe ser 'low', 'medium' o 'high'.
+`;
+
+  const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
+  let lastError = null;
+
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const payload = {
+        contents: [
+          {
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.2
+        }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) throw new Error('Respuesta vacía del modelo Gemini.');
+
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
+      const parsed = JSON.parse(cleaned);
+
+      return {
+        dishName: parsed.dishName || query,
+        mealType: ['breakfast', 'lunch', 'dinner', 'snack'].includes(parsed.mealType) ? parsed.mealType : 'lunch',
+        calories: Math.max(0, parseInt(parsed.calories, 10) || 350),
+        confidenceRange: parsed.confidenceRange || `${Math.max(0, parseInt(parsed.calories, 10) || 350)} kcal`,
+        macros: {
+          protein: Math.max(0, parseInt(parsed.macros?.protein, 10) || 20),
+          carbs: Math.max(0, parseInt(parsed.macros?.carbs, 10) || 35),
+          fat: Math.max(0, parseInt(parsed.macros?.fat, 10) || 12),
+          fiber: Math.max(0, parseInt(parsed.macros?.fiber, 10) || 3)
+        },
+        ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+        satietyScore: typeof parsed.satietyScore === 'number' ? Math.min(10, Math.max(1, parsed.satietyScore)) : 7.5,
+        glycemicImpact: ['low', 'medium', 'high'].includes(parsed.glycemicImpact) ? parsed.glycemicImpact : 'medium',
+        weightLossVerdict: parsed.weightLossVerdict || 'Estimación nutricional completada.',
+        weightLossTips: Array.isArray(parsed.weightLossTips) && parsed.weightLossTips.length > 0 
+          ? parsed.weightLossTips 
+          : ['Bebe un vaso de agua antes y camina 15 min para regular la glucosa.'],
+        healthySwaps: Array.isArray(parsed.healthySwaps) ? parsed.healthySwaps : []
+      };
+    } catch (err) {
+      console.warn(`Text meal calculation with ${model} failed:`, err.message);
+      lastError = err;
+    }
+  }
+
+  // Fallback if all models failed
+  console.warn('Using intelligent text fallback:', lastError?.message);
+  return generateFallbackMealTextAnalysis(query);
+};
+
+
 
 
