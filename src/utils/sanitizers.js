@@ -362,3 +362,128 @@ export const sanitizeDailyNutritionLogList = (list) => {
   return list.map(sanitizeDailyNutritionLog).filter(Boolean);
 };
 
+// 13. Aromatherapy Oils & Inventory (Boticario dōTERRA / DIY)
+export const sanitizeAromatherapyOil = (oil) => {
+  if (!oil || typeof oil !== 'object') return null;
+
+  const id = safeString(oil.id || 'oil-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4));
+  const name = safeString(oil.name || oil.trademarkName || 'Aceite Esencial');
+  const trademarkName = safeString(oil.trademarkName || name);
+  const botanicalName = safeString(oil.botanicalName || '');
+  const brand = safeString(oil.brand || 'dōTERRA');
+  const type = ['single', 'blend', 'custom'].includes(oil.type) ? oil.type : 'single';
+  const category = safeString(oil.category || 'mood');
+  const categoryLabel = safeString(oil.categoryLabel || 'Bienestar');
+  const aroma = safeString(oil.aroma || 'Fresco y botánico');
+
+  const methods = Array.isArray(oil.methods) 
+    ? oil.methods.map(m => safeString(m).toUpperCase()).filter(m => ['A', 'T', 'I'].includes(m))
+    : ['A', 'T'];
+
+  const sensitivity = ['N', 'D', 'S'].includes(oil.sensitivity) ? oil.sensitivity : 'N';
+  const photosensitive = Boolean(oil.photosensitive);
+  const emotionalProperty = safeString(oil.emotionalProperty || '');
+  
+  const keyBenefits = Array.isArray(oil.keyBenefits)
+    ? oil.keyBenefits.map(b => safeString(b)).filter(Boolean)
+    : (typeof oil.keyBenefits === 'string' && oil.keyBenefits ? [oil.keyBenefits] : []);
+
+  const inInventory = Boolean(oil.inInventory ?? oil.defaultInInventory ?? false);
+  const level = safeString(oil.level || '100%');
+  const notes = safeString(oil.notes || '');
+
+  return {
+    id,
+    name,
+    trademarkName,
+    botanicalName,
+    brand,
+    type,
+    category,
+    categoryLabel,
+    aroma,
+    methods: methods.length > 0 ? methods : ['A', 'T'],
+    sensitivity,
+    photosensitive,
+    emotionalProperty,
+    keyBenefits,
+    description: safeString(oil.description || ''),
+    inInventory,
+    level,
+    notes,
+    isCustom: Boolean(oil.isCustom)
+  };
+};
+
+export const sanitizeAromatherapyInventory = (list) => {
+  if (!Array.isArray(list)) return [];
+  return list.map(sanitizeAromatherapyOil).filter(Boolean);
+};
+
+// 14. Aromatherapy Blends & Diffuser Recipes (Recetario y Sinergias)
+export const sanitizeAromatherapyBlend = (blend) => {
+  if (!blend || typeof blend !== 'object') return null;
+
+  const id = safeString(blend.id || 'blend-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4));
+  const name = safeString(blend.name || 'Sinergia Aromática');
+  const category = safeString(blend.category || 'mood');
+  const categoryLabel = safeString(blend.categoryLabel || 'Bienestar');
+  const type = ['diffuser', 'rollon', 'spray', 'bath'].includes(blend.type) ? blend.type : 'diffuser';
+  const targetVibe = safeString(blend.targetVibe || '');
+
+  const ingredients = (Array.isArray(blend.ingredients) ? blend.ingredients : [])
+    .filter(i => i && typeof i === 'object')
+    .map(i => ({
+      oilId: safeString(i.oilId || i.id || ''),
+      oilName: safeString(i.oilName || i.name || 'Aceite'),
+      drops: Math.max(1, Math.round(safeNumber(i.drops, 2)))
+    }));
+
+  const totalDrops = ingredients.reduce((sum, item) => sum + item.drops, 0);
+
+  return {
+    id,
+    name,
+    category,
+    categoryLabel,
+    type,
+    targetVibe,
+    ingredients,
+    totalDrops: totalDrops || safeNumber(blend.totalDrops, 8),
+    carrierMl: safeNumber(blend.carrierMl, type === 'rollon' ? 10 : 0),
+    bestTime: safeString(blend.bestTime || 'Cualquier momento del día'),
+    notes: safeString(blend.notes || ''),
+    isCustom: Boolean(blend.isCustom),
+    createdAt: safeString(blend.createdAt || new Date().toISOString())
+  };
+};
+
+export const sanitizeAromatherapyBlendList = (list) => {
+  if (!Array.isArray(list)) return [];
+  return list.map(sanitizeAromatherapyBlend).filter(Boolean);
+};
+
+// 15. Aromatherapy Mood Logs (Historial de Estados de Ánimo & Alquimia)
+export const sanitizeAromatherapyMoodLog = (log) => {
+  if (!log || typeof log !== 'object') return null;
+
+  return {
+    id: safeString(log.id || 'mood-' + Date.now()),
+    date: safeString(log.date || new Date().toISOString().split('T')[0]),
+    time: safeString(log.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+    moodInput: safeString(log.moodInput || log.label || 'Balance General'),
+    selectedArchetype: safeString(log.selectedArchetype || ''),
+    recommendedBlendName: safeString(log.recommendedBlendName || ''),
+    diffuserFormula: safeString(log.diffuserFormula || ''),
+    rollonFormula: safeString(log.rollonFormula || ''),
+    affirmation: safeString(log.affirmation || ''),
+    rationale: safeString(log.rationale || '')
+  };
+};
+
+export const sanitizeAromatherapyMoodLogList = (list) => {
+  if (!Array.isArray(list)) return [];
+  return list.map(sanitizeAromatherapyMoodLog).filter(Boolean);
+};
+
+

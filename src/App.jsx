@@ -23,7 +23,8 @@ import {
   MessageSquare,
   Utensils,
   Flame,
-  Scale
+  Scale,
+  Droplets
 } from 'lucide-react';
 
 // Firebase Client SDK
@@ -33,6 +34,7 @@ import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestor
 // Import modules
 import ScheduleModule from './components/ScheduleModule';
 import NutritionModule from './components/NutritionModule';
+import AromatherapyModule from './components/AromatherapyModule';
 import PriceComparatorModule from './components/PriceComparatorModule';
 import ExperiencesModule from './components/ExperiencesModule';
 import WardrobeModule from './components/WardrobeModule';
@@ -56,7 +58,9 @@ import {
   sanitizeTimerList,
   sanitizeNutritionList,
   sanitizeNutritionProfile,
-  sanitizeDailyNutritionLogList
+  sanitizeDailyNutritionLogList,
+  sanitizeAromatherapyInventory,
+  sanitizeAromatherapyBlendList
 } from './utils/sanitizers';
 
 // ==========================================
@@ -466,6 +470,23 @@ export default function App() {
     sanitizeDailyNutritionLogList(getSavedArray('aura-nutrition-logs', []))
   );
 
+  const [userOils, setUserOils] = useState(() =>
+    sanitizeAromatherapyInventory(getSavedArray('aura-user-oils', []))
+  );
+
+  const [customBlends, setCustomBlends] = useState(() =>
+    sanitizeAromatherapyBlendList(getSavedArray('aura-custom-blends', []))
+  );
+
+  // Sync aromatherapy to localStorage
+  useEffect(() => {
+    localStorage.setItem('aura-user-oils', JSON.stringify(userOils));
+  }, [userOils]);
+
+  useEffect(() => {
+    localStorage.setItem('aura-custom-blends', JSON.stringify(customBlends));
+  }, [customBlends]);
+
   // Sync nutrition to localStorage
   useEffect(() => {
     localStorage.setItem('aura-nutrition-meals', JSON.stringify(nutritionMeals));
@@ -593,6 +614,8 @@ export default function App() {
       nutritionMeals: nutritionMeals || [],
       nutritionProfile: nutritionProfile || {},
       dailyNutritionLogs: dailyNutritionLogs || [],
+      userOils: userOils || [],
+      customBlends: customBlends || [],
       geminiApiKey: (geminiApiKey || localStorage.getItem('aura-gemini-key') || '').trim(),
       lastUpdated: Date.now()
     };
@@ -674,6 +697,16 @@ export default function App() {
       const sanitized = sanitizeDailyNutritionLogList(data.dailyNutritionLogs);
       setDailyNutritionLogs(sanitized);
       localStorage.setItem('aura-nutrition-logs', JSON.stringify(sanitized));
+    }
+    if (Array.isArray(data.userOils)) {
+      const sanitized = sanitizeAromatherapyInventory(data.userOils);
+      setUserOils(sanitized);
+      localStorage.setItem('aura-user-oils', JSON.stringify(sanitized));
+    }
+    if (Array.isArray(data.customBlends)) {
+      const sanitized = sanitizeAromatherapyBlendList(data.customBlends);
+      setCustomBlends(sanitized);
+      localStorage.setItem('aura-custom-blends', JSON.stringify(sanitized));
     }
     if (typeof data.geminiApiKey === 'string' && data.geminiApiKey.trim()) {
       setGeminiApiKey(data.geminiApiKey.trim());
@@ -817,6 +850,11 @@ export default function App() {
     customOutfits,
     customManuals,
     customTimers,
+    nutritionMeals,
+    nutritionProfile,
+    dailyNutritionLogs,
+    userOils,
+    customBlends,
     geminiApiKey
   ]);
 
@@ -887,6 +925,7 @@ export default function App() {
   const moduleTitles = {
     schedule: 'Rutina Diaria & Cronograma',
     nutrition: 'Nutrición, Scanner Calórico IA & Control de Peso',
+    aromatherapy: 'Aromaterapia & Boticario dōTERRA con IA',
     copilot: 'AURA Copilot & Conversor de Rutinas IA',
     health: 'Tracker de Dolor, Postura & Diagnóstico IA',
     comparator: 'Comparador de Precios & Alacena',
@@ -901,6 +940,7 @@ export default function App() {
   const menuItems = [
     { id: 'schedule', label: 'Rutina Diaria', icon: <Calendar className="w-5 h-5" /> },
     { id: 'nutrition', label: 'Nutrición & Calorías IA', icon: <Utensils className="w-5 h-5 text-[#e0a96d]" /> },
+    { id: 'aromatherapy', label: 'Aromaterapia & Boticario', icon: <Droplets className="w-5 h-5 text-[#e0a96d]" /> },
     { id: 'copilot', label: 'Chat Copilot IA', icon: <Bot className="w-5 h-5 text-[#e0a96d]" /> },
     { id: 'health', label: 'Dolor & Salud IA', icon: <HeartPulse className="w-5 h-5" /> },
     { id: 'comparator', label: 'Comparador de Precios', icon: <Tag className="w-5 h-5" /> },
@@ -1137,6 +1177,19 @@ export default function App() {
                 waterIntake={waterIntake}
                 setWaterIntake={setWaterIntake}
                 schedule={schedule}
+                geminiApiKey={geminiApiKey}
+                showToast={showToast}
+              />
+            </ErrorBoundary>
+          )}
+
+          {activeModule === 'aromatherapy' && (
+            <ErrorBoundary>
+              <AromatherapyModule
+                userOils={userOils}
+                setUserOils={setUserOils}
+                customBlends={customBlends}
+                setCustomBlends={setCustomBlends}
                 geminiApiKey={geminiApiKey}
                 showToast={showToast}
               />
