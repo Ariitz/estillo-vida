@@ -29,10 +29,14 @@ import {
   RefreshCw,
   Loader2,
   Camera,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Save,
+  Bookmark,
+  FileText
 } from 'lucide-react';
 import { analyzeHealthSymptomWithGemini, generateFallbackHealthTriage, compressImage, analyzeHealthImage } from '../utils/geminiService';
 import { sanitizeHealthSymptomList } from '../utils/sanitizers';
+import { getLocalDateString } from '../utils/dateUtils';
 
 export default function HealthTrackerModule({
   healthSymptoms = [],
@@ -54,7 +58,7 @@ export default function HealthTrackerModule({
   const [editingSymptom, setEditingSymptom] = useState(null);
   const [isUpdatingSymptom, setIsUpdatingSymptom] = useState(false);
   const [reAnalyzeOnEdit, setReAnalyzeOnEdit] = useState(true);
-  const [selectedTriageSymptom, setSelectedTriageSymptom] = useState(null);
+  const [selectedTriageModal, setSelectedTriageModal] = useState(null); // { symptom, triage, isPending }
   const [analyzingId, setAnalyzingId] = useState(null);
   const [copiedQuestions, setCopiedQuestions] = useState(false);
 
@@ -102,14 +106,14 @@ export default function HealthTrackerModule({
 
   // Body scroll lock when any modal is open
   useEffect(() => {
-    if (isAddingSymptom || editingSymptom || selectedTriageSymptom) {
+    if (isAddingSymptom || editingSymptom || selectedTriageModal) {
       const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => {
         document.body.style.overflow = prevOverflow;
       };
     }
-  }, [isAddingSymptom, editingSymptom, selectedTriageSymptom]);
+  }, [isAddingSymptom, editingSymptom, selectedTriageModal]);
 
   const categories = [
     { id: 'all', label: 'Todos los Registros', icon: '📋' },
@@ -244,38 +248,72 @@ export default function HealthTrackerModule({
     }
   };
 
-  // Trigger AI Analysis for a symptom
+  // Trigger AI Analysis for a symptom and open review modal
   const handleAnalyzeSymptom = async (symptom) => {
+    if (!symptom) return;
     setAnalyzingId(symptom.id);
     try {
       showToast('info', 'Analizando con IA', `Evaluando especialista y ergonomía para "${symptom.title}"...`);
-      const triage = await analyzeHealthSymptomWithGemini(symptom, geminiApiKey);
-      
-      setHealthSymptoms(prev => (Array.isArray(prev) ? prev : []).map((item) => {
-        if (item && item.id === symptom.id) {
-          return {
-            ...item,
-            aiTriage: triage,
-            lastAnalyzedDate: new Date().toISOString().split('T')[0]
-          };
-        }
-        return item;
-      }));
-      showToast('success', 'Diagnóstico Listo', `Especialista recomendado: ${triage.specialist}`);
-
-      // If modal is currently inspecting this symptom, update it
-      if (selectedTriageSymptom?.id === symptom.id) {
-        setSelectedTriageSymptom({
-          ...selectedTriageSymptom,
-          aiTriage: triage,
-          lastAnalyzedDate: new Date().toISOString().split('T')[0]
-        });
+      let triage;
+      try {
+        triage = await analyzeHealthSymptomWithGemini(symptom, geminiApiKey);
+      } catch (geminiErr) {
+        console.warn("Gemini API error, using intelligent clinical fallback:", geminiErr);
+        triage = generateFallbackHealthTriage(symptom);
       }
+      
+      // Open the interactive review modal so the user can read the full orientation,
+      // switch tabs/windows without losing it, and decide whether to SAVE or DISCARD it.
+      setSelectedTriageModal({
+        symptom,
+        triage,
+        isPending: true
+      });
+      showToast('success', 'Orientación Médica Lista', `Especialista sugerido: ${triage.specialist}. Revisa y decide si guardarlo.`);
     } catch (err) {
       console.error("AI triage error:", err);
       showToast('error', 'Error de Análisis', 'No se pudo completar el análisis: ' + err.message);
     } finally {
       setAnalyzingId(null);
+    }
+  };
+
+  const handleConfirmSaveTriage = (symptomId, triage) => {
+    setHealthSymptoms(prev => (Array.isArray(prev) ? prev : []).map((item) => {
+      if (item && item.id === symptomId) {
+        return {
+          ...item,
+          aiTriage: triage,
+          lastAnalyzedDate: getLocalDateString()
+        };
+      }
+      return item;
+    }));
+    showToast('success', '¡Análisis Guardado!', 'Se guardó la orientación del especialista en tu síntoma.');
+    setSelectedTriageModal(prev => prev ? { ...prev, isPending: false } : null);
+  };
+
+  const handleDiscardTriage = () => {
+    setSelectedTriageModal(null);
+    showToast('info', 'Análisis Descartado', 'No se guardaron cambios en la ficha.');
+  };
+
+  const handleRemoveTriage = (symptomId, title) => {
+    if (window.confirm(`¿Deseas quitar el análisis de especialista de "${title}"? Podrás volver a generarlo con IA cuando quieras.`)) {
+      setHealthSymptoms(prev => (Array.isArray(prev) ? prev : []).map((item) => {
+        if (item && item.id === symptomId) {
+          return {
+            ...item,
+            aiTriage: null,
+            lastAnalyzedDate: null
+          };
+        }
+        return item;
+      }));
+      if (selectedTriageModal?.symptom?.id === symptomId) {
+        setSelectedTriageModal(null);
+      }
+      showToast('info', 'Análisis Removido', `Se quitó el análisis de "${title}".`);
     }
   };
 
@@ -300,7 +338,7 @@ export default function HealthTrackerModule({
       frequency: newFrequency,
       notes: newNotes.trim(),
       status: 'active', // 'active' | 'treatment' | 'resolved'
-      createdAt: new Date().toISOString().split('T')[0],
+      createdAt: getLocalDateString(),
       aiTriage: null
     };
 
@@ -310,7 +348,7 @@ export default function HealthTrackerModule({
         try {
           const triage = await analyzeHealthSymptomWithGemini(newSymptomObj, geminiApiKey);
           newSymptomObj.aiTriage = triage;
-          newSymptomObj.lastAnalyzedDate = new Date().toISOString().split('T')[0];
+          newSymptomObj.lastAnalyzedDate = getLocalDateString();
         } catch (err) {
           console.warn("Auto-triage fallback triggered:", err);
           newSymptomObj.aiTriage = generateFallbackHealthTriage(newSymptomObj);
@@ -353,7 +391,7 @@ export default function HealthTrackerModule({
         try {
           const triage = await analyzeHealthSymptomWithGemini(updatedSymptom, geminiApiKey);
           updatedSymptom.aiTriage = triage;
-          updatedSymptom.lastAnalyzedDate = new Date().toISOString().split('T')[0];
+          updatedSymptom.lastAnalyzedDate = getLocalDateString();
         } catch (err) {
           console.warn("Auto-triage fallback triggered on edit:", err);
           updatedSymptom.aiTriage = generateFallbackHealthTriage(updatedSymptom);
@@ -387,7 +425,7 @@ export default function HealthTrackerModule({
         return {
           ...item,
           status: nextStatus,
-          resolvedDate: nextStatus === 'resolved' ? new Date().toISOString().split('T')[0] : null
+          resolvedDate: nextStatus === 'resolved' ? getLocalDateString() : null
         };
       }
       return item;
@@ -405,8 +443,8 @@ export default function HealthTrackerModule({
     if (window.confirm(`¿Estás segura de eliminar el registro "${title}"?`)) {
       setHealthSymptoms(prev => (Array.isArray(prev) ? prev : []).filter((item) => item && item.id !== id));
       showToast('info', 'Registro Eliminado', `Se eliminó "${title || 'Registro'}" de tu bitácora.`);
-      if (selectedTriageSymptom?.id === id) {
-        setSelectedTriageSymptom(null);
+      if (selectedTriageModal?.symptom?.id === id) {
+        setSelectedTriageModal(null);
       }
     }
   };
@@ -414,7 +452,7 @@ export default function HealthTrackerModule({
   // Copy Questions to Clipboard
   const handleCopyQuestions = (questions = []) => {
     if (!questions || questions.length === 0) return;
-    const textToCopy = `Preguntas para mi consulta médica (${selectedTriageSymptom?.title || 'Salud'}):\n` +
+    const textToCopy = `Preguntas para mi consulta médica (${selectedTriageModal?.symptom?.title || 'Salud'}):\n` +
       questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
     navigator.clipboard.writeText(textToCopy);
     setCopiedQuestions(true);
@@ -669,46 +707,67 @@ export default function HealthTrackerModule({
                 {/* AI Specialist Section in Card */}
                 <div className="pt-3 border-t border-slate-800/80 space-y-3">
                   {hasTriage ? (
-                    <div className="p-3 bg-[#0b0c10]/80 border border-[#e0a96d]/25 rounded-xl space-y-2">
+                    <div className="p-3.5 bg-[#0b0c10]/90 border border-[#e0a96d]/30 rounded-xl space-y-2.5 shadow-inner">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-[#e0a96d] uppercase tracking-wider flex items-center gap-1">
-                          <Stethoscope className="w-3.5 h-3.5" />
+                          <Stethoscope className="w-3.5 h-3.5 text-[#e0a96d]" />
                           Especialista Recomendado
                         </span>
-                        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-[#e0a96d]/10 text-[#e0a96d] border border-[#e0a96d]/20">
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/30">
                           {symptom.aiTriage.priority}
                         </span>
                       </div>
 
-                      <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                      <div className="text-xs sm:text-sm font-bold text-slate-100 flex items-center gap-1.5 font-outfit">
                         <span>👨‍⚕️ {symptom.aiTriage.specialist}</span>
                       </div>
 
-                      <p className="text-[11px] text-slate-400 leading-snug line-clamp-2">
-                        {symptom.aiTriage.physiologicalExplanation}
+                      <p className="text-[11px] text-slate-300 leading-snug line-clamp-2">
+                        {symptom.aiTriage.physiologicalExplanation || symptom.aiTriage.specialistDescription}
                       </p>
 
-                      <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-800/70 gap-2 flex-wrap">
                         <button
                           type="button"
-                          onClick={() => setSelectedTriageSymptom(symptom)}
+                          onClick={() => setSelectedTriageModal({ symptom, triage: symptom.aiTriage, isPending: false })}
                           className="text-[11px] text-[#e0a96d] hover:text-[#f5d4af] font-bold flex items-center gap-1 cursor-pointer transition-colors"
                         >
-                          <span>Ver plan ergonómico & preguntas para consulta</span>
-                          <ChevronRight className="w-3 h-3" />
+                          <span>Ver plan & preguntas ({symptom.aiTriage.consultationQuestions?.length || 0})</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
                         </button>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleAnalyzeSymptom(symptom)}
+                            disabled={isAnalyzing}
+                            className="text-[10px] text-slate-400 hover:text-[#e0a96d] px-2 py-1 rounded-lg border border-slate-800 hover:border-[#e0a96d]/30 transition-all flex items-center gap-1 cursor-pointer"
+                            title="Re-evaluar con IA"
+                          >
+                            {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                            <span className="hidden sm:inline">Re-evaluar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTriage(symptom.id, symptom.title)}
+                            className="text-[10px] text-slate-500 hover:text-rose-400 p-1 rounded-lg border border-slate-800 hover:border-rose-500/30 transition-all cursor-pointer"
+                            title="Quitar análisis de especialista"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="p-3 bg-[#0b0c10]/40 border border-dashed border-slate-800 rounded-xl flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <Sparkles className="w-4 h-4 text-slate-500" />
-                        <span>Sin análisis de especialista aún</span>
+                    <div className="p-3 bg-[#0b0c10]/40 border border-dashed border-slate-800 rounded-xl flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs text-slate-400 min-w-0">
+                        <Sparkles className="w-4 h-4 text-slate-500 shrink-0" />
+                        <span className="truncate">Sin análisis de especialista aún</span>
                       </div>
                       <button
                         onClick={() => handleAnalyzeSymptom(symptom)}
                         disabled={isAnalyzing}
-                        className="btn-rose-gold text-[11px] font-bold py-1.5 px-3 rounded-lg cursor-pointer flex items-center gap-1.5"
+                        className="btn-rose-gold text-[11px] font-bold py-1.5 px-3 rounded-lg cursor-pointer flex items-center gap-1.5 shrink-0 shadow-sm"
                       >
                         {isAnalyzing ? (
                           <>
@@ -738,18 +797,6 @@ export default function HealthTrackerModule({
                         {symptom.status === 'resolved' ? 'Resuelto' : 'Marcar como Aliviado'}
                       </span>
                     </label>
-
-                    {hasTriage && (
-                      <button
-                        onClick={() => handleAnalyzeSymptom(symptom)}
-                        disabled={isAnalyzing}
-                        className="text-[10px] text-slate-500 hover:text-[#e0a96d] flex items-center gap-1 cursor-pointer transition-colors"
-                        title="Re-analizar con IA"
-                      >
-                        {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                        <span>Actualizar IA</span>
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -1213,35 +1260,82 @@ export default function HealthTrackerModule({
       )}
 
       {/* ========================================== */}
-      {/* MODAL 3: COMPREHENSIVE AI CLINICAL TRIAGE */}
+      {/* MODAL 3: COMPREHENSIVE AI CLINICAL TRIAGE & DECISION MODAL */}
       {/* ========================================== */}
-      {selectedTriageSymptom && selectedTriageSymptom.aiTriage && createPortal(
+      {selectedTriageModal && selectedTriageModal.triage && createPortal(
         <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
           <div className="bg-[#171a24] border border-[#e0a96d]/40 rounded-2xl max-w-2xl w-full p-6 shadow-2xl animate-modal-pop my-auto max-h-[92vh] flex flex-col space-y-4">
             
             {/* Triage Header */}
             <div className="flex justify-between items-start border-b border-slate-800 pb-3 shrink-0">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="p-1 rounded-md bg-[#e0a96d]/20 text-[#e0a96d]">
                     <Sparkles className="w-4 h-4" />
                   </span>
                   <span className="text-[10px] font-bold text-[#e0a96d] uppercase tracking-wider">
                     Orientación Clínica & Ergonómica con IA
                   </span>
+                  {selectedTriageModal.isPending ? (
+                    <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">
+                      ⚡ Pendiente de Decisión
+                    </span>
+                  ) : (
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
+                      ✓ Guardado en tu Ficha
+                    </span>
+                  )}
                 </div>
                 <h3 className="text-lg font-black text-slate-100 font-outfit mt-1">
-                  {selectedTriageSymptom.title}
+                  {selectedTriageModal.symptom?.title || 'Análisis de Molestia'}
                 </h3>
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedTriageSymptom(null)}
-                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1 rounded-lg hover:bg-slate-800"
+                onClick={() => {
+                  if (selectedTriageModal.isPending) {
+                    if (window.confirm('¿Deseas salir sin guardar este análisis? Podrás volver a generarlo cuando gustes.')) {
+                      setSelectedTriageModal(null);
+                    }
+                  } else {
+                    setSelectedTriageModal(null);
+                  }
+                }}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                title="Cerrar ventana"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Pending Decision Notice Banner */}
+            {selectedTriageModal.isPending && (
+              <div className="p-3 bg-gradient-to-r from-amber-500/15 via-[#171a24] to-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between gap-3 text-xs shrink-0">
+                <div className="flex items-center gap-2 text-amber-200">
+                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>
+                    <strong>Revisión de IA:</strong> Lee la orientación a tu ritmo. Puedes cambiar de ventana o copiar preguntas. Decide abajo si guardarla o descartarla.
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleDiscardTriage}
+                    className="px-2.5 py-1 text-[11px] font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-all cursor-pointer"
+                  >
+                    Descartar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmSaveTriage(selectedTriageModal.symptom.id, selectedTriageModal.triage)}
+                    className="btn-rose-gold px-3 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Guardar</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Triage Body */}
             <div className="overflow-y-auto pr-2 space-y-4 text-xs flex-1">
@@ -1252,15 +1346,15 @@ export default function HealthTrackerModule({
                     Especialista Médico Idóneo
                   </span>
                   <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#e0a96d]/20 text-[#e0a96d] border border-[#e0a96d]/40">
-                    Prioridad: {selectedTriageSymptom.aiTriage.priority}
+                    Prioridad: {selectedTriageModal.triage.priority}
                   </span>
                 </div>
                 <div className="text-base font-extrabold text-slate-100 font-outfit flex items-center gap-2">
                   <span className="text-lg">👨‍⚕️</span>
-                  <span>{selectedTriageSymptom.aiTriage.specialist}</span>
+                  <span>{selectedTriageModal.triage.specialist}</span>
                 </div>
                 <p className="text-slate-300 text-xs leading-relaxed">
-                  {selectedTriageSymptom.aiTriage.specialistDescription}
+                  {selectedTriageModal.triage.specialistDescription}
                 </p>
               </div>
 
@@ -1271,19 +1365,19 @@ export default function HealthTrackerModule({
                   ¿Por qué ocurre esta molestia? (Explicación Biomecánica / Fisiológica)
                 </span>
                 <p className="text-slate-300 leading-relaxed text-xs">
-                  {selectedTriageSymptom.aiTriage.physiologicalExplanation}
+                  {selectedTriageModal.triage.physiologicalExplanation}
                 </p>
               </div>
 
               {/* Immediate Relief & Ergonomic Action Plan */}
-              {selectedTriageSymptom.aiTriage.immediateReliefTips?.length > 0 && (
+              {selectedTriageModal.triage.immediateReliefTips?.length > 0 && (
                 <div className="bg-[#0b0c10] p-4 rounded-xl border border-emerald-500/20 space-y-2.5">
                   <span className="font-bold text-emerald-400 text-xs flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4" />
                     Plan de Alivio Inmediato & Ergonomía (En Casa / Auto / Oficina)
                   </span>
                   <ul className="space-y-2">
-                    {selectedTriageSymptom.aiTriage.immediateReliefTips.map((tip, idx) => (
+                    {selectedTriageModal.triage.immediateReliefTips.map((tip, idx) => (
                       <li key={idx} className="flex items-start gap-2 text-slate-300 leading-relaxed">
                         <span className="w-4 h-4 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
                           {idx + 1}
@@ -1296,7 +1390,7 @@ export default function HealthTrackerModule({
               )}
 
               {/* Consultation Questions Ready for Medical Visit */}
-              {selectedTriageSymptom.aiTriage.consultationQuestions?.length > 0 && (
+              {selectedTriageModal.triage.consultationQuestions?.length > 0 && (
                 <div className="bg-[#0b0c10] p-4 rounded-xl border border-[#e0a96d]/20 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-[#e0a96d] text-xs flex items-center gap-1.5">
@@ -1304,7 +1398,7 @@ export default function HealthTrackerModule({
                       Guía de Preguntas Clave para tu Cita Médica
                     </span>
                     <button
-                      onClick={() => handleCopyQuestions(selectedTriageSymptom.aiTriage.consultationQuestions)}
+                      onClick={() => handleCopyQuestions(selectedTriageModal.triage.consultationQuestions)}
                       className="text-[10px] font-bold text-[#e0a96d] hover:text-[#f5d4af] flex items-center gap-1 cursor-pointer bg-[#e0a96d]/10 px-2.5 py-1 rounded-lg border border-[#e0a96d]/30 transition-colors"
                     >
                       {copiedQuestions ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
@@ -1312,7 +1406,7 @@ export default function HealthTrackerModule({
                     </button>
                   </div>
                   <ul className="space-y-2">
-                    {selectedTriageSymptom.aiTriage.consultationQuestions.map((q, idx) => (
+                    {selectedTriageModal.triage.consultationQuestions.map((q, idx) => (
                       <li key={idx} className="flex items-start gap-2 text-slate-300 leading-relaxed bg-[#171a24]/60 p-2.5 rounded-lg border border-slate-800">
                         <span className="text-[#e0a96d] font-bold shrink-0">Q{idx + 1}:</span>
                         <span>{q}</span>
@@ -1323,50 +1417,78 @@ export default function HealthTrackerModule({
               )}
 
               {/* Red Flags / Emergency Warning */}
-              {selectedTriageSymptom.aiTriage.redFlags && (
+              {selectedTriageModal.triage.redFlags && (
                 <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-[11px] leading-relaxed flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <div>
                     <strong className="text-rose-200">Signos de Alarma / Acudir a Urgencias:</strong>{' '}
-                    {selectedTriageSymptom.aiTriage.redFlags}
+                    {selectedTriageModal.triage.redFlags}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Triage Footer with Re-analyze Button */}
-            <div className="flex items-center justify-between pt-3 border-t border-slate-800 shrink-0">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={analyzingId === selectedTriageSymptom.id}
-                  onClick={() => handleAnalyzeSymptom(selectedTriageSymptom)}
-                  className="text-xs font-bold text-[#e0a96d] hover:text-[#f5d4af] bg-[#e0a96d]/10 hover:bg-[#e0a96d]/20 border border-[#e0a96d]/30 py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
-                  title="Vuelve a consultar a Gemini IA con los datos de esta molestia"
-                >
-                  {analyzingId === selectedTriageSymptom.id ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Re-evaluando con IA...</span>
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Re-evaluar con IA</span>
-                    </>
-                  )}
-                </button>
-                <span className="text-[10px] text-slate-500 hidden sm:inline">
-                  Orientación preventiva generada por IA.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedTriageSymptom(null)}
-                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer"
-              >
-                Cerrar Guía
-              </button>
+            {/* Triage Footer Action Bar */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800 shrink-0 gap-2 flex-wrap">
+              {selectedTriageModal.isPending ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleDiscardTriage}
+                    className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-xl cursor-pointer transition-all"
+                  >
+                    Descartar Análisis
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmSaveTriage(selectedTriageModal.symptom.id, selectedTriageModal.triage)}
+                    className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-xl cursor-pointer flex items-center gap-2 shadow-lg transition-all"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Guardar Análisis en este Síntoma</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={analyzingId === selectedTriageModal.symptom?.id}
+                      onClick={() => handleAnalyzeSymptom(selectedTriageModal.symptom)}
+                      className="text-xs font-bold text-[#e0a96d] hover:text-[#f5d4af] bg-[#e0a96d]/10 hover:bg-[#e0a96d]/20 border border-[#e0a96d]/30 py-2 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+                      title="Vuelve a consultar a Gemini IA con los datos de esta molestia"
+                    >
+                      {analyzingId === selectedTriageModal.symptom?.id ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Re-evaluando con IA...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Re-evaluar con IA</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTriage(selectedTriageModal.symptom.id, selectedTriageModal.symptom.title)}
+                      className="text-xs text-slate-500 hover:text-rose-400 border border-slate-800 hover:border-rose-500/30 py-2 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
+                      title="Quitar este análisis"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Quitar Análisis</span>
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTriageModal(null)}
+                    className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-xl cursor-pointer"
+                  >
+                    Cerrar Guía
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>,

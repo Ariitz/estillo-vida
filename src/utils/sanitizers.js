@@ -137,19 +137,47 @@ export const sanitizeScheduleList = (list) => {
 };
 
 // 4. Health Symptoms (Tracker de Dolor & Salud)
+export const sanitizeAiTriage = (triage) => {
+  if (!triage || typeof triage !== 'object') return null;
+
+  return {
+    specialist: safeString(triage.specialist || 'Médico General / Especialista'),
+    specialistDescription: safeString(triage.specialistDescription || ''),
+    priority: safeString(triage.priority || 'Atención Recomendada'),
+    physiologicalExplanation: safeString(triage.physiologicalExplanation || ''),
+    immediateReliefTips: Array.isArray(triage.immediateReliefTips)
+      ? triage.immediateReliefTips.map(t => safeString(t)).filter(Boolean)
+      : (typeof triage.immediateReliefTips === 'string' ? [triage.immediateReliefTips] : []),
+    consultationQuestions: Array.isArray(triage.consultationQuestions)
+      ? triage.consultationQuestions.map(q => safeString(q)).filter(Boolean)
+      : (typeof triage.consultationQuestions === 'string' ? [triage.consultationQuestions] : []),
+    lifestyleHabits: Array.isArray(triage.lifestyleHabits)
+      ? triage.lifestyleHabits.map(h => safeString(h)).filter(Boolean)
+      : (typeof triage.lifestyleHabits === 'string' ? [triage.lifestyleHabits] : []),
+    redFlags: safeString(triage.redFlags || '')
+  };
+};
+
 export const sanitizeHealthSymptom = (s) => {
   if (!s || typeof s !== 'object') return null;
 
+  const validStatuses = ['active', 'treatment', 'resolved', 'relieved', 'monitoring'];
+  const rawStatus = safeString(s.status || 'active').toLowerCase();
+  const normalizedStatus = validStatuses.includes(rawStatus) ? rawStatus : 'active';
+
   return {
-    id: safeString(s.id || 'sym-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
+    id: safeString(s.id || 'hlth-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
     title: safeString(s.title || s.name || s.symptom || 'Registro de Síntoma'),
-    bodyPart: safeString(s.bodyPart || 'general'),
-    severity: Math.min(10, Math.max(1, parseInt(s.severity, 10) || 5)),
-    date: safeString(s.date || getLocalDateString()),
-    status: ['active', 'relieved', 'monitoring'].includes(s.status) ? s.status : 'active',
-    triggers: Array.isArray(s.triggers) ? s.triggers.map(t => safeString(t)).filter(Boolean) : (typeof s.triggers === 'string' ? [s.triggers] : []),
-    protocolUsed: safeString(s.protocolUsed || ''),
-    notes: safeString(s.notes || '')
+    category: safeString(s.category || 'pain_posture'),
+    bodyZone: safeString(s.bodyZone || s.bodyPart || 'general'),
+    painLevel: Math.min(10, Math.max(1, parseInt(s.painLevel || s.severity, 10) || 5)),
+    trigger: safeString(s.trigger || (Array.isArray(s.triggers) ? s.triggers.join(', ') : s.triggers) || ''),
+    frequency: safeString(s.frequency || 'Ocasional'),
+    notes: safeString(s.notes || ''),
+    status: normalizedStatus,
+    createdAt: safeString(s.createdAt || s.date || getLocalDateString()),
+    lastAnalyzedDate: s.lastAnalyzedDate ? safeString(s.lastAnalyzedDate) : null,
+    aiTriage: s.aiTriage ? sanitizeAiTriage(s.aiTriage) : null
   };
 };
 
