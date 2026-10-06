@@ -30,6 +30,13 @@ import {
 } from 'lucide-react';
 import { sanitizeScheduleList, sanitizeSelfCareList } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
+import { 
+  getLocalDateString, 
+  getYesterdayDateString, 
+  formatDisplayDate, 
+  parseLocalDate, 
+  getDaysDifference 
+} from '../utils/dateUtils';
 
 export default function ScheduleModule({
   weight,
@@ -80,7 +87,7 @@ export default function ScheduleModule({
   const [scCategory, setScCategory] = useState('beauty');
   const [scNotes, setScNotes] = useState('');
   const [scProtocol, setScProtocol] = useState('');
-  const [scLastDate, setScLastDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [scLastDate, setScLastDate] = useState(() => getLocalDateString());
 
   // Water goal: weight * 35 ml
   const waterGoal = Math.round(weight * 35);
@@ -317,21 +324,22 @@ export default function ScheduleModule({
         daysRemaining: null,
         daysElapsed: null,
         nextDueDateStr: 'Sin registro previo',
+        lastDateStr: 'Nunca',
         percentCycle: 0
       };
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const lastDate = new Date(activity.lastCompletedDate + 'T00:00:00');
-    const diffTime = today.getTime() - lastDate.getTime();
-    const daysElapsed = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const todayStr = getLocalDateString();
+    const daysElapsed = Math.max(0, getDaysDifference(activity.lastCompletedDate, todayStr));
     const daysRemaining = interval - daysElapsed;
 
-    const nextDueDate = new Date(lastDate.getTime() + interval * 24 * 60 * 60 * 1000);
-    const nextDueDateStr = nextDueDate.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
-    const lastDateStr = lastDate.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+    const lastDateObj = parseLocalDate(activity.lastCompletedDate);
+    let nextDueDateStr = 'Fecha no definida';
+    if (lastDateObj) {
+      const nextDueDate = new Date(lastDateObj.getFullYear(), lastDateObj.getMonth(), lastDateObj.getDate() + interval);
+      nextDueDateStr = formatDisplayDate(nextDueDate);
+    }
+    const lastDateStr = formatDisplayDate(activity.lastCompletedDate);
 
     const percentCycle = Math.min(100, Math.max(0, Math.round((daysElapsed / interval) * 100)));
 
@@ -379,27 +387,28 @@ export default function ScheduleModule({
     };
   };
 
-  const handleMarkSelfCareCompletedToday = (id, title) => {
-    const todayStr = new Date().toISOString().split('T')[0];
+  const handleUpdateSelfCareDate = (id, newDate, title) => {
+    const targetDate = newDate || getLocalDateString();
     const updated = (selfCareActivities || []).map(item => {
       if (item.id === id) {
-        return { ...item, lastCompletedDate: todayStr };
+        return { ...item, lastCompletedDate: targetDate };
       }
       return item;
     });
     setSelfCareActivities(updated);
-    showToast('success', '¡Autocuidado Realizado!', `Se actualizó la fecha de "${title}" a hoy.`);
-  };
 
-  const handleUpdateSelfCareDate = (id, newDate) => {
-    const updated = (selfCareActivities || []).map(item => {
-      if (item.id === id) {
-        return { ...item, lastCompletedDate: newDate };
-      }
-      return item;
-    });
-    setSelfCareActivities(updated);
-    showToast('success', 'Fecha Actualizada', 'Se guardó la fecha de realización.');
+    const todayStr = getLocalDateString();
+    const yesterdayStr = getYesterdayDateString();
+    const formatted = formatDisplayDate(targetDate);
+    const actTitle = title || (selfCareActivities.find(a => a.id === id)?.title) || 'Actividad';
+
+    if (targetDate === todayStr) {
+      showToast('success', '¡Autocuidado Realizado Hoy!', `Se actualizó "${actTitle}" con fecha de hoy (${formatted}).`);
+    } else if (targetDate === yesterdayStr) {
+      showToast('success', '¡Autocuidado Registrado!', `Se actualizó "${actTitle}" con fecha de ayer (${formatted}).`);
+    } else {
+      showToast('success', '¡Fecha Registrada!', `Se guardó "${actTitle}" con fecha del ${formatted}.`);
+    }
   };
 
   const handleAddSelfCare = (e) => {
@@ -450,6 +459,7 @@ export default function ScheduleModule({
     setScFrequency('weekly');
     setScCustomValue(1);
     setScCustomUnit('weeks');
+    setScLastDate(getLocalDateString());
     setIsAddingSelfCare(false);
     showToast('success', 'Actividad Registrada', `Se añadió "${newItem.title}" al calendario de autocuidado.`);
   };
@@ -1278,131 +1288,16 @@ export default function ScheduleModule({
                 const catIcon = categoryIcons[activity.category] || '✨';
 
                 return (
-                  <div
+                  <SelfCareCardItem
                     key={activity.id}
-                    className={`bg-[#171a24] border rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg transition-all ${
-                      info.isUrgent
-                        ? 'border-rose-500/30 shadow-rose-500/5'
-                        : info.isDueSoon
-                        ? 'border-amber-500/30 shadow-amber-500/5'
-                        : 'border-[#e0a96d]/15 hover:border-[#e0a96d]/30'
-                    }`}
-                  >
-                    <div>
-                      {/* Top Badges */}
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-lg p-1.5 rounded-lg bg-[#0b0c10] border border-slate-800 shadow-sm">
-                            {catIcon}
-                          </span>
-                          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${freq.badge}`}>
-                            {freq.short}
-                          </span>
-                        </div>
-
-                        {/* Status badge */}
-                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border flex items-center gap-1 shrink-0 ${info.badgeClass}`}>
-                          {info.status === 'good' && <Check className="w-3 h-3 text-emerald-400" />}
-                          {info.status === 'due_soon' && <Clock className="w-3 h-3 text-amber-400" />}
-                          {info.status === 'overdue' && <AlertTriangle className="w-3 h-3 text-rose-400" />}
-                          <span>{info.label}</span>
-                        </span>
-                      </div>
-
-                      {/* Title & Notes */}
-                      <h4 className="text-base font-bold text-slate-100 font-outfit mt-1">
-                        {activity.title}
-                      </h4>
-                      {activity.notes && (
-                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                          {activity.notes}
-                        </p>
-                      )}
-
-                      {/* Protocol Highlights (e.g. Mavala, Anxiety Protocol, Specifics) */}
-                      {activity.protocol && (
-                        <div className="mt-3 p-3 bg-[#0b0c10] border border-[#e0a96d]/15 rounded-xl text-xs space-y-1">
-                          <span className="text-[10px] font-bold text-[#e0a96d] uppercase font-mono flex items-center gap-1">
-                            <ShieldCheck className="w-3 h-3" /> Protocolo de Ejecución
-                          </span>
-                          <p className="text-slate-300 text-[11px] leading-relaxed">
-                            {activity.protocol}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Progress Bar Cycle */}
-                      <div className="mt-4 pt-3 border-t border-slate-800/80 space-y-1.5">
-                        <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 font-medium">
-                          <span>Ciclo de {freq.days} días</span>
-                          <span className={`${info.isUrgent ? 'text-rose-400 font-bold' : info.isDueSoon ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}`}>
-                            {info.percentCycle}% transcurrido
-                          </span>
-                        </div>
-                        <div className="w-full bg-[#0b0c10] h-2 rounded-full overflow-hidden border border-slate-900">
-                          <div
-                            className={`h-full rounded-full progress-bar-transition ${
-                              info.isUrgent
-                                ? 'bg-rose-500'
-                                : info.isDueSoon
-                                ? 'bg-amber-400'
-                                : 'bg-emerald-400'
-                            }`}
-                            style={{ width: `${info.percentCycle}%` }}
-                          />
-                        </div>
-
-                        {/* Dates Info */}
-                        <div className="flex justify-between items-center text-[10px] text-slate-500 pt-1">
-                          <span>Última: <strong className="text-slate-300 font-semibold">{info.lastDateStr || 'Nunca'}</strong></span>
-                          <span>Próxima: <strong className="text-slate-300 font-semibold">{info.nextDueDateStr}</strong></span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons Bar */}
-                    <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <label className="text-[10px] text-slate-500 hidden sm:inline" title="Cambiar fecha registrada">
-                          Fecha:
-                        </label>
-                        <input
-                          type="date"
-                          value={activity.lastCompletedDate || ''}
-                          onChange={(e) => handleUpdateSelfCareDate(activity.id, e.target.value)}
-                          className="bg-[#0b0c10] border border-slate-800 hover:border-[#e0a96d]/40 rounded-lg px-2 py-1.5 text-[10px] text-slate-300 focus:outline-none focus:border-[#e0a96d] cursor-pointer"
-                          title="Cambiar fecha de última realización"
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setEditingSelfCareItem(activity)}
-                          className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                          title="Editar detalles"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSelfCare(activity.id, activity.title)}
-                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-                          title="Eliminar actividad"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMarkSelfCareCompletedToday(activity.id, activity.title)}
-                          className="btn-rose-gold text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer shadow transition-all"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Realizado Hoy</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                    activity={activity}
+                    info={info}
+                    freq={freq}
+                    catIcon={catIcon}
+                    onUpdateDate={handleUpdateSelfCareDate}
+                    onEdit={setEditingSelfCareItem}
+                    onDelete={handleDeleteSelfCare}
+                  />
                 );
               })
             )}
@@ -1657,7 +1552,27 @@ export default function ScheduleModule({
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Fecha Última Realización</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-400">Fecha Última Realización</label>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setEditingSelfCareItem({ ...editingSelfCareItem, lastCompletedDate: getLocalDateString() })}
+                      className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700 cursor-pointer"
+                      title="Establecer fecha de hoy"
+                    >
+                      Hoy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingSelfCareItem({ ...editingSelfCareItem, lastCompletedDate: getYesterdayDateString() })}
+                      className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700 cursor-pointer"
+                      title="Establecer fecha de ayer"
+                    >
+                      Ayer
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="date"
                   value={editingSelfCareItem.lastCompletedDate || ''}
@@ -1707,6 +1622,223 @@ export default function ScheduleModule({
         document.body
       )}
 
+    </div>
+  );
+}
+
+// Subcomponent for individual Self-Care activity cards to isolate date picker state and prevent UI freezing/lagging
+function SelfCareCardItem({
+  activity,
+  info,
+  freq,
+  catIcon,
+  onUpdateDate,
+  onEdit,
+  onDelete
+}) {
+  const [selectedDate, setSelectedDate] = useState(activity.lastCompletedDate || getLocalDateString());
+  const todayStr = getLocalDateString();
+  const yesterdayStr = getYesterdayDateString();
+
+  // Sync internal input date when external activity changes
+  useEffect(() => {
+    setSelectedDate(activity.lastCompletedDate || getLocalDateString());
+  }, [activity.lastCompletedDate]);
+
+  const hasUnsavedDate = Boolean(selectedDate && selectedDate !== (activity.lastCompletedDate || ''));
+  const isSavedToday = activity.lastCompletedDate === todayStr;
+  const isSavedYesterday = activity.lastCompletedDate === yesterdayStr;
+
+  const handleSaveCustomDate = () => {
+    if (!selectedDate) return;
+    onUpdateDate(activity.id, selectedDate, activity.title);
+  };
+
+  const handleSetToday = () => {
+    setSelectedDate(todayStr);
+    onUpdateDate(activity.id, todayStr, activity.title);
+  };
+
+  const handleSetYesterday = () => {
+    setSelectedDate(yesterdayStr);
+    onUpdateDate(activity.id, yesterdayStr, activity.title);
+  };
+
+  return (
+    <div
+      className={`bg-[#171a24] border rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg transition-all ${
+        info.isUrgent
+          ? 'border-rose-500/30 shadow-rose-500/5'
+          : info.isDueSoon
+          ? 'border-amber-500/30 shadow-amber-500/5'
+          : 'border-[#e0a96d]/15 hover:border-[#e0a96d]/30'
+      }`}
+    >
+      <div>
+        {/* Top Badges */}
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-lg p-1.5 rounded-lg bg-[#0b0c10] border border-slate-800 shadow-sm">
+              {catIcon}
+            </span>
+            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${freq.badge}`}>
+              {freq.short}
+            </span>
+          </div>
+
+          {/* Status badge */}
+          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border flex items-center gap-1 shrink-0 ${info.badgeClass}`}>
+            {info.status === 'good' && <Check className="w-3 h-3 text-emerald-400" />}
+            {info.status === 'due_soon' && <Clock className="w-3 h-3 text-amber-400" />}
+            {info.status === 'overdue' && <AlertTriangle className="w-3 h-3 text-rose-400" />}
+            <span>{info.label}</span>
+          </span>
+        </div>
+
+        {/* Title & Notes */}
+        <h4 className="text-base font-bold text-slate-100 font-outfit mt-1">
+          {activity.title}
+        </h4>
+        {activity.notes && (
+          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+            {activity.notes}
+          </p>
+        )}
+
+        {/* Protocol Highlights */}
+        {activity.protocol && (
+          <div className="mt-3 p-3 bg-[#0b0c10] border border-[#e0a96d]/15 rounded-xl text-xs space-y-1">
+            <span className="text-[10px] font-bold text-[#e0a96d] uppercase font-mono flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3" /> Protocolo de Ejecución
+            </span>
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              {activity.protocol}
+            </p>
+          </div>
+        )}
+
+        {/* Progress Bar Cycle */}
+        <div className="mt-4 pt-3 border-t border-slate-800/80 space-y-1.5">
+          <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 font-medium">
+            <span>Ciclo de {freq.days} días</span>
+            <span className={`${info.isUrgent ? 'text-rose-400 font-bold' : info.isDueSoon ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}`}>
+              {info.percentCycle}% transcurrido
+            </span>
+          </div>
+          <div className="w-full bg-[#0b0c10] h-2 rounded-full overflow-hidden border border-slate-900">
+            <div
+              className={`h-full rounded-full progress-bar-transition ${
+                info.isUrgent
+                  ? 'bg-rose-500'
+                  : info.isDueSoon
+                  ? 'bg-amber-400'
+                  : 'bg-emerald-400'
+              }`}
+              style={{ width: `${info.percentCycle}%` }}
+            />
+          </div>
+
+          {/* Dates Info */}
+          <div className="flex justify-between items-center text-[10px] text-slate-500 pt-1">
+            <span>Última: <strong className="text-slate-300 font-semibold">{info.lastDateStr || 'Nunca'}</strong></span>
+            <span>Próxima: <strong className="text-slate-300 font-semibold">{info.nextDueDateStr}</strong></span>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Buttons Bar */}
+      <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        {/* Date Selector & Quick shortcuts */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 bg-[#0b0c10] border border-slate-800 hover:border-[#e0a96d]/40 focus-within:border-[#e0a96d] rounded-lg px-2 py-1 transition-all">
+            <Calendar className="w-3.5 h-3.5 text-[#e0a96d] shrink-0" />
+            <input
+              type="date"
+              value={selectedDate || ''}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveCustomDate();
+              }}
+              className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer font-mono"
+              title="Selecciona la fecha exacta en que fuiste / lo realizaste (ej. 25 de septiembre)"
+            />
+          </div>
+
+          {/* Quick shortcuts */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={handleSetToday}
+              className={`px-2 py-1 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
+                isSavedToday
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+              }`}
+              title="Guardar como realizado hoy"
+            >
+              Hoy
+            </button>
+            <button
+              type="button"
+              onClick={handleSetYesterday}
+              className={`px-2 py-1 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
+                isSavedYesterday
+                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                  : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+              }`}
+              title="Guardar como realizado ayer"
+            >
+              Ayer
+            </button>
+          </div>
+        </div>
+
+        {/* Action buttons on the right */}
+        <div className="flex items-center justify-end gap-1.5 shrink-0">
+          {hasUnsavedDate ? (
+            <button
+              type="button"
+              onClick={handleSaveCustomDate}
+              className="btn-rose-gold text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md transition-all animate-pulse"
+              title={`Guardar la fecha seleccionada (${formatDisplayDate(selectedDate)})`}
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>Guardar Fecha</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSetToday}
+              className={`text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-all shadow ${
+                isSavedToday
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                  : 'btn-rose-gold'
+              }`}
+              title="Marcar como realizado hoy"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>{isSavedToday ? 'Hecho Hoy ✓' : 'Realizado Hoy'}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onEdit(activity)}
+            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+            title="Editar detalles y configuración"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(activity.id, activity.title)}
+            className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+            title="Eliminar actividad"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

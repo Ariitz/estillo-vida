@@ -3,6 +3,8 @@
  * Ensures robust data integrity across modules, local storage, cloud sync, and AI inputs.
  */
 
+import { getLocalDateString } from './dateUtils';
+
 export const safeNumber = (val, fallback = 0) => {
   if (typeof val === 'number' && !isNaN(val)) return val;
   const parsed = parseFloat(val);
@@ -93,7 +95,7 @@ export const sanitizeSelfCareItem = (sc) => {
     customValue: customValue,
     customUnit: customUnit,
     daysInterval: daysInterval,
-    lastCompletedDate: safeString(sc.lastCompletedDate || new Date().toISOString().split('T')[0]),
+    lastCompletedDate: safeString(sc.lastCompletedDate || getLocalDateString()),
     category: category,
     notes: notes,
     protocol: protocol
@@ -143,7 +145,7 @@ export const sanitizeHealthSymptom = (s) => {
     title: safeString(s.title || s.name || s.symptom || 'Registro de Síntoma'),
     bodyPart: safeString(s.bodyPart || 'general'),
     severity: Math.min(10, Math.max(1, parseInt(s.severity, 10) || 5)),
-    date: safeString(s.date || new Date().toISOString().split('T')[0]),
+    date: safeString(s.date || getLocalDateString()),
     status: ['active', 'relieved', 'monitoring'].includes(s.status) ? s.status : 'active',
     triggers: Array.isArray(s.triggers) ? s.triggers.map(t => safeString(t)).filter(Boolean) : (typeof s.triggers === 'string' ? [s.triggers] : []),
     protocolUsed: safeString(s.protocolUsed || ''),
@@ -170,7 +172,7 @@ export const sanitizeExperienceItem = (exp) => {
     cost: safeString(exp.cost || '$$'),
     verdict: ['yes', 'maybe', 'no'].includes(exp.verdict) ? exp.verdict : 'yes',
     placeOrBrand: safeString(exp.placeOrBrand || exp.brand || exp.place || ''),
-    date: safeString(exp.date || new Date().toISOString().split('T')[0]),
+    date: safeString(exp.date || getLocalDateString()),
     notes: safeString(exp.notes || '')
   };
 };
@@ -267,7 +269,7 @@ export const sanitizeNutritionMeal = (m) => {
   if (!m || typeof m !== 'object') return null;
 
   const now = new Date();
-  const defaultDate = now.toISOString().split('T')[0];
+  const defaultDate = getLocalDateString(now);
   const defaultTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
   const rawMealType = safeString(m.mealType || 'lunch').toLowerCase();
@@ -343,7 +345,7 @@ export const sanitizeDailyNutritionLog = (log) => {
 
   return {
     id: safeString(log.id || 'log-' + (log.date || Date.now())),
-    date: safeString(log.date || new Date().toISOString().split('T')[0]),
+    date: safeString(log.date || getLocalDateString()),
     caloriesConsumed: Math.max(0, Math.round(safeNumber(log.caloriesConsumed, 0))),
     caloriesBurned: Math.max(0, Math.round(safeNumber(log.caloriesBurned, 0))),
     tdee: Math.max(0, Math.round(safeNumber(log.tdee, 1800))),
@@ -469,7 +471,7 @@ export const sanitizeAromatherapyMoodLog = (log) => {
 
   return {
     id: safeString(log.id || 'mood-' + Date.now()),
-    date: safeString(log.date || new Date().toISOString().split('T')[0]),
+    date: safeString(log.date || getLocalDateString()),
     time: safeString(log.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
     moodInput: safeString(log.moodInput || log.label || 'Balance General'),
     selectedArchetype: safeString(log.selectedArchetype || ''),

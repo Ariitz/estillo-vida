@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { parseRoutineWithCopilot } from '../utils/geminiService';
 import { sanitizeHouseholdItem, sanitizeSelfCareItem } from '../utils/sanitizers';
+import { getLocalDateString } from '../utils/dateUtils';
 
 export default function CopilotModule({
   geminiApiKey = '',
@@ -447,7 +448,7 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
           customValue: interval,
           customUnit: 'days',
           daysInterval: interval,
-          lastCompletedDate: new Date().toISOString().split('T')[0],
+          lastCompletedDate: getLocalDateString(),
           category: scObj.category === 'skincare' ? 'beauty' : (scObj.category || 'beauty'),
           notes: typeof scObj.notes === 'string' ? scObj.notes : (Array.isArray(scObj.notes) ? scObj.notes.join('. ') : ''),
           protocol: typeof scObj.protocol === 'string' ? scObj.protocol : 'Cadencia configurada por AURA Copilot.'
