@@ -108,3 +108,21 @@ html, body {
 .btn-rose-gold:active {
   transform: translateY(1px);
 }
+
+/* Enhanced Date Picker & Form Input Styling for Dark Theme */
+input[type="date"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.85) sepia(0.3) saturate(2);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(1) brightness(1.2);
+  background: rgba(224, 169, 109, 0.15);
+}
+

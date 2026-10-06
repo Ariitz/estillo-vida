@@ -60,6 +60,32 @@ export const formatDisplayDate = (dateStr, options = { day: 'numeric', month: 's
 };
 
 /**
+ * Formats a YYYY-MM-DD date into a full human-friendly Spanish string (e.g. '25 de septiembre de 2026').
+ * @param {string|Date} dateStr 
+ * @returns {string}
+ */
+export const formatFullDisplayDate = (dateStr) => {
+  if (!dateStr) return 'Sin fecha registrada';
+  const d = parseLocalDate(dateStr);
+  if (!d) return String(dateStr);
+  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+/**
+ * Calculates the next due date based on a last completed date and an interval in days.
+ * @param {string|Date} lastDateStr 
+ * @param {number} intervalDays 
+ * @returns {Date|null}
+ */
+export const calculateNextDueDate = (lastDateStr, intervalDays = 30) => {
+  if (!lastDateStr) return null;
+  const d = parseLocalDate(lastDateStr);
+  if (!d) return null;
+  const days = Math.max(1, parseInt(intervalDays, 10) || 30);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+};
+
+/**
  * Returns difference in calendar days between two dates (date2 - date1).
  * @param {string|Date} date1 
  * @param {string|Date} date2 

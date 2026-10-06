@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Plus, 
@@ -26,7 +26,8 @@ import {
   ChevronRight, 
   Bell,
   Layers,
-  CalendarCheck
+  CalendarCheck,
+  ArrowRight
 } from 'lucide-react';
 import { sanitizeScheduleList, sanitizeSelfCareList } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
@@ -34,6 +35,8 @@ import {
   getLocalDateString, 
   getYesterdayDateString, 
   formatDisplayDate, 
+  formatFullDisplayDate,
+  calculateNextDueDate,
   parseLocalDate, 
   getDaysDifference 
 } from '../utils/dateUtils';
@@ -324,7 +327,9 @@ export default function ScheduleModule({
         daysRemaining: null,
         daysElapsed: null,
         nextDueDateStr: 'Sin registro previo',
+        nextDueDateFullStr: 'Sin registro previo',
         lastDateStr: 'Nunca',
+        lastDateFullStr: 'Nunca',
         percentCycle: 0
       };
     }
@@ -333,13 +338,12 @@ export default function ScheduleModule({
     const daysElapsed = Math.max(0, getDaysDifference(activity.lastCompletedDate, todayStr));
     const daysRemaining = interval - daysElapsed;
 
-    const lastDateObj = parseLocalDate(activity.lastCompletedDate);
-    let nextDueDateStr = 'Fecha no definida';
-    if (lastDateObj) {
-      const nextDueDate = new Date(lastDateObj.getFullYear(), lastDateObj.getMonth(), lastDateObj.getDate() + interval);
-      nextDueDateStr = formatDisplayDate(nextDueDate);
-    }
+    const nextDueDateObj = calculateNextDueDate(activity.lastCompletedDate, interval);
+    const nextDueDateStr = nextDueDateObj ? formatDisplayDate(nextDueDateObj) : 'Fecha no definida';
+    const nextDueDateFullStr = nextDueDateObj ? formatFullDisplayDate(nextDueDateObj) : 'Fecha no definida';
+    
     const lastDateStr = formatDisplayDate(activity.lastCompletedDate);
+    const lastDateFullStr = formatFullDisplayDate(activity.lastCompletedDate);
 
     const percentCycle = Math.min(100, Math.max(0, Math.round((daysElapsed / interval) * 100)));
 
@@ -353,7 +357,9 @@ export default function ScheduleModule({
         daysRemaining,
         daysElapsed,
         nextDueDateStr,
+        nextDueDateFullStr,
         lastDateStr,
+        lastDateFullStr,
         percentCycle: 100,
         isUrgent: true
       };
@@ -368,7 +374,9 @@ export default function ScheduleModule({
         daysRemaining,
         daysElapsed,
         nextDueDateStr,
+        nextDueDateFullStr,
         lastDateStr,
+        lastDateFullStr,
         percentCycle,
         isDueSoon: true
       };
@@ -382,7 +390,9 @@ export default function ScheduleModule({
       daysRemaining,
       daysElapsed,
       nextDueDateStr,
+      nextDueDateFullStr,
       lastDateStr,
+      lastDateFullStr,
       percentCycle
     };
   };
@@ -397,18 +407,25 @@ export default function ScheduleModule({
     });
     setSelfCareActivities(updated);
 
-    const todayStr = getLocalDateString();
-    const yesterdayStr = getYesterdayDateString();
-    const formatted = formatDisplayDate(targetDate);
-    const actTitle = title || (selfCareActivities.find(a => a.id === id)?.title) || 'Actividad';
+    const targetItem = (selfCareActivities || []).find(a => a.id === id);
+    const actTitle = title || targetItem?.title || 'Actividad';
+    const formatted = formatFullDisplayDate(targetDate);
+    
+    // Calculate next date for the toast message
+    const freqInfo = targetItem ? getFrequencyDetails(targetItem) : { days: 30 };
+    const interval = targetItem?.daysInterval || freqInfo.days || 30;
+    const nextDateObj = calculateNextDueDate(targetDate, interval);
+    const nextFormatted = nextDateObj ? formatFullDisplayDate(nextDateObj) : 'Próximamente';
 
-    if (targetDate === todayStr) {
-      showToast('success', '¡Autocuidado Realizado Hoy!', `Se actualizó "${actTitle}" con fecha de hoy (${formatted}).`);
-    } else if (targetDate === yesterdayStr) {
-      showToast('success', '¡Autocuidado Registrado!', `Se actualizó "${actTitle}" con fecha de ayer (${formatted}).`);
-    } else {
-      showToast('success', '¡Fecha Registrada!', `Se guardó "${actTitle}" con fecha del ${formatted}.`);
-    }
+    showToast(
+      'success',
+      '¡Fecha Actualizada!',
+      `"${actTitle}": Realizado el ${formatted}. Próxima sesión: ${nextFormatted}.`
+    );
+  };
+
+  const handleMarkSelfCareCompletedToday = (id, title) => {
+    handleUpdateSelfCareDate(id, getLocalDateString(), title);
   };
 
   const handleAddSelfCare = (e) => {
@@ -1149,13 +1166,65 @@ export default function ScheduleModule({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Fecha de Última Realización</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-400">Fecha de Última Realización</label>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setScLastDate(getLocalDateString())}
+                        className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700 cursor-pointer"
+                        title="Hoy"
+                      >
+                        Hoy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setScLastDate(getYesterdayDateString())}
+                        className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700 cursor-pointer"
+                        title="Ayer"
+                      >
+                        Ayer
+                      </button>
+                    </div>
+                  </div>
                   <input
                     type="date"
                     value={scLastDate}
                     onChange={(e) => setScLastDate(e.target.value)}
-                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2.5 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                    onClick={(e) => e.target.showPicker?.()}
+                    className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2.5 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer font-medium"
                   />
+                </div>
+
+                {/* Live Preview Box for Add Form */}
+                <div className="sm:col-span-3 p-3 bg-[#0b0c10] border border-slate-800 rounded-xl space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-[#e0a96d]" /> Última fecha:
+                    </span>
+                    <strong className="text-slate-200">{formatFullDisplayDate(scLastDate)}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800">
+                    <span className="text-[#e0a96d] font-semibold flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" /> Próxima sesión calculada:
+                    </span>
+                    <strong className="text-[#e0a96d] font-bold font-outfit">
+                      {(() => {
+                        let days = 30;
+                        if (scFrequency === 'custom') {
+                          const val = Math.max(1, parseInt(scCustomValue, 10) || 1);
+                          if (scCustomUnit === 'days') days = val;
+                          else if (scCustomUnit === 'weeks') days = val * 7;
+                          else if (scCustomUnit === 'months') days = val * 30;
+                          else if (scCustomUnit === 'years') days = val * 365;
+                        } else {
+                          days = frequencyMeta[scFrequency]?.days || 30;
+                        }
+                        const nextD = calculateNextDueDate(scLastDate, days);
+                        return nextD ? formatFullDisplayDate(nextD) : 'Fecha no definida';
+                      })()}
+                    </strong>
+                  </div>
                 </div>
 
                 <div>
@@ -1577,8 +1646,48 @@ export default function ScheduleModule({
                   type="date"
                   value={editingSelfCareItem.lastCompletedDate || ''}
                   onChange={(e) => setEditingSelfCareItem({ ...editingSelfCareItem, lastCompletedDate: e.target.value })}
-                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                  onClick={(e) => e.target.showPicker?.()}
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer font-medium"
                 />
+              </div>
+
+              {/* Live Calculation Preview Box in Edit Modal */}
+              <div className="p-3.5 bg-[#0b0c10] border border-[#e0a96d]/30 rounded-xl space-y-1.5">
+                <span className="text-[11px] font-bold text-[#e0a96d] flex items-center gap-1.5 uppercase font-mono">
+                  <Sparkles className="w-3.5 h-3.5" /> Cálculo automático de citas
+                </span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Última realizada:</span>
+                  <strong className="text-slate-200">{formatFullDisplayDate(editingSelfCareItem.lastCompletedDate)}</strong>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Frecuencia / Intervalo:</span>
+                  <strong className="text-slate-200">
+                    {editingSelfCareItem.frequency === 'custom' 
+                      ? `Cada ${editingSelfCareItem.customValue || 1} ${editingSelfCareItem.customUnit || 'días'}` 
+                      : (frequencyMeta[editingSelfCareItem.frequency]?.label || 'Mensual')}
+                  </strong>
+                </div>
+                <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-800">
+                  <span className="text-[#e0a96d] font-semibold">Próxima Cita / Sesión:</span>
+                  <strong className="text-[#e0a96d] font-bold font-outfit text-sm">
+                    {(() => {
+                      let days = 30;
+                      if (editingSelfCareItem.frequency === 'custom') {
+                        const val = Math.max(1, parseInt(editingSelfCareItem.customValue, 10) || 1);
+                        const u = editingSelfCareItem.customUnit || 'days';
+                        if (u === 'days') days = val;
+                        else if (u === 'weeks') days = val * 7;
+                        else if (u === 'months') days = val * 30;
+                        else if (u === 'years') days = val * 365;
+                      } else {
+                        days = frequencyMeta[editingSelfCareItem.frequency]?.days || editingSelfCareItem.daysInterval || 30;
+                      }
+                      const nextDate = calculateNextDueDate(editingSelfCareItem.lastCompletedDate, days);
+                      return nextDate ? formatFullDisplayDate(nextDate) : 'Fecha no definida';
+                    })()}
+                  </strong>
+                </div>
               </div>
 
               <div>
@@ -1637,6 +1746,7 @@ function SelfCareCardItem({
   onDelete
 }) {
   const [selectedDate, setSelectedDate] = useState(activity.lastCompletedDate || getLocalDateString());
+  const dateInputRef = useRef(null);
   const todayStr = getLocalDateString();
   const yesterdayStr = getYesterdayDateString();
 
@@ -1648,6 +1758,11 @@ function SelfCareCardItem({
   const hasUnsavedDate = Boolean(selectedDate && selectedDate !== (activity.lastCompletedDate || ''));
   const isSavedToday = activity.lastCompletedDate === todayStr;
   const isSavedYesterday = activity.lastCompletedDate === yesterdayStr;
+
+  // Calculate live preview for unsaved date
+  const liveInterval = activity.daysInterval || freq.days || 30;
+  const liveNextDueDate = selectedDate ? calculateNextDueDate(selectedDate, liveInterval) : null;
+  const liveNextDueDateStr = liveNextDueDate ? formatFullDisplayDate(liveNextDueDate) : 'Fecha no definida';
 
   const handleSaveCustomDate = () => {
     if (!selectedDate) return;
@@ -1674,9 +1789,9 @@ function SelfCareCardItem({
           : 'border-[#e0a96d]/15 hover:border-[#e0a96d]/30'
       }`}
     >
-      <div>
+      <div className="space-y-3.5">
         {/* Top Badges */}
-        <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-lg p-1.5 rounded-lg bg-[#0b0c10] border border-slate-800 shadow-sm">
               {catIcon}
@@ -1696,20 +1811,22 @@ function SelfCareCardItem({
         </div>
 
         {/* Title & Notes */}
-        <h4 className="text-base font-bold text-slate-100 font-outfit mt-1">
-          {activity.title}
-        </h4>
-        {activity.notes && (
-          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-            {activity.notes}
-          </p>
-        )}
+        <div>
+          <h4 className="text-base font-bold text-slate-100 font-outfit">
+            {activity.title}
+          </h4>
+          {activity.notes && (
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              {activity.notes}
+            </p>
+          )}
+        </div>
 
         {/* Protocol Highlights */}
         {activity.protocol && (
           <div className="mt-3 p-3 bg-[#0b0c10] border border-[#e0a96d]/15 rounded-xl text-xs space-y-1">
             <span className="text-[10px] font-bold text-[#e0a96d] uppercase font-mono flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3" /> Protocolo de Ejecución
+              <ShieldCheck className="w-3.5 h-3.5" /> Protocolo de Ejecución
             </span>
             <p className="text-slate-300 text-[11px] leading-relaxed">
               {activity.protocol}
@@ -1717,8 +1834,51 @@ function SelfCareCardItem({
           </div>
         )}
 
+        {/* Highlighted Dates Display Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 bg-[#0b0c10] border border-slate-800/90 rounded-xl shadow-inner">
+          {/* Last Completed Date */}
+          <div className="flex items-start gap-2.5">
+            <div className="p-2 rounded-lg bg-[#e0a96d]/10 text-[#e0a96d] shrink-0 mt-0.5">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] text-slate-400 uppercase font-mono block">Última Realización</span>
+              <span className="text-xs sm:text-sm font-bold text-slate-100 block">
+                {info.lastDateFullStr || formatFullDisplayDate(activity.lastCompletedDate)}
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">
+                {activity.lastCompletedDate 
+                  ? (info.daysElapsed === 0 ? 'Realizado hoy' : info.daysElapsed === 1 ? 'Realizado ayer' : `Hace ${info.daysElapsed} días`) 
+                  : 'Sin fecha previa'}
+              </span>
+            </div>
+          </div>
+
+          {/* Next Scheduled Date */}
+          <div className="flex items-start gap-2.5">
+            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0 mt-0.5">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] text-indigo-300 uppercase font-mono block">Próxima Sesión</span>
+              <span className="text-xs sm:text-sm font-bold text-[#e0a96d] block">
+                {info.nextDueDateFullStr}
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">
+                {info.daysRemaining !== null 
+                  ? (info.daysRemaining > 0 
+                     ? `En ${info.daysRemaining} día${info.daysRemaining === 1 ? '' : 's'}` 
+                     : info.daysRemaining === 0 
+                     ? '¡Toca hoy!' 
+                     : `Vencida hace ${Math.abs(info.daysRemaining)} d`) 
+                  : 'Pendiente'}
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Progress Bar Cycle */}
-        <div className="mt-4 pt-3 border-t border-slate-800/80 space-y-1.5">
+        <div className="space-y-1.5">
           <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 font-medium">
             <span>Ciclo de {freq.days} días</span>
             <span className={`${info.isUrgent ? 'text-rose-400 font-bold' : info.isDueSoon ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}`}>
@@ -1737,106 +1897,153 @@ function SelfCareCardItem({
               style={{ width: `${info.percentCycle}%` }}
             />
           </div>
-
-          {/* Dates Info */}
-          <div className="flex justify-between items-center text-[10px] text-slate-500 pt-1">
-            <span>Última: <strong className="text-slate-300 font-semibold">{info.lastDateStr || 'Nunca'}</strong></span>
-            <span>Próxima: <strong className="text-slate-300 font-semibold">{info.nextDueDateStr}</strong></span>
-          </div>
         </div>
       </div>
 
-      {/* Action Buttons Bar */}
-      <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-        {/* Date Selector & Quick shortcuts */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="flex items-center gap-1.5 bg-[#0b0c10] border border-slate-800 hover:border-[#e0a96d]/40 focus-within:border-[#e0a96d] rounded-lg px-2 py-1 transition-all">
-            <Calendar className="w-3.5 h-3.5 text-[#e0a96d] shrink-0" />
-            <input
-              type="date"
-              value={selectedDate || ''}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSaveCustomDate();
-              }}
-              className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer font-mono"
-              title="Selecciona la fecha exacta en que fuiste / lo realizaste (ej. 25 de septiembre)"
-            />
+      {/* Date Selector & Action Buttons Bar */}
+      <div className="pt-3 border-t border-slate-800/80 space-y-3">
+        {/* Unsaved Date Preview Banner */}
+        {hasUnsavedDate && (
+          <div className="p-3 bg-[#11131a] border border-[#e0a96d]/60 rounded-xl space-y-2 animate-fade-in shadow-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#e0a96d] flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-[#e0a96d]" />
+                <span>Nueva fecha a registrar:</span>
+              </span>
+              <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono font-bold">
+                Sin guardar aún
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs py-1 border-y border-slate-800">
+              <div>
+                <span className="text-[10px] text-slate-400 block">Última Realización:</span>
+                <strong className="text-slate-100">{formatFullDisplayDate(selectedDate)}</strong>
+              </div>
+              <div>
+                <span className="text-[10px] text-[#e0a96d] block">Próxima Sesión Calculada:</span>
+                <strong className="text-[#e0a96d] font-bold">{liveNextDueDateStr}</strong>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setSelectedDate(activity.lastCompletedDate || getLocalDateString())}
+                className="text-xs text-slate-400 hover:text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-800 hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCustomDate}
+                className="btn-rose-gold text-xs font-bold py-1.5 px-4 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md transition-all animate-pulse"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Guardar Fecha ({formatDisplayDate(selectedDate)})</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Date Selector and Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          {/* Date Selector & Quick shortcuts */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Clickable Date Input Box */}
+            <div 
+              onClick={() => dateInputRef.current?.showPicker?.()}
+              className="flex items-center gap-1.5 bg-[#0b0c10] border border-slate-800 hover:border-[#e0a96d]/60 focus-within:border-[#e0a96d] rounded-lg px-2.5 py-1.5 transition-all cursor-pointer shadow-inner"
+              title="Haz clic para abrir el calendario y seleccionar cualquier fecha (ej. 25 de septiembre)"
+            >
+              <Calendar className="w-3.5 h-3.5 text-[#e0a96d] shrink-0" />
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={selectedDate || ''}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveCustomDate();
+                }}
+                className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer font-mono font-medium"
+                title="Selecciona la fecha exacta en que fuiste / lo realizaste"
+              />
+            </div>
+
+            {/* Quick shortcuts */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleSetToday}
+                className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                  isSavedToday
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+                }`}
+                title="Guardar como realizado hoy"
+              >
+                Hoy
+              </button>
+              <button
+                type="button"
+                onClick={handleSetYesterday}
+                className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                  isSavedYesterday
+                    ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                    : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+                }`}
+                title="Guardar como realizado ayer"
+              >
+                Ayer
+              </button>
+            </div>
           </div>
 
-          {/* Quick shortcuts */}
-          <div className="flex items-center gap-1">
+          {/* Action buttons on the right */}
+          <div className="flex items-center justify-end gap-1.5 shrink-0">
+            {hasUnsavedDate ? (
+              <button
+                type="button"
+                onClick={handleSaveCustomDate}
+                className="btn-rose-gold text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
+                title={`Guardar la fecha seleccionada (${formatDisplayDate(selectedDate)})`}
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Guardar Fecha</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSetToday}
+                className={`text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-all shadow ${
+                  isSavedToday
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : 'btn-rose-gold'
+                }`}
+                title="Marcar como realizado hoy"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>{isSavedToday ? 'Hecho Hoy ✓' : 'Realizado Hoy'}</span>
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={handleSetToday}
-              className={`px-2 py-1 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
-                isSavedToday
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
-              }`}
-              title="Guardar como realizado hoy"
+              onClick={() => onEdit(activity)}
+              className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+              title="Editar detalles y configuración"
             >
-              Hoy
+              <Edit3 className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
-              onClick={handleSetYesterday}
-              className={`px-2 py-1 text-[11px] font-semibold rounded-md border transition-all cursor-pointer ${
-                isSavedYesterday
-                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
-                  : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
-              }`}
-              title="Guardar como realizado ayer"
+              onClick={() => onDelete(activity.id, activity.title)}
+              className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+              title="Eliminar actividad"
             >
-              Ayer
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
-        </div>
-
-        {/* Action buttons on the right */}
-        <div className="flex items-center justify-end gap-1.5 shrink-0">
-          {hasUnsavedDate ? (
-            <button
-              type="button"
-              onClick={handleSaveCustomDate}
-              className="btn-rose-gold text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md transition-all animate-pulse"
-              title={`Guardar la fecha seleccionada (${formatDisplayDate(selectedDate)})`}
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>Guardar Fecha</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSetToday}
-              className={`text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-all shadow ${
-                isSavedToday
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  : 'btn-rose-gold'
-              }`}
-              title="Marcar como realizado hoy"
-            >
-              <Check className="w-3.5 h-3.5" />
-              <span>{isSavedToday ? 'Hecho Hoy ✓' : 'Realizado Hoy'}</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => onEdit(activity)}
-            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-            title="Editar detalles y configuración"
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(activity.id, activity.title)}
-            className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-            title="Eliminar actividad"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
         </div>
       </div>
     </div>
