@@ -401,7 +401,7 @@ export const sanitizeAromatherapyOil = (oil) => {
   const trademarkName = safeString(oil.trademarkName || name);
   const botanicalName = safeString(oil.botanicalName || '');
   const brand = safeString(oil.brand || 'dōTERRA');
-  const type = ['single', 'blend', 'custom'].includes(oil.type) ? oil.type : 'single';
+  const type = safeString(oil.type || 'single');
   const category = safeString(oil.category || 'mood');
   const categoryLabel = safeString(oil.categoryLabel || 'Bienestar');
   const aroma = safeString(oil.aroma || 'Fresco y botánico');
@@ -419,6 +419,7 @@ export const sanitizeAromatherapyOil = (oil) => {
     : (typeof oil.keyBenefits === 'string' && oil.keyBenefits ? [oil.keyBenefits] : []);
 
   const inInventory = Boolean(oil.inInventory ?? oil.defaultInInventory ?? false);
+  const inWishlist = Boolean(oil.inWishlist ?? false);
   const level = safeString(oil.level || '100%');
   const notes = safeString(oil.notes || '');
 
@@ -438,7 +439,12 @@ export const sanitizeAromatherapyOil = (oil) => {
     emotionalProperty,
     keyBenefits,
     description: safeString(oil.description || ''),
+    aromaticGuide: safeString(oil.aromaticGuide || ''),
+    topicalGuide: safeString(oil.topicalGuide || ''),
+    ingestionGuide: safeString(oil.ingestionGuide || ''),
+    safetyGuide: safeString(oil.safetyGuide || ''),
     inInventory,
+    inWishlist,
     level,
     notes,
     isCustom: Boolean(oil.isCustom)

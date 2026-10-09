@@ -60,7 +60,8 @@ export default function AromatherapyModule({
   // ============================================================================
   // TAB 1: BOTICARIO & INVENTARIO STATE
   // ============================================================================
-  const [boticarioFilter, setBoticarioFilter] = useState('all'); // 'all', 'owned', 'singles', 'blends', category
+  const [boticarioFilter, setBoticarioFilter] = useState('all'); // 'all', 'owned', 'wishlist', 'singles', 'blends', 'touch', 'emotional', 'kids', 'metapwr', 'diffuser_carrier'
+  const [consumptionFilter, setConsumptionFilter] = useState('all'); // 'all', 'A', 'T', 'I'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOilDetail, setSelectedOilDetail] = useState(null);
   const [isCustomOilModalOpen, setIsCustomOilModalOpen] = useState(false);
@@ -78,10 +79,13 @@ export default function AromatherapyModule({
     emotionalProperty: '',
     keyBenefits: '',
     level: '100%',
-    notes: ''
+    notes: '',
+    aromaticGuide: '',
+    topicalGuide: '',
+    ingestionGuide: ''
   });
 
-  // Ensure catalog merges seamlessly with user-saved inventory
+  // Ensure catalog merges seamlessly with user-saved inventory and wishlist
   const mergedOils = useMemo(() => {
     // If userOils is empty or missing items from catalog, merge catalog defaults
     const userMap = new Map((userOils || []).map(o => [o.id, o]));
@@ -90,9 +94,18 @@ export default function AromatherapyModule({
     const catalogMerged = DOTERRA_CATALOG.map(catOil => {
       const userEntry = userMap.get(catOil.id);
       if (userEntry) {
-        return { ...catOil, ...userEntry, inInventory: userEntry.inInventory ?? true };
+        return {
+          ...catOil,
+          ...userEntry,
+          inInventory: userEntry.inInventory ?? false,
+          inWishlist: userEntry.inWishlist ?? false
+        };
       }
-      return { ...catOil, inInventory: Boolean(catOil.defaultInInventory) };
+      return {
+        ...catOil,
+        inInventory: Boolean(catOil.defaultInInventory),
+        inWishlist: false
+      };
     });
 
     // Add any completely custom oils added by user
@@ -109,32 +122,57 @@ export default function AromatherapyModule({
         const q = searchQuery.toLowerCase();
         const matchName = oil.name?.toLowerCase().includes(q);
         const matchTrade = oil.trademarkName?.toLowerCase().includes(q);
+        const matchBotanical = oil.botanicalName?.toLowerCase().includes(q);
         const matchAroma = oil.aroma?.toLowerCase().includes(q);
         const matchEmotion = oil.emotionalProperty?.toLowerCase().includes(q);
+        const matchDesc = oil.description?.toLowerCase().includes(q);
         const matchBenefits = Array.isArray(oil.keyBenefits) && oil.keyBenefits.some(b => b.toLowerCase().includes(q));
-        if (!matchName && !matchTrade && !matchAroma && !matchEmotion && !matchBenefits) {
+        if (!matchName && !matchTrade && !matchBotanical && !matchAroma && !matchEmotion && !matchDesc && !matchBenefits) {
           return false;
         }
       }
 
-      // Tab filter
-      if (boticarioFilter === 'owned') return oil.inInventory;
-      if (boticarioFilter === 'singles') return oil.type === 'single';
-      if (boticarioFilter === 'blends') return oil.type === 'blend';
-      if (boticarioFilter !== 'all') return oil.category === boticarioFilter;
+      // Tab / Type filter
+      if (boticarioFilter === 'owned' && !oil.inInventory) return false;
+      if (boticarioFilter === 'wishlist' && !oil.inWishlist) return false;
+      if (boticarioFilter === 'singles' && oil.type !== 'single') return false;
+      if (boticarioFilter === 'blends' && oil.type !== 'blend') return false;
+      if (boticarioFilter === 'touch' && oil.type !== 'touch') return false;
+      if (boticarioFilter === 'emotional' && oil.type !== 'emotional') return false;
+      if (boticarioFilter === 'kids' && oil.type !== 'kids') return false;
+      if (boticarioFilter === 'metapwr' && oil.type !== 'metapwr') return false;
+      if (boticarioFilter === 'diffuser_carrier' && !['carrier', 'diffuser', 'personal_care', 'wellness'].includes(oil.type)) return false;
+      if (!['all', 'owned', 'wishlist', 'singles', 'blends', 'touch', 'emotional', 'kids', 'metapwr', 'diffuser_carrier'].includes(boticarioFilter)) {
+        if (oil.category !== boticarioFilter) return false;
+      }
+
+      // Consumption Method filter (Aromático, Tópico, Interno/Ingerir)
+      if (consumptionFilter === 'A' && !oil.methods?.includes('A')) return false;
+      if (consumptionFilter === 'T' && !oil.methods?.includes('T')) return false;
+      if (consumptionFilter === 'I' && !oil.methods?.includes('I')) return false;
 
       return true;
     });
-  }, [mergedOils, boticarioFilter, searchQuery]);
+  }, [mergedOils, boticarioFilter, consumptionFilter, searchQuery]);
 
   const ownedOilsCount = useMemo(() => mergedOils.filter(o => o.inInventory).length, [mergedOils]);
+  const wishlistCount = useMemo(() => mergedOils.filter(o => o.inWishlist).length, [mergedOils]);
+  const collectionProgressPct = useMemo(() => {
+    if (mergedOils.length === 0) return 0;
+    return Math.round((ownedOilsCount / mergedOils.length) * 100);
+  }, [ownedOilsCount, mergedOils.length]);
 
   // Toggle oil in inventory
   const handleToggleInventory = (oil) => {
     const updatedList = mergedOils.map(item => {
       if (item.id === oil.id) {
         const nextState = !item.inInventory;
-        return { ...item, inInventory: nextState };
+        return {
+          ...item,
+          inInventory: nextState,
+          // If acquired, remove from wishlist
+          inWishlist: nextState ? false : item.inWishlist
+        };
       }
       return item;
     });
@@ -143,6 +181,27 @@ export default function AromatherapyModule({
       'success',
       oil.inInventory ? 'Aceite Retirado' : '¡Aceite en Boticario!',
       `${oil.name} ahora ${oil.inInventory ? 'está marcado como ausente' : 'está activo en tu boticario'}.`
+    );
+  };
+
+  // Toggle oil in wishlist (Por adquirir)
+  const handleToggleWishlist = (oil) => {
+    const updatedList = mergedOils.map(item => {
+      if (item.id === oil.id) {
+        const nextWish = !item.inWishlist;
+        return {
+          ...item,
+          inWishlist: nextWish,
+          inInventory: nextWish ? false : item.inInventory
+        };
+      }
+      return item;
+    });
+    setUserOils(updatedList);
+    showToast(
+      'success',
+      oil.inWishlist ? 'Removido de Lista de Deseos' : '¡Añadido a Lista de Deseos!',
+      `${oil.name} ${oil.inWishlist ? 'fue retirado de tus metas' : 'está en tu lista para adquirir próximamente'}.`
     );
   };
 
@@ -498,13 +557,29 @@ export default function AromatherapyModule({
             </p>
           </div>
 
-          {/* Stat Badges */}
-          <div className="flex flex-wrap gap-3 shrink-0">
-            <div className="bg-[#11131a]/80 backdrop-blur-md border border-[#e0a96d]/20 rounded-2xl p-3.5 min-w-[120px]">
-              <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">En tu Boticario</span>
+          {/* Stat Badges & Collection Goal Tracker */}
+          <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+            <div className="bg-[#11131a]/80 backdrop-blur-md border border-[#e0a96d]/20 rounded-2xl p-3.5 min-w-[140px] flex flex-col justify-between">
+              <div>
+                <span className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">En tu Boticario</span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="text-xl font-extrabold text-[#e0a96d] font-outfit">{ownedOilsCount}</span>
+                  <span className="text-[10px] text-slate-500">/ {mergedOils.length} ({collectionProgressPct}%)</span>
+                </div>
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
+                <div 
+                  className="bg-gradient-to-r from-[#e0a96d] to-amber-300 h-1.5 rounded-full transition-all duration-500"
+                  style={{ width: `${collectionProgressPct}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-[#11131a]/80 backdrop-blur-md border border-rose-500/20 rounded-2xl p-3.5 min-w-[120px]">
+              <span className="block text-[10px] uppercase tracking-wider text-rose-400 font-bold">Por Adquirir</span>
               <div className="flex items-baseline gap-1 mt-0.5">
-                <span className="text-xl font-extrabold text-[#e0a96d] font-outfit">{ownedOilsCount}</span>
-                <span className="text-[10px] text-slate-500">/ {mergedOils.length} aceites</span>
+                <span className="text-xl font-extrabold text-rose-400 font-outfit">{wishlistCount}</span>
+                <span className="text-[10px] text-slate-500">en Wishlist</span>
               </div>
             </div>
 
@@ -514,7 +589,7 @@ export default function AromatherapyModule({
                 <span className="text-xl font-extrabold text-emerald-400 font-outfit">
                   {allBlends.filter(b => b.ingredients.every(i => mergedOils.some(o => o.inInventory && (o.id === i.oilId || o.name.toLowerCase().includes(i.oilName.toLowerCase()))))).length}
                 </span>
-                <span className="text-[10px] text-slate-500">para preparar</span>
+                <span className="text-[10px] text-slate-500">disponibles</span>
               </div>
             </div>
           </div>
@@ -531,7 +606,7 @@ export default function AromatherapyModule({
             }`}
           >
             <Droplets className="w-4 h-4" />
-            <span>🌿 Mi Boticario & Catálogo</span>
+            <span>🌿 Mi Boticario & Catálogo 2026 ({mergedOils.length})</span>
           </button>
 
           <button
@@ -590,55 +665,78 @@ export default function AromatherapyModule({
       {activeTab === 'boticario' && (
         <div className="space-y-6 animate-fade-in">
           {/* Controls & Filter bar */}
-          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-            {/* Search Input */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por aceite, emoción, beneficio (ej. dolor de cabeza, sueño)..."
-                className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#e0a96d]"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
+          <div className="space-y-3">
+            {/* Top row: Search & Custom Add */}
+            <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+              {/* Search Input */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar por nombre, emoción, beneficio (ej. dolor de cabeza, digestión, colágeno)..."
+                  className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#e0a96d]"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <button
+                onClick={() => setIsCustomOilModalOpen(true)}
+                className="btn-rose-gold text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 shrink-0 cursor-pointer shadow-md"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Agregar Aceite DIY</span>
+              </button>
             </div>
 
-            {/* Category / Filter pills */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {/* Line / Product Category Filters */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
               <button
                 onClick={() => setBoticarioFilter('all')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
                   boticarioFilter === 'all'
-                    ? 'bg-[#e0a96d]/20 text-[#e0a96d] border border-[#e0a96d]/40'
+                    ? 'bg-[#e0a96d]/20 text-[#e0a96d] border border-[#e0a96d]/40 shadow-sm'
                     : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
                 }`}
               >
-                Todos ({mergedOils.length})
+                Catálogo Completo ({mergedOils.length})
               </button>
 
               <button
                 onClick={() => setBoticarioFilter('owned')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer ${
                   boticarioFilter === 'owned'
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm'
                     : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
                 }`}
               >
-                <CheckCircle2 className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                 <span>En mi Boticario ({ownedOilsCount})</span>
               </button>
 
               <button
+                onClick={() => setBoticarioFilter('wishlist')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                  boticarioFilter === 'wishlist'
+                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-sm'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                <Heart className="w-3.5 h-3.5 text-rose-400 fill-rose-400/30" />
+                <span>Por Adquirir ({wishlistCount})</span>
+              </button>
+
+              <button
                 onClick={() => setBoticarioFilter('singles')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
                   boticarioFilter === 'singles'
                     ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40'
                     : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
@@ -649,7 +747,7 @@ export default function AromatherapyModule({
 
               <button
                 onClick={() => setBoticarioFilter('blends')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
                   boticarioFilter === 'blends'
                     ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40'
                     : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
@@ -659,11 +757,111 @@ export default function AromatherapyModule({
               </button>
 
               <button
-                onClick={() => setIsCustomOilModalOpen(true)}
-                className="btn-rose-gold text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 shrink-0 cursor-pointer ml-auto"
+                onClick={() => setBoticarioFilter('touch')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
+                  boticarioFilter === 'touch'
+                    ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Agregar Aceite DIY</span>
+                Línea Touch (Roll-on)
+              </button>
+
+              <button
+                onClick={() => setBoticarioFilter('emotional')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
+                  boticarioFilter === 'emotional'
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                Aromaterapia Emocional
+              </button>
+
+              <button
+                onClick={() => setBoticarioFilter('kids')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
+                  boticarioFilter === 'kids'
+                    ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                Colección Niños
+              </button>
+
+              <button
+                onClick={() => setBoticarioFilter('metapwr')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
+                  boticarioFilter === 'metapwr'
+                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                MetaPWR & Bienestar
+              </button>
+
+              <button
+                onClick={() => setBoticarioFilter('diffuser_carrier')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
+                  boticarioFilter === 'diffuser_carrier'
+                    ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                Portadores & Difusores
+              </button>
+            </div>
+
+            {/* Consumption Method Secondary Filters */}
+            <div className="flex items-center gap-2 text-[11px] pt-1">
+              <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px] mr-1">
+                Método de Consumo:
+              </span>
+              <button
+                onClick={() => setConsumptionFilter('all')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  consumptionFilter === 'all'
+                    ? 'bg-slate-700 text-slate-100'
+                    : 'bg-[#11131a] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                Todos los Métodos
+              </button>
+
+              <button
+                onClick={() => setConsumptionFilter('A')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  consumptionFilter === 'A'
+                    ? 'bg-sky-500/25 text-sky-300 border border-sky-500/40'
+                    : 'bg-[#11131a] text-slate-400 hover:text-sky-300 border border-slate-800'
+                }`}
+              >
+                <Wind className="w-3 h-3 text-sky-400" />
+                <span>💨 Aromático (Difusor / Inhalar)</span>
+              </button>
+
+              <button
+                onClick={() => setConsumptionFilter('T')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  consumptionFilter === 'T'
+                    ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40'
+                    : 'bg-[#11131a] text-slate-400 hover:text-emerald-300 border border-slate-800'
+                }`}
+              >
+                <Feather className="w-3 h-3 text-emerald-400" />
+                <span>💆‍♀️ Tópico (Piel & Masaje)</span>
+              </button>
+
+              <button
+                onClick={() => setConsumptionFilter('I')}
+                className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  consumptionFilter === 'I'
+                    ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40'
+                    : 'bg-[#11131a] text-slate-400 hover:text-amber-300 border border-slate-800'
+                }`}
+              >
+                <Droplets className="w-3 h-3 text-amber-400" />
+                <span>💧 Interno (Ingerible en Agua / Cápsula)</span>
               </button>
             </div>
           </div>
@@ -672,59 +870,117 @@ export default function AromatherapyModule({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredOils.map((oil) => {
               const isOwned = oil.inInventory;
+              const isWishlist = oil.inWishlist;
 
               return (
                 <div
                   key={oil.id}
                   className={`rounded-2xl border transition-all duration-300 p-5 flex flex-col justify-between relative group ${
                     isOwned
-                      ? 'bg-[#171a24] border-[#e0a96d]/30 shadow-lg hover:border-[#e0a96d]/60 shadow-[#e0a96d]/5'
-                      : 'bg-[#11131a]/60 border-slate-800/80 hover:border-slate-700 opacity-80 hover:opacity-100'
+                      ? 'bg-[#171a24] border-[#e0a96d]/40 shadow-lg hover:border-[#e0a96d]/70 shadow-[#e0a96d]/5'
+                      : (isWishlist
+                        ? 'bg-[#18151e] border-rose-500/30 hover:border-rose-500/60 shadow-lg shadow-rose-500/5'
+                        : 'bg-[#11131a]/70 border-slate-800/80 hover:border-slate-700 opacity-90 hover:opacity-100')
                   }`}
                 >
                   {/* Top Header */}
                   <div>
                     <div className="flex items-start justify-between gap-3 mb-2.5">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
                           <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#e0a96d]/10 text-[#e0a96d] border border-[#e0a96d]/20">
                             {oil.categoryLabel || oil.brand}
                           </span>
+
                           {oil.type === 'blend' && (
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
                               Mezcla
                             </span>
                           )}
+                          {oil.type === 'touch' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-300 border border-pink-500/20">
+                              Touch Roll-on
+                            </span>
+                          )}
+                          {oil.type === 'kids' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-300 border border-teal-500/20">
+                              Colección Niños
+                            </span>
+                          )}
+                          {oil.type === 'metapwr' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-300 border border-orange-500/20">
+                              MetaPWR
+                            </span>
+                          )}
+                          {oil.type === 'emotional' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                              Emocional
+                            </span>
+                          )}
+                          {oil.type === 'diffuser' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/20">
+                              Difusor
+                            </span>
+                          )}
+                          {oil.type === 'carrier' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                              Aceite Portador
+                            </span>
+                          )}
+
                           {oil.photosensitive && (
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1" title="¡Fotosensible! No exponerse al sol en 12-24h tras uso tópico">
                               <Sun className="w-2.5 h-2.5" />
                               <span>Fotosensible</span>
                             </span>
                           )}
+
+                          {oil.sensitivity === 'D' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 flex items-center gap-1" title="¡Aceite Caliente! Diluir siempre con Coco Fraccionado">
+                              <Flame className="w-2.5 h-2.5" />
+                              <span>Diluir Siempre</span>
+                            </span>
+                          )}
                         </div>
 
-                        <h3 className="text-base font-bold font-outfit text-slate-100 mt-1">
+                        <h3 className="text-base font-bold font-outfit text-slate-100 truncate">
                           {oil.name}
                         </h3>
                         {oil.trademarkName && oil.trademarkName !== oil.name && (
-                          <span className="text-[11px] text-slate-400 block font-medium">
+                          <span className="text-[11px] text-slate-400 block font-medium truncate">
                             {oil.trademarkName} {oil.botanicalName ? `• ${oil.botanicalName}` : ''}
                           </span>
                         )}
                       </div>
 
-                      {/* In Inventory Toggle Button */}
-                      <button
-                        onClick={() => handleToggleInventory(oil)}
-                        className={`p-2 rounded-xl border transition-all cursor-pointer ${
-                          isOwned
-                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-rose-500/15 hover:text-rose-400 hover:border-rose-500/30'
-                            : 'bg-[#0b0c10] text-slate-500 border-slate-800 hover:text-emerald-400 hover:border-emerald-500/30'
-                        }`}
-                        title={isOwned ? 'Marcar como ausente en boticario' : 'Añadir a mi boticario activo'}
-                      >
-                        {isOwned ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                      </button>
+                      {/* Quick Action Toggles: Wishlist & Inventory */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Wishlist Button */}
+                        <button
+                          onClick={() => handleToggleWishlist(oil)}
+                          className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                            isWishlist
+                              ? 'bg-rose-500/20 text-rose-400 border-rose-500/40 shadow-sm'
+                              : 'bg-[#0b0c10] text-slate-500 border-slate-800 hover:text-rose-400 hover:border-rose-500/30'
+                          }`}
+                          title={isWishlist ? 'Quitar de Lista de Deseos' : 'Marcar para Adquirir (Wishlist)'}
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${isWishlist ? 'fill-rose-400' : ''}`} />
+                        </button>
+
+                        {/* In Inventory Toggle Button */}
+                        <button
+                          onClick={() => handleToggleInventory(oil)}
+                          className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                            isOwned
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-rose-500/15 hover:text-rose-400 hover:border-rose-500/30'
+                              : 'bg-[#0b0c10] text-slate-500 border-slate-800 hover:text-emerald-400 hover:border-emerald-500/30'
+                          }`}
+                          title={isOwned ? 'Marcar como ausente en boticario' : 'Tengo este aceite en mi Boticario'}
+                        >
+                          {isOwned ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Emotional & Aromatic profile */}
@@ -732,22 +988,29 @@ export default function AromatherapyModule({
                       "{oil.emotionalProperty || oil.description}"
                     </p>
 
-                    {/* Usage Badges (A, T, I) */}
-                    <div className="flex items-center gap-1.5 mb-3">
-                      <span className="text-[10px] text-slate-400 font-semibold mr-1">Uso:</span>
+                    {/* Usage Badges (A, T, I) & Ingestion summary */}
+                    <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+                      <span className="text-[10px] text-slate-400 font-semibold mr-0.5">Cómo consumir:</span>
                       {oil.methods?.includes('A') && (
-                        <span className="w-5 h-5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center justify-center text-[10px] font-black" title="Aromático (Difusor / Inhalación)">
-                          A
+                        <span className="px-1.5 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[10px] font-black flex items-center gap-1" title="Aromático: Difusor ultrasónico o inhalación profunda en palmas">
+                          <span>A</span>
+                          <span className="text-[9px] font-medium hidden sm:inline">Difusor</span>
                         </span>
                       )}
                       {oil.methods?.includes('T') && (
-                        <span className="w-5 h-5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center text-[10px] font-black" title="Tópico (Diluido con Coco)">
-                          T
+                        <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-black flex items-center gap-1" title="Tópico: Masaje en piel diluido con Coco Fraccionado">
+                          <span>T</span>
+                          <span className="text-[9px] font-medium hidden sm:inline">Tópico</span>
                         </span>
                       )}
-                      {oil.methods?.includes('I') && (
-                        <span className="w-5 h-5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center text-[10px] font-black" title="Interno (En cápsula o agua según lineamiento dōTERRA)">
-                          I
+                      {oil.methods?.includes('I') ? (
+                        <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-black flex items-center gap-1" title="Interno: Apto para ingerir en agua o cápsula vegetal">
+                          <span>I</span>
+                          <span className="text-[9px] font-medium hidden sm:inline">Ingerir</span>
+                        </span>
+                      ) : (
+                        <span className="text-[9px] text-slate-500 italic">
+                          (No ingerir)
                         </span>
                       )}
 
@@ -777,7 +1040,14 @@ export default function AromatherapyModule({
                         <span className="text-[10px] font-bold text-emerald-400">En Boticario</span>
                       </div>
                     ) : (
-                      <span className="text-[10px] text-slate-500">Catálogo dōTERRA</span>
+                      isWishlist ? (
+                        <div className="flex items-center gap-1.5">
+                          <Heart className="w-2.5 h-2.5 text-rose-400 fill-rose-400" />
+                          <span className="text-[10px] font-bold text-rose-400">Por Adquirir</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-500">Catálogo dōTERRA 2026</span>
+                      )
                     )}
 
                     <button
@@ -785,7 +1055,7 @@ export default function AromatherapyModule({
                       className="text-xs font-bold text-[#e0a96d] hover:text-[#f3c699] flex items-center gap-1 cursor-pointer transition-colors p-1"
                     >
                       <Info className="w-3.5 h-3.5" />
-                      <span>Ficha Completa</span>
+                      <span>Ficha & Guía de Consumo</span>
                     </button>
                   </div>
                 </div>
@@ -796,7 +1066,7 @@ export default function AromatherapyModule({
           {filteredOils.length === 0 && (
             <div className="text-center py-16 bg-[#171a24] rounded-2xl border border-slate-800">
               <Droplets className="w-12 h-12 text-slate-600 mx-auto mb-3 animate-pulse" />
-              <h4 className="text-base font-bold text-slate-300">No se encontraron aceites</h4>
+              <h4 className="text-base font-bold text-slate-300">No se encontraron productos</h4>
               <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
                 Prueba con otro término de búsqueda o limpia los filtros activos.
               </p>
@@ -1520,91 +1790,239 @@ export default function AromatherapyModule({
       )}
 
       {/* ============================================================================ */}
-      {/* 7. MODAL: DETALLES DE ACEITE ESENCIAL */}
+      {/* 7. MODAL: DETALLES DE ACEITE ESENCIAL & GUÍA COMPLETA DE CONSUMO */}
       {/* ============================================================================ */}
       {selectedOilDetail && createPortal(
         <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-          <div className="bg-[#171a24] border border-[#e0a96d]/40 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl animate-modal-pop my-auto max-h-[90vh] flex flex-col">
+          <div className="bg-[#171a24] border border-[#e0a96d]/40 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl animate-modal-pop my-auto max-h-[92vh] flex flex-col">
+            {/* Header */}
             <div className="flex justify-between items-start border-b border-slate-800 pb-4 shrink-0">
-              <div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/30">
-                  {selectedOilDetail.categoryLabel || selectedOilDetail.brand}
-                </span>
-                <h3 className="text-xl font-bold font-outfit text-slate-100 mt-1">
+              <div className="flex-1 pr-2">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/30">
+                    {selectedOilDetail.categoryLabel || selectedOilDetail.brand}
+                  </span>
+                  {selectedOilDetail.type === 'blend' && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                      Mezcla dōTERRA
+                    </span>
+                  )}
+                  {selectedOilDetail.type === 'touch' && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-300 border border-pink-500/20">
+                      Touch Roll-on
+                    </span>
+                  )}
+                  {selectedOilDetail.type === 'kids' && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-300 border border-teal-500/20">
+                      Colección Niños
+                    </span>
+                  )}
+                  {selectedOilDetail.type === 'metapwr' && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-300 border border-orange-500/20">
+                      Sistema MetaPWR
+                    </span>
+                  )}
+                  {selectedOilDetail.type === 'emotional' && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                      Aromaterapia Emocional
+                    </span>
+                  )}
+                </div>
+
+                <h3 className="text-xl sm:text-2xl font-black font-outfit text-slate-100 mt-1">
                   {selectedOilDetail.name}
                 </h3>
                 {selectedOilDetail.trademarkName && (
-                  <span className="text-xs text-slate-400">{selectedOilDetail.trademarkName} {selectedOilDetail.botanicalName ? `(${selectedOilDetail.botanicalName})` : ''}</span>
+                  <span className="text-xs text-slate-400 font-medium block">
+                    {selectedOilDetail.trademarkName} {selectedOilDetail.botanicalName ? `• ${selectedOilDetail.botanicalName}` : ''}
+                  </span>
                 )}
               </div>
+
               <button
                 onClick={() => setSelectedOilDetail(null)}
-                className="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 cursor-pointer"
+                className="text-slate-400 hover:text-slate-200 p-2 rounded-xl hover:bg-slate-800 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1 py-4 space-y-4 pr-1">
+            {/* Scrollable Body */}
+            <div className="overflow-y-auto flex-1 py-4 space-y-5 pr-1 text-xs">
+              {/* Emotional & Holistic Profile */}
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[#e0a96d] mb-1">
-                  Perfil Emocional & Holístico
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#e0a96d] mb-1.5 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#e0a96d]" />
+                  <span>Perfil Emocional & Holístico</span>
                 </h4>
-                <p className="text-xs text-slate-300 italic bg-[#0b0c10] p-3 rounded-xl border border-slate-800">
+                <p className="text-xs text-slate-200 italic bg-[#0b0c10] p-3.5 rounded-2xl border border-slate-800 leading-relaxed">
                   "{selectedOilDetail.emotionalProperty || selectedOilDetail.description}"
                 </p>
               </div>
 
+              {/* Guía de Consumo & Formas de Uso (A, T, I) */}
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
-                  Beneficios Principales
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-2.5 flex items-center gap-1.5">
+                  <Droplets className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Guía Práctica de Uso y Consumo</span>
                 </h4>
-                <ul className="space-y-1.5 text-xs text-slate-300">
-                  {selectedOilDetail.keyBenefits?.map((b, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <span>{b}</span>
-                    </li>
-                  ))}
-                </ul>
+
+                <div className="space-y-2.5">
+                  {/* 1. Modo Aromático */}
+                  <div className="bg-[#0b0c10] p-3.5 rounded-2xl border border-sky-500/20">
+                    <div className="flex items-center gap-2 text-sky-400 font-bold mb-1">
+                      <Wind className="w-4 h-4" />
+                      <span className="uppercase tracking-wider text-[10px]">💨 Modo Aromático (Difusor / Inhalación)</span>
+                    </div>
+                    <p className="text-slate-300 text-xs leading-relaxed">
+                      {selectedOilDetail.aromaticGuide || (
+                        selectedOilDetail.methods?.includes('A')
+                          ? 'Colocar de 3 a 5 gotas en difusor ultrasónico con agua purificada fresca, o frotar 1 gota en las palmas de las manos e inhalar profundamente durante 3 respiraciones diafragmáticas.'
+                          : 'Este producto no está diseñado para difusión ambiental.'
+                      )}
+                    </p>
+                  </div>
+
+                  {/* 2. Modo Tópico */}
+                  <div className="bg-[#0b0c10] p-3.5 rounded-2xl border border-emerald-500/20">
+                    <div className="flex items-center justify-between gap-2 text-emerald-400 font-bold mb-1">
+                      <div className="flex items-center gap-2">
+                        <Feather className="w-4 h-4" />
+                        <span className="uppercase tracking-wider text-[10px]">💆‍♀️ Modo Tópico (Piel & Masaje)</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-normal">
+                        Sensibilidad: <strong>{selectedOilDetail.sensitivity === 'N' ? 'Neat (Puro)' : (selectedOilDetail.sensitivity === 'D' ? 'Diluir Siempre' : 'Piel Sensible')}</strong>
+                      </span>
+                    </div>
+                    <p className="text-slate-300 text-xs leading-relaxed">
+                      {selectedOilDetail.topicalGuide || (
+                        selectedOilDetail.methods?.includes('T')
+                          ? 'Aplicar 1-2 gotas diluidas en 1 cucharadita de Aceite Fraccionado de Coco (FCO) en sienes, nuca, muñecas o planta de los pies.'
+                          : 'Uso tópico no recomendado para este formato.'
+                      )}
+                    </p>
+
+                    {selectedOilDetail.photosensitive && (
+                      <div className="mt-2 flex items-center gap-1.5 p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-semibold">
+                        <Sun className="w-3.5 h-3.5 shrink-0" />
+                        <span>¡Fotosensible! Evitar la luz solar o rayos UV directos sobre la piel durante 12 a 24 horas tras su aplicación.</span>
+                      </div>
+                    )}
+
+                    {selectedOilDetail.sensitivity === 'D' && (
+                      <div className="mt-2 flex items-center gap-1.5 p-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-semibold">
+                        <Flame className="w-3.5 h-3.5 shrink-0" />
+                        <span>¡Aceite Caliente! Requiere dilución obligatoria con Coco Fraccionado para no irritar la piel.</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Modo Interno / Ingerible */}
+                  <div className={`p-3.5 rounded-2xl border ${
+                    selectedOilDetail.methods?.includes('I')
+                      ? 'bg-[#0b0c10] border-amber-500/25 text-amber-200'
+                      : 'bg-[#0b0c10]/60 border-slate-800 text-slate-400'
+                  }`}>
+                    <div className="flex items-center gap-2 font-bold mb-1 text-amber-400">
+                      <Droplets className="w-4 h-4" />
+                      <span className="uppercase tracking-wider text-[10px]">
+                        💧 Modo Interno (Consumo Oral / Ingerir)
+                      </span>
+                    </div>
+                    <p className="text-xs leading-relaxed">
+                      {selectedOilDetail.ingestionGuide || (
+                        selectedOilDetail.methods?.includes('I')
+                          ? 'Añadir 1-2 gotas en 120-240 ml de agua fresca o infusión tibia, colocar 1 gota sublingual o ingerir en 1 cápsula vegetal vacía llena con aceite portador.'
+                          : '⚠️ No ingerir. Este producto está formulado exclusivamente para uso aromático y/o tópico.'
+                      )}
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
+              {/* Key Benefits */}
+              {Array.isArray(selectedOilDetail.keyBenefits) && selectedOilDetail.keyBenefits.length > 0 && (
+                <div>
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-2">
+                    Beneficios Principales
+                  </h4>
+                  <ul className="space-y-1.5">
+                    {selectedOilDetail.keyBenefits.map((b, i) => (
+                      <li key={i} className="flex items-start gap-2 text-slate-300">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Sensory & Notes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div className="bg-[#0b0c10] p-3 rounded-xl border border-slate-800">
-                  <span className="text-[10px] text-slate-400 font-bold block mb-1 uppercase">Aroma</span>
+                  <span className="text-[10px] text-slate-400 font-bold block mb-1 uppercase">Aroma Sensorial</span>
                   <span className="text-xs text-slate-200 font-semibold">{selectedOilDetail.aroma}</span>
                 </div>
                 <div className="bg-[#0b0c10] p-3 rounded-xl border border-slate-800">
-                  <span className="text-[10px] text-slate-400 font-bold block mb-1 uppercase">Sensibilidad Dérmica</span>
-                  <span className="text-xs text-slate-200 font-semibold">
-                    {selectedOilDetail.sensitivity === 'N' ? 'Neat (Puro)' : (selectedOilDetail.sensitivity === 'D' ? 'Diluir Siempre' : 'Piel Sensible')}
-                  </span>
+                  <span className="text-[10px] text-slate-400 font-bold block mb-1 uppercase">Consejos de Uso</span>
+                  <span className="text-xs text-slate-300">{selectedOilDetail.notes || 'Guardar en lugar fresco lejos de la luz solar.'}</span>
                 </div>
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-800 flex justify-between items-center shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  handleToggleInventory(selectedOilDetail);
-                  setSelectedOilDetail(prev => ({ ...prev, inInventory: !prev.inInventory }));
-                }}
-                className={`text-xs font-bold py-2.5 px-4 rounded-xl cursor-pointer transition-colors ${
-                  selectedOilDetail.inInventory
-                    ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
-                    : 'btn-rose-gold'
-                }`}
-              >
-                {selectedOilDetail.inInventory ? 'Quitar de Boticario' : 'Añadir a mi Boticario'}
-              </button>
+            {/* Footer Controls */}
+            <div className="pt-4 border-t border-slate-800 flex flex-wrap justify-between items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2">
+                {/* Wishlist Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleToggleWishlist(selectedOilDetail);
+                    setSelectedOilDetail(prev => ({ ...prev, inWishlist: !prev.inWishlist, inInventory: prev.inWishlist ? prev.inInventory : false }));
+                  }}
+                  className={`text-xs font-bold py-2.5 px-4 rounded-xl cursor-pointer transition-all flex items-center gap-1.5 ${
+                    selectedOilDetail.inWishlist
+                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-sm'
+                      : 'bg-[#0b0c10] text-slate-300 border border-slate-700 hover:text-rose-400 hover:border-rose-500/30'
+                  }`}
+                >
+                  <Heart className={`w-3.5 h-3.5 ${selectedOilDetail.inWishlist ? 'fill-rose-400' : ''}`} />
+                  <span>{selectedOilDetail.inWishlist ? 'En Lista de Deseos' : 'Marcar para Adquirir'}</span>
+                </button>
+
+                {/* Inventory Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleToggleInventory(selectedOilDetail);
+                    setSelectedOilDetail(prev => ({ ...prev, inInventory: !prev.inInventory, inWishlist: !prev.inInventory ? false : prev.inWishlist }));
+                  }}
+                  className={`text-xs font-bold py-2.5 px-4 rounded-xl cursor-pointer transition-all flex items-center gap-1.5 ${
+                    selectedOilDetail.inInventory
+                      ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
+                      : 'btn-rose-gold'
+                  }`}
+                >
+                  {selectedOilDetail.inInventory ? (
+                    <>
+                      <X className="w-3.5 h-3.5" />
+                      <span>Quitar de Boticario</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Tengo en Boticario</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
               <button
                 type="button"
                 onClick={() => setSelectedOilDetail(null)}
-                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2.5 px-4 rounded-xl cursor-pointer"
+                className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2.5 px-5 rounded-xl cursor-pointer"
               >
-                Cerrar
+                Cerrar Guía
               </button>
             </div>
           </div>

@@ -1,13 +1,13 @@
 /**
- * AURA Nexus - Catálogo Oficial dōTERRA y Biblioteca de Aceites Esenciales
- * Base de datos enriquecida con propiedades botánicas, métodos de aplicación,
- * advertencias de seguridad, aromaterapia emocional y sinergias curadas.
+ * AURA Nexus - Catálogo Oficial dōTERRA 2026 y Biblioteca de Aromaterapia Holística
+ * Base de datos enriquecida con propiedades botánicas, métodos de aplicación (Aromático, Tópico, Interno),
+ * advertencias de seguridad, fotosensibilidad, dilución dérmica, aromaterapia emocional y guías de uso.
  */
 
 export const DOTERRA_CATALOG = [
-  // ==========================================
-  // ACEITES INDIVIDUALES (SINGLE OILS)
-  // ==========================================
+  // ============================================================================
+  // 1. ACEITES INDIVIDUALES (SINGLE OILS)
+  // ============================================================================
   {
     id: 'lavender',
     name: 'Lavanda',
@@ -18,16 +18,19 @@ export const DOTERRA_CATALOG = [
     category: 'calm',
     categoryLabel: 'Calma & Sueño',
     aroma: 'Floral, dulce, herbáceo y empolvado',
-    methods: ['A', 'T', 'I'], // Aromático, Tópico, Interno
-    sensitivity: 'N', // Neat (Puro/Sin diluir)
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N', // Neat (Puro)
     photosensitive: false,
     emotionalProperty: 'El aceite de la comunicación honesta, paz mental y serenidad',
     keyBenefits: [
-      'Induce calma profunda y mejora la calidad del sueño REM',
-      'Alivia irritaciones cutáneas, picaduras y quemaduras leves',
-      'Reduce la tensión muscular y la ansiedad cotidiana'
+      'Induce calma profunda y mejora la calidad del sueño REM restaurador',
+      'Alivia irritaciones cutáneas, picaduras y quemaduras leves en segundos',
+      'Reduce la tensión muscular y calma el sistema nervioso autónomo'
     ],
     description: 'Conocida universalmente como la reina de los aceites esenciales por su inigualable poder calmante y versatilidad regeneradora.',
+    aromaticGuide: 'Difundir de 4 a 6 gotas en la recámara 30 minutos antes de dormir, o frotar 1 gota en las palmas e inhalar profundamente.',
+    topicalGuide: 'Aplicar 1-2 gotas puras o con Coco Fraccionado en sienes, nuca, muñecas, pecho o directamente sobre picaduras e irritaciones.',
+    ingestionGuide: 'Agregar 1 gota en una taza de té tibio de manzanilla o en 120 ml de agua para calmar la ansiedad nocturna.',
     defaultInInventory: true,
     level: '100%',
     notes: 'Básico indispensable en buró y difusor nocturno.'
@@ -47,20 +50,23 @@ export const DOTERRA_CATALOG = [
     photosensitive: false,
     emotionalProperty: 'El aceite de un corazón animado, claridad y vigor intelectual',
     keyBenefits: [
-      'Despierta la concentración mental instantánea y combate el sueño diurno',
+      'Despierta la concentración mental instantánea y combate la somnolencia diurna',
       'Alivia dolores de cabeza y tensión en sienes o nuca con sensación refrescante',
       'Favorece una digestión ligera y despeja las vías respiratorias'
     ],
     description: 'Un disparo de energía botánica pura con alto contenido de mentol para despertar los sentidos y reactivar la productividad.',
+    aromaticGuide: 'Colocar 3-4 gotas en el difusor de oficina/estudio o frotar en manos e inhalar con ojos cerrados.',
+    topicalGuide: 'Aplicar 1 gota diluida con Coco Fraccionado en sienes (lejos de los ojos), frente, nuca y hombros para disolver tensión.',
+    ingestionGuide: 'Agregar 1 gota en un vaso de agua fresca o té para refrescar el aliento y aliviar malestar estomacal.',
     defaultInInventory: true,
     level: '100%',
-    notes: 'Ideal antes de estudiar o entrenar.'
+    notes: 'Ideal antes de estudiar, entrenar o reuniones importantes.'
   },
   {
     id: 'frankincense',
     name: 'Incienso',
     trademarkName: 'Frankincense',
-    botanicalName: 'Boswellia carterii',
+    botanicalName: 'Boswellia carterii, frereana, sacra, papyrifera',
     brand: 'dōTERRA',
     type: 'single',
     category: 'mood',
@@ -71,14 +77,17 @@ export const DOTERRA_CATALOG = [
     photosensitive: false,
     emotionalProperty: 'El rey de los aceites: el aceite de la verdad, conexión espiritual y sabiduría',
     keyBenefits: [
-      'Potencia la regeneración celular y la luminosidad de la piel (skincare glow)',
-      'Favorece estados meditativos profundos, reduciendo la rumiación mental',
-      'Potencia el efecto de cualquier otro aceite esencial cuando se usan en sinergia'
+      'Potencia la regeneración celular y la luminosidad de la piel (efecto anti-age y glow)',
+      'Favorece estados meditativos profundos, reduciendo la rumiación mental y el estrés',
+      'Potencia el efecto biológico de cualquier otro aceite esencial cuando se usan en sinergia'
     ],
-    description: 'Considerado oro líquido en la aromaterapia milenaria por su capacidad para calmar el sistema nervioso y regenerar la piel.',
+    description: 'Considerado oro líquido en la aromaterapia milenaria por su capacidad para calmar el sistema nervioso y rejuvenecer la piel.',
+    aromaticGuide: 'Difundir 3-4 gotas durante sesiones de meditación, yoga o lectura para inducir calma y claridad espiritual.',
+    topicalGuide: 'Mezclar 1 gota con tu crema hidratante nocturna o serum facial para promover un cutis radiante y sin imperfecciones.',
+    ingestionGuide: 'Colocar 1-2 gotas debajo de la lengua (sublingual) cada mañana o tomar en cápsula vegetal para salud celular y bienestar sistémico.',
     defaultInInventory: true,
-    level: '75%',
-    notes: '1 gota sublingual o en la crema de noche.'
+    level: '100%',
+    notes: 'El dicho dōTERRA dice: "Si tienes dudas de qué aceite usar, usa Incienso".'
   },
   {
     id: 'wild-orange',
@@ -95,14 +104,17 @@ export const DOTERRA_CATALOG = [
     photosensitive: true, // ¡Fotosensible!
     emotionalProperty: 'El aceite de la abundancia, la alegría creativa y el optimismo',
     keyBenefits: [
-      'Eleva el estado de ánimo y disipa sentimientos de tristeza o pesimismo',
-      'Purifica el aire ambiental y elimina olores pesados',
-      'Aporta un sabor revitalizante al agua y brinda soporte antioxidante'
+      'Eleva el estado de ánimo y disipa sentimientos de tristeza, apatía o pesimismo',
+      'Purifica el aire ambiental y elimina olores pesados en cocina o estancia',
+      'Aporta un sabor revitalizante al agua y brinda soporte antioxidante natural'
     ],
     description: 'Extraído en frío de la cáscara de naranja, es un rayo de sol embotellado que disuelve el estrés y energiza cualquier espacio.',
+    aromaticGuide: 'Difundir 4-5 gotas en mañanas grises o cuando necesites un empujón de creatividad y buen humor.',
+    topicalGuide: 'Aplicar 1-2 gotas en muñecas o cuello como perfume cítrico estimulante. ¡No exponerse al sol durante 12h!',
+    ingestionGuide: 'Añadir 1-2 gotas a tu botella de agua matutina para sabor cítrico y apoyo antioxidante.',
     defaultInInventory: true,
     level: '100%',
-    notes: 'Precaución: Evitar la luz solar directa hasta 12 horas después de su aplicación tópica.'
+    notes: 'Precaución de fotosensibilidad: Evitar rayos UV y sol directo 12h tras su uso tópico.'
   },
   {
     id: 'lemon',
@@ -120,13 +132,16 @@ export const DOTERRA_CATALOG = [
     emotionalProperty: 'El aceite de la concentración mental y la purificación',
     keyBenefits: [
       'Apoya la desintoxicación natural del cuerpo y la función hepática saludable',
-      'Despeja la niebla mental y ayuda a memorizar conceptos complejos',
-      'Poderoso limpiador y desengrasante natural de superficies'
+      'Despeja la niebla mental y ayuda a retener y memorizar conceptos complejos',
+      'Poderoso limpiador y desengrasante natural de superficies y telas'
     ],
     description: 'Fresco y vigorizante, ideal para consumir en ayunas en agua tibia o difundir para un ambiente impecable y nítido.',
+    aromaticGuide: 'Difundir 4 gotas junto con 2 de Menta para un ambiente de máxima concentración y frescura.',
+    topicalGuide: 'Aplicar diluido únicamente de noche para aclarar manchas cutáneas o tonificar la piel.',
+    ingestionGuide: 'Tomar 1-2 gotas en un vaso de agua tibia en ayunas para apoyar la digestión y el balance de pH.',
     defaultInInventory: true,
     level: '100%',
-    notes: 'No aplicar sobre piel antes de exponerse al sol.'
+    notes: '¡Fotosensible! No exponer la piel al sol tras aplicarlo tópicamente.'
   },
   {
     id: 'tea-tree',
@@ -136,27 +151,30 @@ export const DOTERRA_CATALOG = [
     brand: 'dōTERRA',
     type: 'single',
     category: 'immunity',
-    categoryLabel: 'Límites & Piel',
+    categoryLabel: 'Límites & Piel Limpia',
     aroma: 'Herbáceo, verde, medicinal y refrescante',
-    methods: ['A', 'T'],
+    methods: ['A', 'T', 'I'],
     sensitivity: 'S',
     photosensitive: false,
     emotionalProperty: 'El aceite de los límites energéticos saludables y la liberación de la toxicidad',
     keyBenefits: [
-      'Incomparable para brotes de acné, imperfecciones y cuidado de uñas',
-      'Potente purificador antimicrobiano para cutis y cuero cabelludo',
+      'Incomparable para brotes de acné, espinillas, imperfecciones y cuidado de uñas',
+      'Potente purificador antimicrobiano para cutis y cuero cabelludo con caspa',
       'Ayuda a poner límites firmes frente a relaciones o ambientes drenantes'
     ],
     description: 'El guardián botánico por excelencia con más de 90 compuestos activos purificantes.',
-    defaultInInventory: false,
+    aromaticGuide: 'Difundir 3-4 gotas con Eucalipto para purificar el aire de gérmenes estacionales.',
+    topicalGuide: 'Aplicar 1 gota directamente sobre granitos con un hisopo, o añadir 2 gotas a tu shampoo para salud capilar.',
+    ingestionGuide: 'Tomar 1 gota en cápsula vegetal o enjuague bucal con agua (hacer gárgaras y escupir) para calmar la garganta.',
+    defaultInInventory: true,
     level: '100%',
-    notes: 'Aplicar directamente sobre brotes con un hisopo.'
+    notes: 'Aplicar sobre imperfecciones cutáneas puntuales.'
   },
   {
     id: 'eucalyptus',
     name: 'Eucalipto',
     trademarkName: 'Eucalyptus',
-    botanicalName: 'Eucalyptus radiata',
+    botanicalName: 'Eucalyptus radiata / globulus',
     brand: 'dōTERRA',
     type: 'single',
     category: 'respiratory',
@@ -169,12 +187,15 @@ export const DOTERRA_CATALOG = [
     keyBenefits: [
       'Abre las vías respiratorias y promueve una respiración profunda y fluida',
       'Excelente en la ducha para crear una experiencia de spa y descongestión',
-      'Alivia la tensión muscular en el pecho y cuello'
+      'Alivia la tensión muscular en el pecho, cuello y espalda alta'
     ],
     description: 'Ideal para difundir en temporadas de cambios de estación o cuando se requiere claridad respiratoria total.',
-    defaultInInventory: false,
+    aromaticGuide: 'Colocar 2 gotas en el suelo de la regadera con agua caliente para un baño de vapor descongestionante tipo sauna.',
+    topicalGuide: 'Mezclar 2 gotas con Aceite Fraccionado de Coco y masajear en pecho y espalda para despejar la respiración.',
+    ingestionGuide: 'No ingerir. Uso exclusivo aromático y tópico.',
+    defaultInInventory: true,
     level: '100%',
-    notes: 'No ingerir. Perfecto para gotas en el piso de la regadera con vapor caliente.'
+    notes: 'No ingerir. Perfecto para días nublados o congestión nasal.'
   },
   {
     id: 'rosemary',
@@ -192,10 +213,13 @@ export const DOTERRA_CATALOG = [
     emotionalProperty: 'El aceite del conocimiento, la transición mental y la memoria',
     keyBenefits: [
       'Aumenta la retención de memoria y la velocidad de procesamiento cognitivo',
-      'Estimula la microcirculación en el cuero cabelludo para fortalecer el cabello',
+      'Estimula la microcirculación en el cuero cabelludo para fortalecer y engrosar el cabello',
       'Reduce la fatiga mental tras jornadas largas frente a la pantalla'
     ],
     description: 'El mejor aliado para sesiones intensas de estudio, programación o análisis donde se exige máximo rendimiento cerebral.',
+    aromaticGuide: 'Difundir 3 gotas de Romero y 3 de Menta en tu espacio de trabajo para evitar dispersión mental.',
+    topicalGuide: 'Añadir 3 gotas a tu dosis de shampoo o mezclar con aceite de jojoba y masajear el cuero cabelludo antes de lavar.',
+    ingestionGuide: 'Añadir 1 gota a platillos mediterráneos o tomar 1 gota en cápsula vegetal para soporte digestivo y antioxidante.',
     defaultInInventory: false,
     level: '100%',
     notes: 'Excelente combinado con Menta en el difusor de oficina.'
@@ -220,9 +244,12 @@ export const DOTERRA_CATALOG = [
       'Excelente acondicionador para el cuero cabelludo y cutis graso'
     ],
     description: 'Aroma boscoso envolvente que transmite la solidez inmutable de un árbol milenario.',
+    aromaticGuide: 'Difundir 4 gotas junto con Lavanda o Bergamota antes de ir a la cama para calmar la mente inquieta.',
+    topicalGuide: 'Aplicar 1-2 gotas con aceite de coco en plantas de los pies, pecho o muñecas para anclar emociones.',
+    ingestionGuide: 'No ingerir. Uso exclusivo aromático y tópico.',
     defaultInInventory: false,
     level: '100%',
-    notes: 'Combinar con Lavanda en difusor 30 minutos antes de dormir.'
+    notes: 'No ingerir. Gran aliado para conciliar el sueño en noches de insomnio.'
   },
   {
     id: 'bergamot',
@@ -241,18 +268,21 @@ export const DOTERRA_CATALOG = [
     keyBenefits: [
       'Calma la autocrítica destructiva, la vergüenza y el síndrome del impostor',
       'Combina simultáneamente propiedades calmantes y energizantes',
-      'Purifica la piel (aplicación nocturna únicamente)'
+      'Purifica la piel y equilibra el sebo (aplicación nocturna únicamente)'
     ],
     description: 'Único entre los cítricos por su capacidad de calmar y relajar mientras disipa el desánimo y nutre el amor propio.',
+    aromaticGuide: 'Difundir 4 gotas en momentos de autoexigencia excesiva o estrés laboral.',
+    topicalGuide: 'Aplicar 1 gota diluida en cuello o pecho por la noche. ¡Evitar sol y rayos UV por 24 horas!',
+    ingestionGuide: 'Agregar 1 gota en una taza de té negro para transformarlo en un té Earl Grey aromático y reconfortante.',
     defaultInInventory: false,
     level: '100%',
-    notes: '¡Evitar la exposición al sol durante 12-24 horas tras aplicación tópica!'
+    notes: '¡Altamente fotosensible! Evitar exposición solar directa durante 24h tras aplicación en piel.'
   },
   {
     id: 'copaiba',
     name: 'Copaiba',
     trademarkName: 'Copaiba',
-    botanicalName: 'Copaifera reticulata',
+    botanicalName: 'Copaifera reticulata, officinalis, coriacea, langsdorffii',
     brand: 'dōTERRA',
     type: 'single',
     category: 'relief',
@@ -261,16 +291,19 @@ export const DOTERRA_CATALOG = [
     methods: ['A', 'T', 'I'],
     sensitivity: 'N',
     photosensitive: false,
-    emotionalProperty: 'El aceite de la revelación, el perdón y el alivio emocional',
+    emotionalProperty: 'El aceite de la revelación, el perdón y el alivio emocional profundo',
     keyBenefits: [
-      'Poderoso antioxidante con altos niveles de beta-cariofileno (apoyo al sistema endocannabinoide)',
-      'Alivia molestias musculares, articulares y procesos inflamatorios',
-      'Seda el sistema nervioso y promueve una piel lisa y tersa'
+      'Poderoso antioxidante con altos niveles de beta-cariofileno (apoyo directo al sistema endocannabinoide CB2)',
+      'Alivia molestias musculares, articulares y procesos inflamatorios corporales',
+      'Seda el sistema nervioso y promueve una piel lisa, tersa y uniforme'
     ],
-    description: 'El gran aliado para calmar el cuerpo y la mente sin efectos psicotrópicos, actuando directamente sobre los receptores CB2.',
-    defaultInInventory: false,
+    description: 'El gran aliado botánico para calmar el cuerpo y la mente sin efectos psicotrópicos, actuando sobre receptores CB2.',
+    aromaticGuide: 'Difundir 3-4 gotas con Incienso o Naranja para crear una atmósfera de paz profunda y serenidad.',
+    topicalGuide: 'Aplicar directamente o con Coco Fraccionado sobre zonas con molestia muscular, articular o brotes cutáneos.',
+    ingestionGuide: 'Colocar 1-2 gotas debajo de la lengua (sublingual) o en 1 cápsula vegetal para alivio corporal y calma nerviosa.',
+    defaultInInventory: true,
     level: '100%',
-    notes: '1-2 gotas sublinguales para calmar la ansiedad nocturna o dolores corporales.'
+    notes: 'Maravilloso combinado con Incienso para potenciar el alivio antiinflamatorio.'
   },
   {
     id: 'oregano',
@@ -288,13 +321,16 @@ export const DOTERRA_CATALOG = [
     emotionalProperty: 'El aceite de la no-dependencia, el desapego y la humildad',
     keyBenefits: [
       'Uno de los antimicrobianos e inmunomoduladores naturales más potentes del planeta',
-      'Soporte inmunológico intensivo durante temporadas invernales',
-      'Potente apoyo antioxidante'
+      'Soporte inmunológico intensivo durante temporadas de frío o convalecencia',
+      'Potente acción limpiadora y antioxidante'
     ],
     description: 'Un aceite "caliente" que debe ser manejado con respeto: siempre diluir generosamente con aceite de coco fraccionado.',
+    aromaticGuide: 'Difundir 1-2 gotas con Limón o Árbol de Té para purificar el ambiente en temporadas de virus.',
+    topicalGuide: '¡Siempre diluir! 1 gota en 1 cucharada de Coco Fraccionado en la planta de los pies. Jamás aplicar puro.',
+    ingestionGuide: 'Tomar 1 gota en 1 cápsula vegetal llena con aceite de oliva (nunca directo en agua porque quema las mucosas).',
     defaultInInventory: false,
     level: '100%',
-    notes: '¡PRECAUCIÓN! Aceite cáustico/caliente. Jamás aplicar puro en piel.'
+    notes: '¡PRECAUCIÓN! Aceite cáustico/caliente. Jamás aplicar puro sobre la piel ni tomar en agua directa.'
   },
   {
     id: 'vetiver',
@@ -312,13 +348,16 @@ export const DOTERRA_CATALOG = [
     emotionalProperty: 'El aceite del arraigo profundo, el centramiento y la estabilidad emocional',
     keyBenefits: [
       'Apaga el "ruido mental" y el sobrepensamiento obsesivo en segundos',
-      'Ideal para personas con déficit de atención, hiperactividad o mente dispersa',
-      'Favorece un sueño profundo e ininterrumpido'
+      'Ideal para personas con hiperactividad, déficit de atención o mente dispersa',
+      'Favorece un sueño profundo, pesado y continuo'
     ],
     description: 'Extraído de las raíces profundas de la planta, es el tranquilizante botánico más anclador que existe.',
+    aromaticGuide: 'Difundir 2 gotas con 3 de Lavanda o Naranja Silvestre para inducir relajación total.',
+    topicalGuide: 'Aplicar 1 gota en la planta de los pies, nuca o pecho antes de acostarse para detener la mente hiperactiva.',
+    ingestionGuide: 'Tomar 1 gota en cápsula vegetal o en una taza de leche vegetal tibia para descanso nocturno.',
     defaultInInventory: false,
     level: '100%',
-    notes: 'Textura espesa. Aplicar 1 gota en la planta de los pies al acostarse.'
+    notes: 'Textura muy espesa. Calentar el frasco entre las manos para facilitar la salida de la gota.'
   },
   {
     id: 'lemongrass',
@@ -331,18 +370,21 @@ export const DOTERRA_CATALOG = [
     categoryLabel: 'Circulación & Limpieza',
     aroma: 'Cítrico herbáceo, ahumado, fresco y terroso',
     methods: ['A', 'T', 'I'],
-    sensitivity: 'D',
+    sensitivity: 'D', // Diluir
     photosensitive: false,
     emotionalProperty: 'El aceite de la limpieza energética y la eliminación de bloqueos',
     keyBenefits: [
-      'Estimula la circulación sanguínea y alivia la pesadez en piernas o músculos',
-      'Repelente natural contra insectos',
-      'Tónico tonificante para piel y articulaciones'
+      'Estimula la circulación sanguínea y alivia la pesadez en piernas, ligamentos o músculos',
+      'Excelente repelente botánico natural contra insectos y mosquitos',
+      'Tónico refrescante para piel, articulaciones y digestión'
     ],
-    description: 'Excelente para masajes post-entrenamiento diluido con aceite portador.',
+    description: 'Excelente para masajes post-entrenamiento diluido con aceite portador o para purificar olores.',
+    aromaticGuide: 'Difundir 3-4 gotas con Eucalipto o Menta para refrescar el hogar y ahuyentar insectos.',
+    topicalGuide: 'Diluir 2 gotas en 1 cucharada de Coco Fraccionado y masajear articulaciones o piernas cansadas.',
+    ingestionGuide: 'Agregar 1 gota en tés, sopas o platillos asiáticos para sabor cítrico y apoyo digestivo.',
     defaultInInventory: false,
     level: '100%',
-    notes: 'Diluir siempre para evitar irritación dérmica.'
+    notes: 'Diluir siempre para evitar sensibilidad dérmica.'
   },
   {
     id: 'clary-sage',
@@ -360,18 +402,750 @@ export const DOTERRA_CATALOG = [
     emotionalProperty: 'El aceite de la intuición, la visión clara y la receptividad',
     keyBenefits: [
       'Regula y alivia cólicos menstruales y síntomas del síndrome premenstrual (PMS)',
-      'Equilibra las fluctuaciones hormonales y reduce bochornos',
-      'Induce sueños lúcidos y calma la angustia emocional'
+      'Equilibra las fluctuaciones hormonales y reduce bochornos en la perimenopausia',
+      'Induce sueños vívidos, calma la angustia emocional y reduce el cortisol'
     ],
-    description: 'La gran aliada de la salud femenina y el balance hormonal natural.',
+    description: 'La gran aliada botánica de la salud femenina y el balance hormonal natural.',
+    aromaticGuide: 'Difundir 3 gotas de Salvia Esclarea con 2 de Bergamota durante días de tensión emocional o hormonal.',
+    topicalGuide: 'Masajear 3-5 gotas con Coco Fraccionado en el abdomen bajo y espalda lumbar durante el ciclo menstrual.',
+    ingestionGuide: 'Tomar 1-2 gotas en cápsula vegetal para apoyo hormonal y relajación general.',
     defaultInInventory: false,
     level: '100%',
-    notes: 'Masajear en el abdomen bajo con aceite de coco durante el ciclo menstrual.'
+    notes: 'Evitar su uso durante el embarazo hasta el momento del parto.'
+  },
+  {
+    id: 'siberian-fir',
+    name: 'Abeto Siberiano',
+    trademarkName: 'Siberian Fir',
+    botanicalName: 'Abies sibirica',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'respiratory',
+    categoryLabel: 'Vigor Boscoso & Calma',
+    aroma: 'Fresco, amaderado, boscoso, verde y balsámico',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del confort en las transiciones y la perspectiva madura',
+    keyBenefits: [
+      'Alivia vías respiratorias y promueve respiración profunda y serena',
+      'Calma músculos adoloridos y cansancio tras actividad física intensa',
+      'Genera una atmósfera de paz, estabilidad y aire fresco de bosque'
+    ],
+    description: 'Extraído de las agujas del abeto en los bosques siberianos, brinda una sensación inmediata de conexión con la naturaleza.',
+    aromaticGuide: 'Difundir 4 gotas para recrear un baño de bosque (shinrin-yoku) en tu sala o recámara.',
+    topicalGuide: 'Masajear 2-3 gotas diluidas en hombros o espalda para calmar contracturas.',
+    ingestionGuide: 'Tomar 1 gota en cápsula vegetal o agua para confort celular y bienestar.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Excelente combinado con Naranja Silvestre o Menta.'
+  },
+  {
+    id: 'douglas-fir',
+    name: 'Abeto de Douglas',
+    trademarkName: 'Douglas Fir',
+    botanicalName: 'Pseudotsuga menziesii',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'focus',
+    categoryLabel: 'Renovación & Sabiduría',
+    aroma: 'Limpio, fresco, amaderado, dulce y sutilmente cítrico',
+    methods: ['A', 'T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la sabiduría generacional y la renovación de patrones',
+    keyBenefits: [
+      'Purifica el ambiente e impulsa un estado de ánimo positivo y enfocado',
+      'Despeja las vías respiratorias durante cambios estacionales',
+      'Aporta brillo y sensación de limpieza al cutis'
+    ],
+    description: 'Proviene de coníferas jóvenes de Nueva Zelanda, combinando notas boscosas con destellos cítricos refrescantes.',
+    aromaticGuide: 'Difundir 3 gotas de Douglas Fir con 2 de Toronja para energizar mañanas de trabajo.',
+    topicalGuide: 'Aplicar 1-2 gotas con limpiador facial para purificar la piel.',
+    ingestionGuide: 'No ingerir. Uso exclusivo aromático y tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'No ingerir. Ideal para perfumar el hogar con aroma fresco navideño o de montaña.'
+  },
+  {
+    id: 'basil',
+    name: 'Albahaca',
+    trademarkName: 'Basil',
+    botanicalName: 'Ocimum basilicum',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'focus',
+    categoryLabel: 'Claridad & Renovación Adrenal',
+    aroma: 'Cálido, especiado, herbáceo y dulce',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'S',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la renovación de la fatiga crónica y el agotamiento mental',
+    keyBenefits: [
+      'Restaura la vitalidad mental en personas con burnout o agotamiento suprarrenal',
+      'Alivia la tensión muscular y dolor de cabeza en sienes y nuca',
+      'Facilita la digestión y aporta un toque gourmet a platillos'
+    ],
+    description: 'El tónico definitivo para cuando sientes que te has quedado sin batería física y mental.',
+    aromaticGuide: 'Difundir 3 gotas con 2 de Lima o Menta en tardes de cansancio extremo.',
+    topicalGuide: 'Masajear 1-2 gotas diluidas en sienes y detrás de las orejas para despejar la mente.',
+    ingestionGuide: 'Usar la punta de un palillo mojada en el aceite para sazonar pastas, salsas de tomate o tomar 1 gota en cápsula.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Sabor muy concentrado en cocina: una sola gota sazona una olla entera.'
+  },
+  {
+    id: 'cinnamon-bark',
+    name: 'Canela (Corteza)',
+    trademarkName: 'Cinnamon Bark',
+    botanicalName: 'Cinnamomum zeylanicum',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'immunity',
+    categoryLabel: 'Calor, Escudo & Pasión',
+    aroma: 'Picante, dulce, cálido y especiado',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'D', // ¡Aceite muy caliente!
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la armonía sexual, la calidez afectiva y la confianza en uno mismo',
+    keyBenefits: [
+      'Uno de los antioxidantes e inmunoprotectores más poderosos de la naturaleza',
+      'Favorece la circulación saludable y la respuesta inflamatoria balanceada',
+      'Eleva la energía corporal y promueve un ambiente acogedor'
+    ],
+    description: 'Extracto de corteza pura de canela de Ceilán. Puro fuego botánico.',
+    aromaticGuide: 'Difundir 1-2 gotas con 4 de Naranja Silvestre para un ambiente cálido y reconfortante.',
+    topicalGuide: '¡Dilución extrema requerida! 1 gota en 15-30 ml de Coco Fraccionado. Nunca directo.',
+    ingestionGuide: 'Tomar 1 gota en 1 cápsula vegetal llena con aceite vegetal para soporte metabólico e inmunológico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: '¡Aceite sumamente caliente! Diluir rigurosamente.'
+  },
+  {
+    id: 'cardamom',
+    name: 'Cardamomo',
+    trademarkName: 'Cardamom',
+    botanicalName: 'Elettaria cardamomum',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'respiratory',
+    categoryLabel: 'Autocontrol & Digestión',
+    aroma: 'Especiado, frutal, cálido y balsámico',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del autocontrol, la objetividad y la digestión de emociones intensas',
+    keyBenefits: [
+      'Apoya la salud del sistema respiratorio despejando la respiración',
+      'Alivia molestias gastrointestinales y sensación de pesadez estomacal',
+      'Aporta un toque dulce y exótico a bebidas calientes'
+    ],
+    description: 'Pariente cercano del jengibre, cultivado en Guatemala, famoso por su aroma especiado sofisticado.',
+    aromaticGuide: 'Difundir 3 gotas con Incienso o Bergamota para fomentar una mentalidad serena.',
+    topicalGuide: 'Masajear 1-2 gotas diluidas sobre el abdomen o el pecho.',
+    ingestionGuide: 'Añadir 1 gota a tu café, té chai o licuado para un impulso digestivo delicioso.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Espectacular para preparar Golden Milk o café especiado.'
+  },
+  {
+    id: 'clove',
+    name: 'Clavo',
+    trademarkName: 'Clove',
+    botanicalName: 'Eugenia caryophyllata',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'immunity',
+    categoryLabel: 'Límites & Salud Bucal',
+    aroma: 'Cálido, muy especiado, amaderado y punzante',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'D', // Aceite caliente
+    photosensitive: false,
+    emotionalProperty: 'El aceite de los límites personales fuertes y la superación del victimismo',
+    keyBenefits: [
+      'Número uno en la escala ORAC de capacidad antioxidante vegetal',
+      'Tradicionalmente usado para el confort bucodental y de encías',
+      'Poderoso escudo inmunológico y purificador del aire'
+    ],
+    description: 'Rico en eugenol, es el ingrediente estelar de las mezclas protectoras dōTERRA.',
+    aromaticGuide: 'Difundir 2 gotas con 3 de Naranja Silvestre y 1 de Canela para purificar espacios.',
+    topicalGuide: 'Diluir 1 gota en abundante aceite de coco y aplicar en encías o zona de molestia bucal externa.',
+    ingestionGuide: 'Tomar 1 gota en cápsula vegetal para un potente boost antioxidante celular.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Aceite caliente. Siempre diluir para contacto dérmico.'
+  },
+  {
+    id: 'turmeric',
+    name: 'Cúrcuma',
+    trademarkName: 'Turmeric',
+    botanicalName: 'Curcuma longa',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'relief',
+    categoryLabel: 'Restauración Celular & Articular',
+    aroma: 'Cálido, terroso, especiado y amaderado',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la resiliencia y la restauración ante la adversidad',
+    keyBenefits: [
+      'Contiene turmeronas que apoyan la absorción de curcumina y la salud neurológica',
+      'Poderosa respuesta antiinflamatoria para articulaciones y músculos fatigados',
+      'Promueve una piel radiante, limpia y con tono uniforme'
+    ],
+    description: 'Destilado al vapor de los rizomas de cúrcuma en la India, ofrece soporte celular y articular integral.',
+    aromaticGuide: 'Difundir 3 gotas con Incienso y Mandarina para elevar el ánimo y la resiliencia.',
+    topicalGuide: 'Aplicar 1-2 gotas sobre zonas articulares adoloridas o añadir a tu crema facial de noche.',
+    ingestionGuide: 'Tomar 1-2 gotas en una cápsula vegetal con Copaiba para soporte articular diario.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Combinar con Copaiba e Incienso para la tríada antiinflamatoria más potente.'
+  },
+  {
+    id: 'cypress',
+    name: 'Ciprés',
+    trademarkName: 'Cypress',
+    botanicalName: 'Cupressus sempervirens',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'relief',
+    categoryLabel: 'Fluidez & Circulación',
+    aroma: 'Limpio, fresco, amaderado y herbáceo',
+    methods: ['A', 'T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del movimiento, el flujo de la vida y soltar el estancamiento',
+    keyBenefits: [
+      'Estimula el retorno venoso y alivia la sensación de piernas pesadas y varices',
+      'Promueve un aspecto firme y tonificado en la piel',
+      'Ayuda a procesar el duelo y transiciones emocionales complejas'
+    ],
+    description: 'El aceite de la fluidez biológica y emocional. Reactiva la circulación cuando te sientes estancada.',
+    aromaticGuide: 'Difundir 4 gotas durante momentos de bloqueo mental o cambios de vida importantes.',
+    topicalGuide: 'Masajear 3-4 gotas con Coco Fraccionado en piernas con movimientos ascendentes desde los tobillos.',
+    ingestionGuide: 'No ingerir. Uso exclusivo aromático y tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'No ingerir. Ideal para aplicar en piernas tras largas jornadas de pie o vuelos.'
+  },
+  {
+    id: 'geranium',
+    name: 'Geranio',
+    trademarkName: 'Geranium',
+    botanicalName: 'Pelargonium graveolens',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'beauty',
+    categoryLabel: 'Piel Glow & Amor Propio',
+    aroma: 'Herbáceo, floral, dulce y penetrante',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'S',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del amor, la confianza y la sanación del corazón',
+    keyBenefits: [
+      'Promueve un cabello brillante y saludable y un cutis luminoso y terso',
+      'Equilibra el exceso de grasa y calma rojeces en la piel',
+      'Ayuda a sanar heridas emocionales y restaurar la confianza'
+    ],
+    description: 'Apodado "la rosa de los pobres" por su exquisito perfil botánico y sus efectos rejuvenecedores en la piel.',
+    aromaticGuide: 'Difundir 3 gotas con 3 de Lavanda para un ambiente floral relajante y armonioso.',
+    topicalGuide: 'Añadir 1 gota a tu crema hidratante facial o corporal para un brillo radiante.',
+    ingestionGuide: 'Tomar 1 gota en agua o cápsula vegetal para apoyo hormonal y salud celular.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Excelente para regular piel mixta o con tendencia a granitos.'
+  },
+  {
+    id: 'grapefruit',
+    name: 'Toronja / Pomelo',
+    trademarkName: 'Grapefruit',
+    botanicalName: 'Citrus X paradisi',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'metabolic',
+    categoryLabel: 'Aceptación Corporal & Metabolismo',
+    aroma: 'Cítrico, floral, frutal y energizante',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: true,
+    emotionalProperty: 'El aceite del honor hacia el propio cuerpo y la superación de la autocrítica física',
+    keyBenefits: [
+      'Apoya el metabolismo saludable y ayuda a calmar antojos compulsivos de azúcar',
+      'Mejora la apariencia de la piel con celulitis mediante masaje linfático',
+      'Eleva el estado de ánimo y disipa la pesadez mental matutina'
+    ],
+    description: 'Prensado en frío de la cáscara del pomelo, es un catalizador de energía positiva y amor corporal.',
+    aromaticGuide: 'Difundir 4 gotas en la cocina o sala para refrescar el ambiente y reducir la ansiedad por picar entre comidas.',
+    topicalGuide: 'Masajear en muslos o abdomen con Coco Fraccionado de noche para estimular el drenaje linfático.',
+    ingestionGuide: 'Añadir 1-2 gotas a tu termo de agua para hidratación revitalizante y apoyo metabólico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: '¡Fotosensible! No exponerse al sol en 12h tras aplicarlo tópicamente.'
+  },
+  {
+    id: 'helichrysum',
+    name: 'Helicriso (Siempreviva)',
+    trademarkName: 'Helichrysum',
+    botanicalName: 'Helichrysum italicum',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'beauty',
+    categoryLabel: 'Regeneración Extrema & Cicatrización',
+    aroma: 'Herbáceo, miel, terroso y cálido',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del dolor sanado, la resiliencia y la transformación del sufrimiento',
+    keyBenefits: [
+      'Conocido como el "aceite de la juventud eterna" por su poder regenerador dérmico',
+      'Reduce notablemente la apariencia de cicatrices, manchas y hematomas (moretones)',
+      'Promueve una circulación fluida y calma dolores musculares'
+    ],
+    description: 'Una de las joyas botánicas más preciadas del Mediterráneo. Conocido como flor inmortal porque nunca marchita.',
+    aromaticGuide: 'Difundir 2 gotas con Incienso para sesiones de introspección profunda o sanación emocional.',
+    topicalGuide: 'Aplicar 1 gota pura directamente sobre cicatrices recientes, hematomas o líneas de expresión.',
+    ingestionGuide: 'Tomar 1 gota en cápsula vegetal para apoyo circulatorio y celular.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Imprescindible en cualquier botiquín de emergencia para moretones o raspaduras.'
+  },
+  {
+    id: 'ginger',
+    name: 'Jengibre',
+    trademarkName: 'Ginger',
+    botanicalName: 'Zingiber officinale',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'digestive',
+    categoryLabel: 'Empoderamiento & Digestión',
+    aroma: 'Picante, dulce, cálido y terroso',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'D', // Caliente
+    photosensitive: false,
+    emotionalProperty: 'El aceite del empoderamiento personal, la presencia y la toma de acción',
+    keyBenefits: [
+      'Calma las náuseas, mareos por movimiento en viajes y malestar estomacal',
+      'Aporta calor a articulaciones frías o rígidas',
+      'Promueve una digestión saludable y una mentalidad proactiva'
+    ],
+    description: 'Destilado de rizomas frescos de Madagascar, proporciona calor reconfortante a nivel corporal y emocional.',
+    aromaticGuide: 'Inhalar directamente del frasco o difundir 3 gotas durante viajes largos para evitar mareos.',
+    topicalGuide: 'Diluir 1-2 gotas con Coco Fraccionado y masajear en el abdomen bajo con movimientos circulares.',
+    ingestionGuide: 'Tomar 1-2 gotas en agua tibia con limón o en cápsula vegetal tras comidas copiosas.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Diluir siempre al aplicar en la piel por su potencia térmica.'
+  },
+  {
+    id: 'lime',
+    name: 'Lima',
+    trademarkName: 'Lime',
+    botanicalName: 'Citrus aurantifolia',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'mood',
+    categoryLabel: 'Chispa Creativa & Alegría',
+    aroma: 'Cítrico ácido, dulce, fresco y vivaz',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: true,
+    emotionalProperty: 'El aceite del entusiasmo por la vida y la gratitud sincera',
+    keyBenefits: [
+      'Disipa la apatía y revitaliza la mente en momentos de estancamiento',
+      'Purifica la piel y el aire de impurezas',
+      'Realza el sabor de bebidas, guacamole y platillos frescos'
+    ],
+    description: 'Prensada en frío de cáscaras de lima fresca, aporta un brillo aromático contagioso.',
+    aromaticGuide: 'Difundir 4 gotas con 2 de Menta o Eucalipto para llenar la casa de energía limpia.',
+    topicalGuide: 'Usar diluido en masajes nocturnos. ¡Evitar sol por 12-24 horas!',
+    ingestionGuide: 'Añadir 1 gota a agua mineral, licuados verdes o recetas culinarias.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: '¡Fotosensible! No exponerse al sol tras aplicación tópica.'
+  },
+  {
+    id: 'marjoram',
+    name: 'Mejorana',
+    trademarkName: 'Marjoram',
+    botanicalName: 'Origanum majorana',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'calm',
+    categoryLabel: 'Apertura & Conexión Cardíaca',
+    aroma: 'Cálido, herbáceo, amaderado y alcanforado',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la vulnerabilidad, la confianza en las relaciones y la ternura',
+    keyBenefits: [
+      'Relaja contracturas musculares severas y espasmos corporales',
+      'Calma el sistema cardiovascular y modula la presión arterial por estrés',
+      'Induce un sueño reparador en personas con insomnio por hiperalerta'
+    ],
+    description: 'Conocida en la Grecia antigua como "la alegría de la montaña", es un relajante muscular y emocional insuperable.',
+    aromaticGuide: 'Difundir 3 gotas con Lavanda y Cedro para una relajación profunda antes de dormir.',
+    topicalGuide: 'Masajear 2-3 gotas diluidas en el cuello, hombros o zona lumbar para disolver nudos de tensión.',
+    ingestionGuide: 'Tomar 1 gota en cápsula vegetal para soporte cardiovascular o digestivo.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Gran sustituto de la lavanda para quienes prefieren notas herbales y amaderadas.'
+  },
+  {
+    id: 'melissa',
+    name: 'Melisa (Toronjil)',
+    trademarkName: 'Melissa',
+    botanicalName: 'Melissa officinalis',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'mood',
+    categoryLabel: 'Luz Interior & Calma Inmune',
+    aroma: 'Cítrico, herbáceo, dulce y fresco',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'S',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la luz espiritual, la reconexión con el alma y la disolución de la oscuridad',
+    keyBenefits: [
+      'Poderoso calmante del sistema nervioso en momentos de shock o trauma emocional',
+      'Excelente soporte para el sistema inmunológico estacional',
+      'Favorece un sueño sereno y sueños pacíficos'
+    ],
+    description: 'Una de las plantas más escasas y valoradas en aromaterapia botánica por su extraordinario poder calmante.',
+    aromaticGuide: 'Difundir 2 gotas en momentos de agobio emocional severo o tristeza profunda.',
+    topicalGuide: 'Aplicar 1 gota diluida en pecho, muñecas o detrás de las orejas.',
+    ingestionGuide: 'Colocar 1 gota sublingual o en cápsula vegetal para calmar palpitaciones y nervios.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Uno de los aceites más exclusivos de dōTERRA por el volumen vegetal requerido para destilarlo.'
+  },
+  {
+    id: 'spearmint',
+    name: 'Menta Verde (Hierbabuena)',
+    trademarkName: 'Spearmint',
+    botanicalName: 'Mentha spicata',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'focus',
+    categoryLabel: 'Expresión & Confianza Vocal',
+    aroma: 'Dulce, mentolado, fresco y suave',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la expresión oral confiada y la comunicación asertiva',
+    keyBenefits: [
+      'Alternativa más suave a la Menta piperita, ideal para niños y piel sensible',
+      'Promueve la digestión ligera y ayuda a calmar náuseas estomacales',
+      'Despeja la mente y apoya la elocuencia al hablar en público'
+    ],
+    description: 'Una menta dulce y amigable que vigoriza sin ser excesivamente fría.',
+    aromaticGuide: 'Difundir 3 gotas antes de dar una presentación o llamada importante para hablar con claridad.',
+    topicalGuide: 'Aplicar 1-2 gotas diluidas en sienes o estómago para frescura instantánea.',
+    ingestionGuide: 'Añadir 1 gota a agua fresca o postres para un sabor fresco a hierbabuena.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Ideal para quienes encuentran la Menta tradicional demasiado fuerte.'
+  },
+  {
+    id: 'myrrh',
+    name: 'Mirra',
+    trademarkName: 'Myrrh',
+    botanicalName: 'Commiphora myrrha',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'beauty',
+    categoryLabel: 'Nutrición Materna & Piel',
+    aroma: 'Cálido, resinoso, terroso, amargo y balsámico',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del amor maternal, la seguridad y la confianza en la vida',
+    keyBenefits: [
+      'Incomparable para hidratar piel sumamente seca, agrietada o madura',
+      'Excelente cuidado para encías y mucosa bucal',
+      'Induce paz emocional y sensación de protección'
+    ],
+    description: 'Resina sagrada del este de África apreciada desde la antigüedad por sus virtudes cicatrizantes y cosméticas.',
+    aromaticGuide: 'Difundir 3 gotas con Incienso durante momentos de oración o meditación.',
+    topicalGuide: 'Añadir 1-2 gotas a tu crema facial o aplicar directo en talones o cutículas agrietadas.',
+    ingestionGuide: 'Tomar 1 gota en cápsula vegetal para salud celular y bienestar tiroideo.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Textura espesa y resinosa. Limpiar la rosca del frasco tras cada uso.'
+  },
+  {
+    id: 'patchouli',
+    name: 'Pachulí',
+    trademarkName: 'Patchouli',
+    botanicalName: 'Pogostemon cablin',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'calm',
+    categoryLabel: 'Presencia Física & Belleza',
+    aroma: 'Terroso, amaderado, dulce, especiado y almizclado',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la presencia corporal, la sensualidad y la conexión con la materia',
+    keyBenefits: [
+      'Aporta equilibrio a emociones desbordadas y aterriza la mente',
+      'Tonifica y suaviza la apariencia de arrugas e imperfecciones',
+      'Fijador natural aromático de larga duración en perfumería botánica'
+    ],
+    description: 'Destilado de hojas maduras de pachulí, su aroma mejora con el paso del tiempo como un buen vino.',
+    aromaticGuide: 'Difundir 3 gotas con Naranja Silvestre o Menta para un aroma bohemio sofisticado.',
+    topicalGuide: 'Aplicar 1 gota en cuello o muñecas como perfume natural duradero o en crema hidratante.',
+    ingestionGuide: 'Tomar 1 gota en cápsula vegetal para calmar la ansiedad.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Su fijación aromática es la más duradera de todos los aceites esenciales.'
+  },
+  {
+    id: 'black-pepper',
+    name: 'Pimienta Negra',
+    trademarkName: 'Black Pepper',
+    botanicalName: 'Piper nigrum',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'immunity',
+    categoryLabel: 'Autenticidad & Digestión',
+    aroma: 'Cálido, picante, frutal y especiado',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'D', // Diluir
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la honestidad emocional y la eliminación de máscaras',
+    keyBenefits: [
+      'Estimula la digestión y activa el calor metabólico',
+      'Calma los deseos intensos de fumar o hábitos compulsivos',
+      'Alivia molestias musculares en masajes estimulantes'
+    ],
+    description: 'Extraído del fruto de la pimienta en Madagascar, aporta vitalidad y calor penetrante.',
+    aromaticGuide: 'Difundir 2 gotas con Toronja o Bergamota para reducir antojos o estrés.',
+    topicalGuide: 'Diluir 1 gota en 1 cucharada de Coco Fraccionado y masajear músculos adoloridos.',
+    ingestionGuide: 'Sazonar platillos o tomar 1 gota en cápsula vegetal para digestión saludable.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Diluir siempre para uso en piel.'
+  },
+  {
+    id: 'pink-pepper',
+    name: 'Pimienta Rosa',
+    trademarkName: 'Pink Pepper',
+    botanicalName: 'Schinus molle',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'mood',
+    categoryLabel: 'Autoaceptación & Celular',
+    aroma: 'Especiado, frutal, floral y amaderado',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la compasión hacia uno mismo y la no-comparación',
+    keyBenefits: [
+      'Apoya el sistema cardiovascular y la respuesta celular saludable',
+      'Efecto calmante sobre el sistema nervioso central',
+      'Aroma especiado sutil y elegante para perfumería'
+    ],
+    description: 'Proviene del árbol sagrado de los incas en Perú y Kenia, ofreciendo antioxidantes excepcionales.',
+    aromaticGuide: 'Difundir 3 gotas con Incienso y Bergamota para elevar la vibra.',
+    topicalGuide: 'Aplicar 1-2 gotas diluidas en pecho o muñecas.',
+    ingestionGuide: 'Tomar 1-2 gotas en un vaso de agua o cápsula vegetal para salud celular y digestiva.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Mucho más suave y floral que la pimienta negra.'
+  },
+  {
+    id: 'petitgrain',
+    name: 'Petitgrain',
+    trademarkName: 'Petitgrain',
+    botanicalName: 'Citrus aurantium',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'calm',
+    categoryLabel: 'Herencia Sana & Sueño',
+    aroma: 'Fresco, floral, verde y ligeramente amargo',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false, // No es fotosensible (extraído de hojas/ramas)
+    emotionalProperty: 'El aceite de la liberación de lealtades familiares limitantes',
+    keyBenefits: [
+      'Apodado "la lavanda para hombres" por su efecto sedante sin aroma puramente floral',
+      'No es fotosensible, a diferencia de los aceites extraídos de cáscara de cítricos',
+      'Calma la taquicardia por estrés y facilita conciliar el sueño'
+    ],
+    description: 'Destilado de las hojas y ramitas tiernas del naranjo amargo en Paraguay.',
+    aromaticGuide: 'Difundir 4 gotas con Bergamota o Lavanda para relajación antes de dormir.',
+    topicalGuide: 'Aplicar 1-2 gotas en sienes y nuca para calmar el estrés diario.',
+    ingestionGuide: 'Tomar 1 gota en agua o infusión para serenar los nervios.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'No es fotosensible porque se destila de las hojas y ramas, no de la cáscara del fruto.'
+  },
+  {
+    id: 'roman-chamomile',
+    name: 'Manzanilla Romana',
+    trademarkName: 'Roman Chamomile',
+    botanicalName: 'Anthemis nobilis',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'calm',
+    categoryLabel: 'Propósito Espiritual & Dulce Sueño',
+    aroma: 'Dulce, floral, manzana y herbáceo',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del propósito de vida, la guía divina y la paz profunda',
+    keyBenefits: [
+      'Extraordinario para calmar berrinches o hiperactividad en niños y adultos',
+      'Regenera piel irritada, eczema, dermatitis y rojeces',
+      'Induce calma celestial y relaja la musculatura tensa'
+    ],
+    description: 'El extracto calmante más suave y noble del reino botánico.',
+    aromaticGuide: 'Difundir 3 gotas con Lavanda para un ambiente de guardería o recámara pacífica.',
+    topicalGuide: 'Aplicar 1 gota en la planta de los pies o mezclar con crema hidratante para piel sensible.',
+    ingestionGuide: 'Tomar 1 gota en té de hierbas para calmar el cuerpo y la mente.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'El aceite de máxima tolerancia para bebés, niños y pieles reactivas.'
+  },
+  {
+    id: 'sandalwood-hawaiian',
+    name: 'Sándalo Hawaiano',
+    trademarkName: 'Hawaiian Sandalwood',
+    botanicalName: 'Santalum paniculatum',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'mood',
+    categoryLabel: 'Devoción & Glow Celestial',
+    aroma: 'Amaderado rico, dulce, balsámico y aterciopelado',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la devoción espiritual, la humildad y la quietud mental',
+    keyBenefits: [
+      'Proporciona a la piel un aspecto liso, hidratado y juvenil inigualable',
+      'Eleva la vibración meditativa disolviendo la desconexión espiritual',
+      'Excelente fijador aromático calmante y afrodisíaco suave'
+    ],
+    description: 'Cosechado de forma sustentable en reservas de Hawái, es una joya mística y cosmética.',
+    aromaticGuide: 'Difundir 3 gotas durante prácticas espirituales, yoga o momentos de introspección.',
+    topicalGuide: 'Aplicar 1-2 gotas en rostro y cuello antes del serum o crema de noche.',
+    ingestionGuide: 'Tomar 1-2 gotas en cápsula vegetal para bienestar general.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Exclusivo y preciado para rutinas de skincare de alta gama.'
+  },
+  {
+    id: 'tangerine',
+    name: 'Tangerina (Mandarina)',
+    trademarkName: 'Tangerine',
+    botanicalName: 'Citrus reticulata',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'mood',
+    categoryLabel: 'Espontaneidad & Alegría',
+    aroma: 'Cítrico dulce, fresco, chispeante y acidulado',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: true,
+    emotionalProperty: 'El aceite de la espontaneidad lúdica y la creatividad pura',
+    keyBenefits: [
+      'Disuelve el perfeccionismo rígido y devuelve la ligereza infantil',
+      'Apoya el sistema digestivo e inmunológico con limoneno',
+      'Purifica el ambiente dejando una estela dulce y fresca'
+    ],
+    description: 'Más dulce y jugosa que la naranja tradicional, invita a disfrutar la vida sin tanta seriedad.',
+    aromaticGuide: 'Difundir 4 gotas con 2 de Menta para un espacio alegre y dinámico.',
+    topicalGuide: 'Aplicar diluido por la noche en muñecas o cuello. ¡Fotosensible!',
+    ingestionGuide: 'Añadir 1-2 gotas en agua fresca, licuados o repostería.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: '¡Fotosensible! No exponerse al sol en 12h tras uso en piel.'
+  },
+  {
+    id: 'thyme',
+    name: 'Tomillo',
+    trademarkName: 'Thyme',
+    botanicalName: 'Thymus vulgaris',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'immunity',
+    categoryLabel: 'Perdón & Escudo Inmune',
+    aroma: 'Herbáceo caliente, especiado, verde y penetrante',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'D', // Aceite Caliente
+    photosensitive: false,
+    emotionalProperty: 'El aceite del perdón, la liberación del rencor acumulado y el coraje',
+    keyBenefits: [
+      'Poderoso protector contra amenazas microbianas y estacionales',
+      'Estimula la circulación y la vitalidad celular',
+      'Ayuda a soltar la amargura, el enojo reprimido y el resentimiento'
+    ],
+    description: 'Uno de los limpiadores botánicos más enérgicos del mundo herbal. Usar con alta dilución.',
+    aromaticGuide: 'Difundir 1-2 gotas con Eucalipto y Árbol de Té para desinfectar el aire.',
+    topicalGuide: '¡Diluir siempre! 1 gota en 1 cucharada de Coco Fraccionado en la planta de los pies.',
+    ingestionGuide: 'Tomar 1 gota en cápsula vegetal con aceite portador durante temporadas invernales.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Aceite caliente. Requiere dilución rigurosa.'
+  },
+  {
+    id: 'ylang-ylang',
+    name: 'Ylang Ylang',
+    trademarkName: 'Ylang Ylang',
+    botanicalName: 'Cananga odorata',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'mood',
+    categoryLabel: 'Niño Interior & Sensualidad',
+    aroma: 'Floral exótico, dulce, cálido y seductor',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del niño interior, la alegría juguetona y la sensualidad',
+    keyBenefits: [
+      'Calma la taquicardia por ansiedad y disminuye la presión arterial reactiva',
+      'Excelente acondicionador para cabello brillante y piel luminosa',
+      'Reconecta con el disfrute de los sentidos y disuelve la frialdad emocional'
+    ],
+    description: 'Destilado de las flores amarillas en forma de estrella de Madagascar, es el elixir afrodisíaco por excelencia.',
+    aromaticGuide: 'Difundir 3 gotas con Bergamota para un ambiente romántico y sensual.',
+    topicalGuide: 'Aplicar 1 gota en muñecas y cuello como perfume floral exótico o en el cuero cabelludo.',
+    ingestionGuide: 'Tomar 1 gota en cápsula vegetal o en infusión para relajación cardiovascular.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Aroma muy potente: menos es más (1 gota basta).'
+  },
+  {
+    id: 'yarrow-pom',
+    name: 'Yarrow|Pom (Botella Dúo Botánico 30ml)',
+    trademarkName: 'Yarrow|Pom Active Botanical Duo',
+    botanicalName: 'Achillea millefolium & Punica granatum',
+    brand: 'dōTERRA',
+    type: 'single',
+    category: 'beauty',
+    categoryLabel: 'Colágeno & Juventud Celular',
+    aroma: 'Frutal, especiado, dulce y herbal (color azul zafiro intenso)',
+    methods: ['T', 'I'], // Tópico e Interno
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la protección energética, la integridad del aura y la regeneración',
+    keyBenefits: [
+      'Sinergia patentada de Milenrama (ácido camazuleno azul) y aceite de semilla de Granada',
+      'Activa las enzimas protectoras de la piel y apoya la producción natural de colágeno',
+      'Poderosa acción antioxidante sistémica cuando se ingiere'
+    ],
+    description: 'Un elixir azul zafiro de vanguardia cosmética que fusiona botánicos medicinales con lípidos nutritivos.',
+    aromaticGuide: 'No es para difusor (es una fórmula dúo nutritiva con lípidos).',
+    topicalGuide: 'Aplicar 2-4 gotas en rostro, cuello y escote mañana y noche como serum rejuvenecedor.',
+    ingestionGuide: 'Tomar 1-2 gotas directamente debajo de la lengua o en agua por la mañana y noche para juventud celular.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Color azul brillante natural que se absorbe sin manchar la piel.'
   },
 
-  // ==========================================
-  // MEZCLAS REGISTRADAS dōTERRA (PROPRIETARY BLENDS)
-  // ==========================================
+  // ============================================================================
+  // 2. MEZCLAS PATENTADAS dōTERRA (PROPRIETARY BLENDS)
+  // ============================================================================
   {
     id: 'on-guard',
     name: 'On Guard',
@@ -383,18 +1157,21 @@ export const DOTERRA_CATALOG = [
     categoryLabel: 'Defensa & Escudo',
     aroma: 'Cálido, especiado, cítrico y amaderado (Navidad embotellada)',
     methods: ['A', 'T', 'I'],
-    sensitivity: 'D', // Contiene canela y clavo (Diluir)
+    sensitivity: 'D', // Contiene canela y clavo
     photosensitive: false,
     emotionalProperty: 'El aceite de la protección energética, los límites seguros y la invulnerabilidad',
     keyBenefits: [
-      'Refuerza las defensas naturales del sistema inmunológico',
-      'Purifica el aire eliminando patógenos ambientales',
-      'Excelente enjuague bucal purificante para encías y garganta'
+      'Refuerza las defensas naturales del sistema inmunológico en temporadas críticas',
+      'Purifica el aire ambiental eliminando patógenos y virus flotantes',
+      'Excelente enjuague bucal purificante para encías y garganta sana'
     ],
-    description: 'La mezcla insignia más famosa de dōTERRA, formulada con aceites botánicos con alta capacidad antioxidante comprobada.',
+    description: 'La mezcla insignia más famosa de dōTERRA, con alta capacidad antioxidante comprobada.',
+    aromaticGuide: 'Difundir 4-5 gotas en el hogar para mantener el ambiente purificado y libre de amenazas estacionales.',
+    topicalGuide: 'Diluir 2 gotas en 1 cucharadita de Coco Fraccionado y frotar en la planta de los pies o columna.',
+    ingestionGuide: 'Agregar 1 gota a una rebanada de manzana, en agua con miel o tomar en cápsula vegetal para defensas.',
     defaultInInventory: true,
     level: '100%',
-    notes: 'Un básico para temporadas frías o para limpiar la energía de espacios concurridos.'
+    notes: 'Un básico indispensable para temporadas frías o para limpiar la energía de espacios concurridos.'
   },
   {
     id: 'balance',
@@ -413,12 +1190,15 @@ export const DOTERRA_CATALOG = [
     keyBenefits: [
       'Disuelve la ansiedad aguda, ataques de pánico y la sensación de agobio',
       'Conecta con el momento presente cuando la mente viaja al futuro con angustia',
-      'Favorece la tranquilidad corporal y la armonización del sistema circulatorio'
+      'Favorece la tranquilidad corporal y la armonización del pulso'
     ],
-    description: 'Con un característico tono azul por el Blue Tansy, es el antídoto definitivo para la mente dispersa y el estrés moderno.',
+    description: 'Con un característico tono azul por el Blue Tansy, es el antídoto definitivo para el estrés moderno.',
+    aromaticGuide: 'Difundir 4 gotas en tu espacio de trabajo o inhalar en palmas al iniciar el día.',
+    topicalGuide: 'Aplicar 2-3 gotas en la planta de los pies cada mañana al despertar y en muñecas durante el día.',
+    ingestionGuide: 'No ingerir. Uso exclusivo aromático y tópico.',
     defaultInInventory: true,
     level: '100%',
-    notes: 'Aplicar 2 gotas en la planta de los pies cada mañana al despertar.'
+    notes: 'No ingerir. Ritual sagrado matutino en las plantas de los pies.'
   },
   {
     id: 'adaptiv',
@@ -440,6 +1220,9 @@ export const DOTERRA_CATALOG = [
       'Ideal para personas con sobrecarga cognitiva o multitasking excesivo'
     ],
     description: 'Formulado específicamente para los desafíos neurológicos del siglo XXI: calma sin adormecer y eleva el enfoque.',
+    aromaticGuide: 'Difundir 4-5 gotas en la oficina o sala durante jornadas intensas.',
+    topicalGuide: 'Aplicar 1-2 gotas en nuca, hombros y muñecas cuando sientas que la mente se satura.',
+    ingestionGuide: 'No ingerir. (Para consumo interno existe la versión Adaptiv Cápsulas blandas).',
     defaultInInventory: true,
     level: '100%',
     notes: 'Tener siempre a la mano en el escritorio o en roll-on en el bolso.'
@@ -461,12 +1244,15 @@ export const DOTERRA_CATALOG = [
     keyBenefits: [
       'Induce un sueño profundo y combate el insomnio crónico o la dificultad para conciliar',
       'Calma tensiones emocionales y desacelera el ritmo cardíaco alterado',
-      'Crea un santuario de descanso en la habitación'
+      'Crea un santuario de descanso inquebrantable en la habitación'
     ],
-    description: 'La mezcla de relajación por antonomasia. Apaga los pensamientos recurrentes y prepara el cuerpo para un descanso restaurador.',
+    description: 'La mezcla de relajación por antonomasia. Apaga pensamientos recurrentes y prepara el cuerpo para descansar.',
+    aromaticGuide: 'Difundir 4-6 gotas en la recámara 30 minutos antes de dormir con luces tenues.',
+    topicalGuide: 'Aplicar 1-2 gotas en plantas de los pies, nuca y sobre la almohada.',
+    ingestionGuide: 'No ingerir. (Para consumo interno usar Serenity Softgels).',
     defaultInInventory: true,
     level: '100%',
-    notes: '4-5 gotas en el difusor de recámara 30 minutos antes de acostarse.'
+    notes: 'No ingerir. La reina indiscutible del descanso nocturno.'
   },
   {
     id: 'deep-blue',
@@ -488,12 +1274,15 @@ export const DOTERRA_CATALOG = [
       'Efecto frío-calor que relaja contracturas musculares profundas'
     ],
     description: 'La solución terapéutica para el cuerpo cansado o adolorido. Nunca ingerir.',
+    aromaticGuide: 'No recomendado para difusión prolongada. Inhalar directo para vigor físico.',
+    topicalGuide: 'Masajear 2-3 gotas diluidas con Coco Fraccionado en rodillas, hombros, lumbares o cuello.',
+    ingestionGuide: '¡Prohibido ingerir! Solo para uso tópico.',
     defaultInInventory: true,
     level: '100%',
-    notes: '¡Solo uso tópico! Masajear diluido en hombros, lumbares o piernas.'
+    notes: '¡Solo uso tópico! Tapa con seguro para niños. Nunca ingerir.'
   },
   {
-    id: 'breathe',
+    id: 'breathe-easy-air',
     name: 'Breathe (Easy Air)',
     trademarkName: 'Breathe / Easy Air (Mezcla Respiratoria)',
     botanicalName: 'Laurel Leaf, Eucalyptus, Peppermint, Melaleuca, Lemon, Cardamom, Ravintsara, Ravensara',
@@ -507,14 +1296,17 @@ export const DOTERRA_CATALOG = [
     photosensitive: false,
     emotionalProperty: 'El aceite de la respiración profunda, la vitalidad y el abrazo de la vida',
     keyBenefits: [
-      'Minimiza los efectos de amenazas estacionales y congestión nasal',
-      'Facilita la respiración nocturna reduciendo ronquidos y despertares',
+      'Minimiza los efectos de amenazas estacionales y congestión nasal severa',
+      'Facilita la respiración nocturna reduciendo ronquidos y despertares ahogados',
       'Despeja la cabeza pesada y la sensación de claustrofobia'
     ],
     description: 'Sensación inmediata de aire puro de montaña directo a los pulmones.',
+    aromaticGuide: 'Difundir 4 gotas toda la noche en la recámara o inhalar profundamente de las palmas.',
+    topicalGuide: 'Aplicar 2 gotas con Coco Fraccionado en pecho, espalda y planta de los pies.',
+    ingestionGuide: 'No ingerir. Uso exclusivo aromático y tópico.',
     defaultInInventory: true,
     level: '100%',
-    notes: 'Aplicar 1 gota con aceite portador en el pecho o difundir toda la noche.'
+    notes: 'No ingerir. Esencial en cambios de estación y resfriados.'
   },
   {
     id: 'digestzen',
@@ -532,18 +1324,75 @@ export const DOTERRA_CATALOG = [
     emotionalProperty: 'El aceite de la asimilación de experiencias y la digestión de la vida',
     keyBenefits: [
       'Alivia pesadez, gases, acidez, indigestión y distensión abdominal en minutos',
-      'Ayuda a calmar mareos por movimiento en viajes o autos',
+      'Ayuda a calmar mareos por movimiento en viajes en auto o avión',
       'Favorece la absorción y digestión saludable de alimentos copiosos'
     ],
     description: 'El domador estomacal oficial: 1 gota en un vaso de agua o masajeada circularmente en el ombligo obra maravillas.',
+    aromaticGuide: 'Inhalar directamente de la botella cuando sientas náuseas o mareo.',
+    topicalGuide: 'Masajear 1-2 gotas con Coco Fraccionado en el abdomen en el sentido de las manecillas del reloj.',
+    ingestionGuide: 'Tomar 1-2 gotas en un vaso de agua o cápsula vegetal tras comidas pesadas.',
+    defaultInInventory: true,
+    level: '100%',
+    notes: 'Indispensable en comidas fuera de casa o viajes.'
+  },
+  {
+    id: 'metapwr-oil',
+    name: 'MetaPWR Mezcla de Aceites',
+    trademarkName: 'MetaPWR Metabolic Blend 15ml',
+    botanicalName: 'Grapefruit, Lemon, Peppermint, Ginger, Cinnamon Bark',
+    brand: 'dōTERRA',
+    type: 'metapwr',
+    category: 'metabolic',
+    categoryLabel: 'Metabolismo & Energía Celular',
+    aroma: 'Cítrico, mentolado, especiado y dulce',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: true,
+    emotionalProperty: 'El aceite del empoderamiento corporal, vitalidad sostenida y superación de antojos',
+    keyBenefits: [
+      'Inhibe la maduración de nuevas células grasas (adipogénesis) según estudios clínicos',
+      'Disuelve los antojos compulsivos de azúcar y carbohidratos refinados',
+      'Aumenta la energía física y mental sostenida a lo largo del día sin picos de cortisol'
+    ],
+    description: 'El pilar aromático y metabólico del sistema MetaPWR de dōTERRA. Formulado con proporciones exactas de cítricos y especias.',
+    aromaticGuide: 'Difundir 4 gotas durante sesiones de ejercicio o trabajo para mantener la energía alta y la mente enfocada.',
+    topicalGuide: 'Masajear diluido en zonas con acumulación de tejido adiposo antes del entrenamiento. (¡Evitar sol directo en 12h!).',
+    ingestionGuide: 'Añadir 2-4 gotas a tu termo de agua de 1 litro y beber durante el día para quemar grasa y frenar antojos.',
     defaultInInventory: false,
     level: '100%',
-    notes: 'Indispensable en comidas pesadas o salidas a restaurantes.'
+    notes: 'Pilar fundamental para optimizar la salud metabólica y longevidad.'
+  },
+  {
+    id: 'supermint',
+    name: 'SuperMint',
+    trademarkName: 'SuperMint Mentha Blend',
+    botanicalName: 'Peppermint, Japanese Mint, Bergamot Mint, Spearmint',
+    brand: 'dōTERRA',
+    type: 'blend',
+    category: 'focus',
+    categoryLabel: 'Frescura Extrema & Claridad',
+    aroma: 'Ultra mentolado, dulce, herbal y helado',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'S',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la claridad lúcida y la reactivación instantánea',
+    keyBenefits: [
+      'Combina 4 variedades selectas de menta para un perfil sensorial superior',
+      'Despeja las vías respiratorias y refresca el aliento al instante',
+      'Genera una recarga energética mental en segundos'
+    ],
+    description: 'La evolución de la menta: cuatro variedades unidas para una experiencia fresca sin precedentes.',
+    aromaticGuide: 'Difundir 3 gotas para una ola de frescura que despierta a toda la habitación.',
+    topicalGuide: 'Aplicar 1 gota diluida en sienes, nuca y frente para sensación fría revitalizante.',
+    ingestionGuide: 'Agregar 1 gota a agua fresca o té para digestión y frescura bucal extrema.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Increíblemente refrescante en días calurosos o fatiga vespertina.'
   },
   {
     id: 'pasttense',
     name: 'PastTense',
-    trademarkName: 'PastTense (Mezcla contra la Tensión)',
+    trademarkName: 'PastTense (Mezcla contra la Tensión Roll-on)',
     botanicalName: 'Wintergreen, Lavender, Peppermint, Frankincense, Cilantro, Marjoram, Roman Chamomile, Basil, Rosemary',
     brand: 'dōTERRA',
     type: 'blend',
@@ -557,12 +1406,15 @@ export const DOTERRA_CATALOG = [
     keyBenefits: [
       'Fórmula magistral para disolver dolores de cabeza por estrés y tensión cervical',
       'Relaja los músculos de la mandíbula (bruxismo) y hombros contraídos',
-      'Presentación ideal en roll-on para llevar a todas partes'
+      'Presentación ideal en roll-on listo para aplicar en cualquier momento'
     ],
     description: 'El rescate de bolsillo cuando sientes la cabeza a punto de explotar o los hombros como rocas.',
+    aromaticGuide: 'Inhalar de muñecas tras aplicarlo.',
+    topicalGuide: 'Aplicar en sienes (lejos de los ojos), nuca, detrás de orejas y trapecios.',
+    ingestionGuide: 'No ingerir. Uso exclusivo tópico y aromático.',
     defaultInInventory: false,
     level: '100%',
-    notes: 'Aplicar en sienes (lejos de los ojos), nuca y detrás de las orejas.'
+    notes: 'No ingerir. Imprescindible en el bolso o mochila de trabajo.'
   },
   {
     id: 'citrus-bliss',
@@ -580,13 +1432,16 @@ export const DOTERRA_CATALOG = [
     emotionalProperty: 'El aceite de la chispa creativa, la motivación y el entusiasmo juvenil',
     keyBenefits: [
       'Disipa el desánimo, la apatía y la baja energía matutina',
-      'Estimula la creatividad y el flujo de ideas',
+      'Estimula la creatividad y el flujo de ideas en proyectos',
       'Neutraliza olores y llena la casa de un aroma a limpieza gourmet'
     ],
     description: 'Una explosión de cítricos maduros envueltos en vainilla pura que arranca una sonrisa instantánea.',
+    aromaticGuide: 'Difundir 4-5 gotas en sala, cocina o estudio para elevar la vibración.',
+    topicalGuide: 'Aplicar en muñecas por la noche como perfume alegre. ¡Fotosensible!',
+    ingestionGuide: 'No ingerir. Uso aromático y tópico.',
     defaultInInventory: false,
     level: '100%',
-    notes: 'Fotosensible. Ideal para difusor de sala, cocina o estudio.'
+    notes: 'Fotosensible. La mezcla más alegre y adictiva para el difusor de casa.'
   },
   {
     id: 'purify',
@@ -603,20 +1458,988 @@ export const DOTERRA_CATALOG = [
     photosensitive: false,
     emotionalProperty: 'El aceite de la purificación del espacio, renovación y limpieza de ataduras',
     keyBenefits: [
-      'Elimina olores persistentes de cocina, humedad o mascotas',
-      'Purifica el aire tras visitas o periodos de enfermedad',
+      'Elimina olores persistentes de cocina, humedad o mascotas en minutos',
+      'Purifica el aire tras visitas o periodos de enfermedad en casa',
       'Alivia picaduras de insectos e irritaciones leves'
     ],
     description: 'El reset aromático definitivo para renovar la energía y el aire de cualquier habitación.',
+    aromaticGuide: 'Difundir 4 gotas tras cocinar o para limpiar la energía de una habitación.',
+    topicalGuide: 'Aplicar 1 gota diluida sobre picaduras de mosquitos para calmar la comezón.',
+    ingestionGuide: 'No ingerir. Uso exclusivo aromático y tópico.',
     defaultInInventory: false,
     level: '100%',
-    notes: 'Difundir para refrescar la casa en minutos.'
+    notes: 'No ingerir. Increíble para eliminar olores fuertes.'
+  },
+  {
+    id: 'aromatouch',
+    name: 'AromaTouch',
+    trademarkName: 'AromaTouch (Mezcla para Masaje)',
+    botanicalName: 'Cypress, Peppermint, Marjoram, Basil, Grapefruit, Lavender',
+    brand: 'dōTERRA',
+    type: 'blend',
+    category: 'relief',
+    categoryLabel: 'Relajación Muscular & Circulación',
+    aroma: 'Limpio, fresco, mentolado y herbáceo',
+    methods: ['T', 'A'],
+    sensitivity: 'N',
+    photosensitive: true,
+    emotionalProperty: 'El aceite de la apertura del corazón, relajación y conexión física',
+    keyBenefits: [
+      'Fórmula insignia de la técnica AromaTouch de dōTERRA para masajes',
+      'Relaja músculos contraídos, promueve la circulación y calma tejidos',
+      'Reduce el estrés y genera una sensación profunda de spa'
+    ],
+    description: 'Mezcla maestra desarrollada para relajar los músculos y aumentar la circulación en la espalda y extremidades.',
+    aromaticGuide: 'Difundir 3-4 gotas en sesiones de masaje o relajación.',
+    topicalGuide: 'Mezclar 4-5 gotas con Coco Fraccionado y realizar masaje suave a lo largo de la columna vertebral y hombros.',
+    ingestionGuide: 'No ingerir. Exclusivo para masaje tópico y aromático.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'No ingerir. La reina del masaje relajante en pareja o profesional.'
+  },
+  {
+    id: 'ddr-prime',
+    name: 'DDR Prime',
+    trademarkName: 'DDR Prime Complejo Celular 15ml',
+    botanicalName: 'Frankincense, Wild Orange, Litsea, Thyme, Clove, Summer Savory, Niaouli, Lemongrass',
+    brand: 'dōTERRA',
+    type: 'blend',
+    category: 'immunity',
+    categoryLabel: 'Regeneración Celular & ADN',
+    aroma: 'Herbáceo, cítrico, especiado y medicinal',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'D',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la transformación celular y la sanación del linaje',
+    keyBenefits: [
+      'Protege a las células contra el daño oxidativo y apoya la integridad del ADN',
+      'Promueve la respuesta celular saludable y la apoptosis normal de células dañadas',
+      'Excelente soporte para la longevidad y vitalidad integral'
+    ],
+    description: 'Fórmula celular avanzada de dōTERRA diseñada para apoyar la salud de las células del cuerpo.',
+    aromaticGuide: 'Difundir 3 gotas con Incienso para un ambiente de regeneración y paz.',
+    topicalGuide: 'Diluir 2 gotas en 1 cucharadita de Coco Fraccionado y masajear en columna y planta de los pies.',
+    ingestionGuide: 'Tomar 1-2 gotas en cápsula vegetal o en agua con comida para protección celular diaria.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Pilar para prevención y cuidado celular a largo plazo.'
+  },
+  {
+    id: 'zendocrine',
+    name: 'Zendocrine',
+    trademarkName: 'Zendocrine (Mezcla Desintoxicante)',
+    botanicalName: 'Tangerine, Rosemary, Geranium, Juniper Berry, Cilantro',
+    brand: 'dōTERRA',
+    type: 'blend',
+    category: 'digestive',
+    categoryLabel: 'Detox Hepático & Renal',
+    aroma: 'Herbáceo, punzante, floral y fresco',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la desintoxicación de hábitos tóxicos y renovación',
+    keyBenefits: [
+      'Apoya la capacidad natural del cuerpo para eliminar toxinas a través del hígado y riñones',
+      'Favorece la función hepática saludable tras excesos alimenticios',
+      'Excelente tónico para temporadas de détox primaveral o reset de hábitos'
+    ],
+    description: 'La fórmula botánica purificadora para apoyar a los órganos de filtración del cuerpo.',
+    aromaticGuide: 'Difundir 3 gotas con Limón durante periodos de détox o limpieza.',
+    topicalGuide: 'Aplicar 2 gotas con Coco Fraccionado en la zona del hígado (costado derecho bajo las costillas) y plantas de los pies.',
+    ingestionGuide: 'Tomar 1-2 gotas en un vaso de agua o cápsula vegetal en ayunas durante 10-14 días.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Ideal para ciclos de limpieza hepática y détox 2 veces al año.'
+  },
+  {
+    id: 'air-x',
+    name: 'Air-X',
+    trademarkName: 'Air-X (Mezcla Purificadora Aérea)',
+    botanicalName: 'Litsea, Tangerine, Grapefruit, Frankincense, Cardamom',
+    brand: 'dōTERRA',
+    type: 'blend',
+    category: 'respiratory',
+    categoryLabel: 'Aire Puro & Claridad',
+    aroma: 'Cítrico dulce, especiado, fresco y resinoso',
+    methods: ['A', 'T', 'I'],
+    sensitivity: 'N',
+    photosensitive: true,
+    emotionalProperty: 'El aceite de la mente despejada y la adaptabilidad ante el cambio',
+    keyBenefits: [
+      'Diseñado específicamente para purificar el aire en ambientes urbanos cargados',
+      'Sensación de frescura respiratoria limpia y estimulante',
+      'Sabor delicioso y refrescante al añadirse al agua'
+    ],
+    description: 'Formulado para purificar el aire que respiras y renovar la vitalidad.',
+    aromaticGuide: 'Difundir 4-5 gotas en casa u oficina para purificar el aire de contaminantes.',
+    topicalGuide: 'Aplicar 1-2 gotas diluidas en pecho o muñecas.',
+    ingestionGuide: 'Añadir 1-2 gotas en tu vaso de agua para sabor cítrico y soporte antioxidante.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Fotosensible. Aroma cítrico sumamente sofisticado y moderno.'
+  },
+  {
+    id: 'northern-escape',
+    name: 'Northern Escape',
+    trademarkName: 'Northern Escape (Bosque Nórdico)',
+    botanicalName: 'Black Spruce, Siberian Fir, Balsam Fir, Lavandin, Cedarwood, Cypress, Hinoki, Frankincense, Nootka, Cananga, Clove',
+    brand: 'dōTERRA',
+    type: 'blend',
+    category: 'calm',
+    categoryLabel: 'Bosque Profundo & Serenidad',
+    aroma: 'Boscoso intenso, resinoso, fresco y balsámico',
+    methods: ['A', 'T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del escape a la naturaleza, la solidez y el renacimiento mental',
+    keyBenefits: [
+      'Recrea la experiencia de caminar en un bosque virgen nórdico',
+      'Calma la ansiedad de la vida urbana y reduce niveles de estrés',
+      'Purifica el aire con fitoncidas de coníferas milenarias'
+    ],
+    description: 'Una sinergia majestuosa de coníferas que transporta los sentidos al corazón de los bosques canadienses.',
+    aromaticGuide: 'Difundir 4-5 gotas para transformar tu hogar en una cabaña de bosque alpino.',
+    topicalGuide: 'Aplicar 1-2 gotas con Coco Fraccionado en plantas de los pies o pecho para enraizamiento.',
+    ingestionGuide: 'No ingerir. Uso aromático y tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'No ingerir. Uno de los aromas boscosos más sublimes de dōTERRA.'
+  },
+  {
+    id: 'salubelle-immortelle',
+    name: 'Salubelle (Immortelle)',
+    trademarkName: 'Salubelle Beauty Blend Roll-on 10ml',
+    botanicalName: 'Frankincense, Hawaiian Sandalwood, Lavender, Myrrh, Helichrysum, Rose',
+    brand: 'dōTERRA',
+    type: 'blend',
+    category: 'beauty',
+    categoryLabel: 'Elixir Antienvejecimiento Supremo',
+    aroma: 'Amaderado, floral exquisito, resinoso y cálido',
+    methods: ['T'], // Roll-on
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la belleza eterna, la dignidad y la gracia madura',
+    keyBenefits: [
+      'Contiene los aceites más caros y regeneradores del mundo (Rosa, Incienso, Helicriso, Sándalo)',
+      'Atenúa visiblemente arrugas, líneas finas, manchas de edad y flacidez',
+      'Proporciona una nutrición celular profunda a cutis maduro o deshidratado'
+    ],
+    description: 'La joya de la corona en cosmética antienvejecimiento natural: aceites puros no diluidos en frasco roll-on.',
+    aromaticGuide: 'Inhalar tras aplicarlo en el rostro.',
+    topicalGuide: 'Aplicar suavemente en contorno de ojos (hueso orbital), líneas de expresión, cuello y escote mañana y noche.',
+    ingestionGuide: 'No ingerir. Uso cosmético tópico exclusivo.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Oro puro para la piel. Se puede diluir al 50% con Coco Fraccionado para duplicar su duración.'
+  },
+
+  // ============================================================================
+  // 3. LÍNEA DE AROMATERAPIA EMOCIONAL dōTERRA (EMOTIONAL AROMATHERAPY)
+  // ============================================================================
+  {
+    id: 'motivate',
+    name: 'Motivate',
+    trademarkName: 'Motivate (Mezcla Alentadora)',
+    botanicalName: 'Peppermint, Clementine, Coriander, Basil, Yuzu, Melissa, Rosemary, Vanilla',
+    brand: 'dōTERRA',
+    type: 'emotional',
+    category: 'energy',
+    categoryLabel: 'Motivación & Coraje',
+    aroma: 'Fresco, limpio, mentolado y cítrico',
+    methods: ['A', 'T'],
+    sensitivity: 'N',
+    photosensitive: true,
+    emotionalProperty: 'El aceite del coraje, la confianza en el potencial propio y la acción',
+    keyBenefits: [
+      'Disipa la procrastinación, la duda y el miedo al fracaso',
+      'Despierta la determinación para emprender nuevos desafíos',
+      'Aumenta la autoconfianza y la energía ejecutiva'
+    ],
+    description: 'La chispa botánica para vencer la inercia y avanzar hacia tus metas con paso firme.',
+    aromaticGuide: 'Difundir 4 gotas por la mañana o antes de empezar una sesión de trabajo demandante.',
+    topicalGuide: 'Aplicar en muñecas, nuca y sobre el corazón antes de un examen, reto o entrevista.',
+    ingestionGuide: 'No ingerir. Uso aromático y tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Fotosensible. Tu mejor aliado contra la procrastinación.'
+  },
+  {
+    id: 'cheer',
+    name: 'Cheer',
+    trademarkName: 'Cheer (Mezcla Edificante)',
+    botanicalName: 'Wild Orange, Clove, Star Anise, Lemon Myrtle, Nutmeg, Vanilla, Ginger, Cinnamon',
+    brand: 'dōTERRA',
+    type: 'emotional',
+    category: 'mood',
+    categoryLabel: 'Alegría & Optimismo',
+    aroma: 'Fresco, especiado, dulce y cálido',
+    methods: ['A', 'T'],
+    sensitivity: 'D',
+    photosensitive: true,
+    emotionalProperty: 'El aceite del optimismo, la calidez y la superación del desánimo',
+    keyBenefits: [
+      'Promueve sentimientos de felicidad, positivismo y jovialidad',
+      'Contrarresta emociones negativas de tristeza o decepción',
+      'Llena cualquier habitación de un aroma festivo y reconfortante'
+    ],
+    description: 'Un rayo de optimismo que abriga el corazón y despierta sonrisas.',
+    aromaticGuide: 'Difundir 3-4 gotas en momentos de desánimo o mañanas nubladas.',
+    topicalGuide: 'Aplicar diluido con Coco Fraccionado sobre el corazón y muñecas.',
+    ingestionGuide: 'No ingerir. Uso aromático y tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Fotosensible. Mezcla perfecta para combatir el desánimo.'
+  },
+  {
+    id: 'passion',
+    name: 'Passion',
+    trademarkName: 'Passion (Mezcla Inspiradora)',
+    botanicalName: 'Fractionated Coconut Oil, Cardamom, Cinnamon, Ginger, Clove, Sandalwood, Jasmine, Vanilla, Damiana',
+    brand: 'dōTERRA',
+    type: 'emotional',
+    category: 'mood',
+    categoryLabel: 'Pasión & Creatividad',
+    aroma: 'Especiado, cálido, rico y exótico',
+    methods: ['A', 'T'],
+    sensitivity: 'S',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la pasión por la vida, el entusiasmo y el fuego interior',
+    keyBenefits: [
+      'Enciende el entusiasmo y la pasión por proyectos, relaciones y pasatiempos',
+      'Disipa el aburrimiento, la apatía y la rutina gris',
+      'Despierta la creatividad audaz y la sensualidad'
+    ],
+    description: 'La chispa para reavivar la emoción por vivir cuando todo se siente monótono.',
+    aromaticGuide: 'Difundir 3-4 gotas en tu estudio o recámara para estimular la creatividad.',
+    topicalGuide: 'Aplicar en muñecas y detrás de las orejas como perfume apasionado.',
+    ingestionGuide: 'No ingerir. Uso aromático y tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Excelente para romper con la rutina y reactivar el brillo creativo.'
+  },
+  {
+    id: 'forgive',
+    name: 'Forgive',
+    trademarkName: 'Forgive (Mezcla Renovadora)',
+    botanicalName: 'Spruce, Bergamot, Juniper Berry, Myrrh, Arborvitae, Nootka, Thyme, Citronella',
+    brand: 'dōTERRA',
+    type: 'emotional',
+    category: 'calm',
+    categoryLabel: 'Perdón & Liberación',
+    aroma: 'Herbáceo, fresco, amaderado y terroso',
+    methods: ['A', 'T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del perdón, la empatía y la liberación del rencor',
+    keyBenefits: [
+      'Ayuda a soltar el enojo reprimido, la amargura y la necesidad de culpar',
+      'Fomenta sentimientos de paciencia, alivio y ligereza en el pecho',
+      'Facilita la reconciliación y el cierre de ciclos dolorosos'
+    ],
+    description: 'Un bálsamo para soltar pesos del pasado y permitir que el corazón vuelva a respirar ligero.',
+    aromaticGuide: 'Difundir 4 gotas durante meditaciones sobre el perdón o escribir en tu diario.',
+    topicalGuide: 'Aplicar 1-2 gotas sobre el pecho (zona del corazón) y en muñecas.',
+    ingestionGuide: 'No ingerir. Uso aromático y tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'No ingerir. Sanador emocional profundo para momentos de resentimiento.'
+  },
+  {
+    id: 'console',
+    name: 'Console',
+    trademarkName: 'Console (Mezcla Reconfortante)',
+    botanicalName: 'Frankincense, Patchouli, Ylang Ylang, Labdanum, Amyris, Sandalwood, Rose, Osmanthus',
+    brand: 'dōTERRA',
+    type: 'emotional',
+    category: 'calm',
+    categoryLabel: 'Consuelo en el Duelo & Paz',
+    aroma: 'Dulce, floral, amaderado, resinoso y cálido',
+    methods: ['A', 'T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del consuelo, la ternura ante la pérdida y la esperanza',
+    keyBenefits: [
+      'Abraza el corazón en momentos de duelo, dolor emocional o ruptura',
+      'Disuelve la sensación de vacío y desamparo',
+      'Aporta calidez y esperanza para dar los primeros pasos hacia la sanación'
+    ],
+    description: 'El abrazo aromático más tierno cuando estás pasando por una pérdida o tristeza profunda.',
+    aromaticGuide: 'Difundir 3-4 gotas en la recámara o espacio personal durante momentos de duelo.',
+    topicalGuide: 'Aplicar 1-2 gotas con Coco Fraccionado sobre el corazón y en las palmas e inhalar.',
+    ingestionGuide: 'No ingerir. Uso aromático y tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'No ingerir. El mejor regalo y apoyo para alguien que vive un duelo.'
+  },
+  {
+    id: 'peace',
+    name: 'Peace',
+    trademarkName: 'Peace (Mezcla Tranquilizadora)',
+    botanicalName: 'Vetiver, Lavender, Ylang Ylang, Frankincense, Clary Sage, Marjoram, Labdanum, Spearmint',
+    brand: 'dōTERRA',
+    type: 'emotional',
+    category: 'calm',
+    categoryLabel: 'Paz Mental & Cero Pánico',
+    aroma: 'Dulce, rico, mentolado y floral',
+    methods: ['A', 'T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la paz interior, la confianza en el flujo de la vida y la serenidad',
+    keyBenefits: [
+      'Frena en seco la espiral de pánico, miedo al futuro y rumiación',
+      'Restaura la confianza en que todo estará bien',
+      'Induce calma inmediata en situaciones de alta presión o nerviosismo'
+    ],
+    description: 'El recordatorio de que no tienes que controlarlo todo: respira y ríndete a la paz.',
+    aromaticGuide: 'Difundir 4 gotas cuando sientas ansiedad o nerviosismo descontrolado.',
+    topicalGuide: 'Aplicar en muñecas, sienes y detrás del cuello.',
+    ingestionGuide: 'No ingerir. Uso aromático y tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'No ingerir. Espectacular para calmar la mente en segundos.'
+  },
+
+  // ============================================================================
+  // 4. COLECCIÓN NIÑOS (KIDS COLLECTION - ROLL-ONS PREDILUIDOS SEGUROS)
+  // ============================================================================
+  {
+    id: 'thinker-kids',
+    name: 'Thinker (Enfoque Infantil)',
+    trademarkName: 'Thinker Focus Blend Roll-on 10ml',
+    botanicalName: 'Vetiver, Peppermint, Clementine, Rosemary in Fractionated Coconut Oil',
+    brand: 'dōTERRA',
+    type: 'kids',
+    category: 'focus',
+    categoryLabel: 'Enfoque & Tareas Escolares',
+    aroma: 'Terroso, mentolado, herbal y cítrico suave',
+    methods: ['T', 'A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del enfoque despejado y la curiosidad intelectual',
+    keyBenefits: [
+      'Ayuda a niños y adultos a concentrarse en tareas escolares y proyectos',
+      'Reduce la dispersión mental e hiperactividad sin irritar la piel',
+      'Listo para usar en roll-on seguro para toda la familia'
+    ],
+    description: 'Fórmula prediluida para apoyar la atención, retención de conceptos y calma mental.',
+    aromaticGuide: 'Inhalar de las muñecas tras aplicarlo.',
+    topicalGuide: 'Aplicar en la nuca, muñecas y sienes de los niños antes de hacer la tarea o estudiar.',
+    ingestionGuide: 'No ingerir. Roll-on de uso tópico exclusivo.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Maravilloso también para adultos que buscan una mezcla de enfoque suave.'
+  },
+  {
+    id: 'calmer-kids',
+    name: 'Calmer (Descanso Infantil)',
+    trademarkName: 'Calmer Restful Blend Roll-on 10ml',
+    botanicalName: 'Lavender, Cananga, Buddha Wood, Roman Chamomile in Fractionated Coconut Oil',
+    brand: 'dōTERRA',
+    type: 'kids',
+    category: 'calm',
+    categoryLabel: 'Dulces Sueños & Calma Infantil',
+    aroma: 'Dulce, floral y suavemente amaderado',
+    methods: ['T', 'A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del sueño pacífico y la serenidad nocturna infantil',
+    keyBenefits: [
+      'Ayuda a los niños a desacelerar el ritmo tras un día activo de juegos',
+      'Reduce miedos nocturnos y pesadillas',
+      'Crea una rutina de sueño reconfortante y predecible'
+    ],
+    description: 'La mezcla calmante prediluida más tierna para dormir plácidamente.',
+    aromaticGuide: 'Inhalar de las manos en la rutina de acostarse.',
+    topicalGuide: 'Aplicar en la planta de los pies, muñecas y detrás de las orejas de los niños al ir a la cama.',
+    ingestionGuide: 'No ingerir. Roll-on de uso tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Esencial para la rutina nocturna de los más pequeños.'
+  },
+  {
+    id: 'stronger-kids',
+    name: 'Stronger (Escudo Infantil)',
+    trademarkName: 'Stronger Protective Blend Roll-on 10ml',
+    botanicalName: 'Cedarwood, Litsea, Frankincense, Rose in Fractionated Coconut Oil',
+    brand: 'dōTERRA',
+    type: 'kids',
+    category: 'immunity',
+    categoryLabel: 'Defensas & Resiliencia Infantil',
+    aroma: 'Brillante, alimonado, cálido y floral',
+    methods: ['T', 'A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la fortaleza física y la confianza corporal infantil',
+    keyBenefits: [
+      'Refuerza las defensas naturales de los niños en la escuela y guardería',
+      'Promueve una piel sana y alivia raspones o irritaciones menores',
+      'Brinda sensación de vitalidad y bienestar diario'
+    ],
+    description: 'El escudo inmunológico prediluido suave pero potente para niños.',
+    aromaticGuide: 'Inhalar directamente de las muñecas.',
+    topicalGuide: 'Aplicar a lo largo de la columna vertebral y planta de los pies antes de ir a la escuela.',
+    ingestionGuide: 'No ingerir. Uso tópico exclusivo.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Excelente para aplicar antes de salir de casa a la escuela.'
+  },
+  {
+    id: 'rescuer-kids',
+    name: 'Rescuer (Alivio Corporal Infantil)',
+    trademarkName: 'Rescuer Soothing Blend Roll-on 10ml',
+    botanicalName: 'Copaiba, Lavender, Spearmint, Zanthoxylum in Fractionated Coconut Oil',
+    brand: 'dōTERRA',
+    type: 'kids',
+    category: 'relief',
+    categoryLabel: 'Alivio de Dolores de Crecimiento',
+    aroma: 'Mentolado suave, fresco y floral',
+    methods: ['T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del confort físico y la relajación corporal',
+    keyBenefits: [
+      'Alivia dolores de crecimiento en piernas de niños en desarrollo',
+      'Calma músculos cansados tras deportes o juegos intensos',
+      'Sensación refrescante y calmante sin ser agresivo con la piel sensible'
+    ],
+    description: 'El rescate muscular prediluido ideal para niños activos.',
+    aromaticGuide: 'Inhalar tras aplicarlo en las piernas.',
+    topicalGuide: 'Masajear en piernas, hombros o espalda de los niños antes de dormir.',
+    ingestionGuide: 'No ingerir. Uso tópico exclusivo.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Increíble alivio para los típicos dolores de crecimiento en las noches.'
+  },
+  {
+    id: 'steady-kids',
+    name: 'Steady (Equilibrio Infantil)',
+    trademarkName: 'Steady Grounding Blend Roll-on 10ml',
+    botanicalName: 'Amyris, Balsam Fir, Coriander, Magnolia in Fractionated Coconut Oil',
+    brand: 'dōTERRA',
+    type: 'kids',
+    category: 'calm',
+    categoryLabel: 'Enraizamiento & Anti-Berrinches',
+    aroma: 'Amaderado suave, frutal y floral ligero',
+    methods: ['T', 'A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del equilibrio emocional y la calma en momentos de frustración',
+    keyBenefits: [
+      'Calma episodios de berrinches, llanto o frustración infantil',
+      'Ayuda a calmar los nervios en días de exámenes o eventos nuevos',
+      'Promueve una mente tranquila y emociones estables'
+    ],
+    description: 'El ancla emocional prediluida para niños ante emociones intensas.',
+    aromaticGuide: 'Inhalar de muñecas.',
+    topicalGuide: 'Aplicar en la nuca y planta de los pies cuando el niño esté abrumado.',
+    ingestionGuide: 'No ingerir. Uso tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Ideal para momentos de sobreestimulación en centros comerciales o fiestas.'
+  },
+  {
+    id: 'brave-kids',
+    name: 'Brave (Valentía Infantil)',
+    trademarkName: 'Brave Courage Blend Roll-on 10ml',
+    botanicalName: 'Wild Orange, Amyris, Osmanthus, Cinnamon in Fractionated Coconut Oil',
+    brand: 'dōTERRA',
+    type: 'kids',
+    category: 'mood',
+    categoryLabel: 'Valentía, Seguridad & Cero Timidez',
+    aroma: 'Cálido, cítrico, dulce y especiado sutil',
+    methods: ['T', 'A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del valor, la confianza en sí mismo y la superación de dudas',
+    keyBenefits: [
+      'Inyecta confianza antes de eventos deportivos, musicales o primer día de clases',
+      'Disipa la timidez paralizante y el miedo a lo desconocido',
+      'Aroma cálido y motivante que alegra el espíritu'
+    ],
+    description: 'La inyección de valor y seguridad para los pequeños valientes.',
+    aromaticGuide: 'Inhalar de las manos frotadas.',
+    topicalGuide: 'Aplicar sobre el corazón, muñecas y nuca antes de enfrentar una situación nueva.',
+    ingestionGuide: 'No ingerir. Uso tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'El empujón perfecto antes de presentaciones escolares.'
+  },
+  {
+    id: 'tamer-kids',
+    name: 'Tamer (Digestión Infantil)',
+    trademarkName: 'Tamer Digestive Blend Roll-on 10ml',
+    botanicalName: 'Spearmint, Japanese Peppermint, Ginger, Black Pepper, Parsley Seed in FCO',
+    brand: 'dōTERRA',
+    type: 'kids',
+    category: 'digestive',
+    categoryLabel: 'Pancita Feliz & Cero Mareos',
+    aroma: 'Mentolado dulce, especiado suave y fresco',
+    methods: ['T', 'A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del confort digestivo y la calma ante alimentos nuevos',
+    keyBenefits: [
+      'Alivia dolores de estómago, cólicos y gases en niños',
+      'Calma náuseas y mareos en el auto o autobús escolar',
+      'Fórmula suave y fresca con menta verde japonesa'
+    ],
+    description: 'La solución prediluida para la pancita de los niños.',
+    aromaticGuide: 'Inhalar del roll-on durante viajes por carretera.',
+    topicalGuide: 'Aplicar en el estómago con masaje circular suave en el sentido de las manecillas del reloj.',
+    ingestionGuide: 'No ingerir. Uso tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Indispensable en la guantera del auto para viajes familiares.'
+  },
+
+  // ============================================================================
+  // 5. LÍNEA TOUCH (ROLL-ONS PREDILUIDOS CON ACEITE FRACCIONADO DE COCO)
+  // ============================================================================
+  {
+    id: 'rose-touch',
+    name: 'Rosa Touch',
+    trademarkName: 'Rose Touch Roll-on 10ml',
+    botanicalName: 'Rosa damascena in Fractionated Coconut Oil',
+    brand: 'dōTERRA',
+    type: 'touch',
+    category: 'beauty',
+    categoryLabel: 'El Rey Floral & Amor Divino',
+    aroma: 'Floral dulce, profundo, embriagador y celestial',
+    methods: ['T', 'A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del amor incondicional, la compasión y la gracia divina',
+    keyBenefits: [
+      'Considerado el aceite con la frecuencia vibratoria más alta del planeta (~320 MHz)',
+      'Hidrata y rejuvenece la piel con tono y textura inigualables',
+      'Eleva el estado de ánimo y disuelve el dolor emocional más profundo'
+    ],
+    description: 'El aceite más preciado del mundo: se requieren miles de pétalos frescos de rosa de Bulgaria para cada gota.',
+    aromaticGuide: 'Inhalar de las muñecas para elevar la frecuencia emocional.',
+    topicalGuide: 'Aplicar sobre el corazón, cuello, líneas de expresión facial y puntos de pulso.',
+    ingestionGuide: 'No ingerir. Roll-on de uso tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'La máxima expresión del lujo botánico y el cuidado facial de élite.'
+  },
+  {
+    id: 'jasmine-touch',
+    name: 'Jazmín Touch',
+    trademarkName: 'Jasmine Touch Roll-on 10ml',
+    botanicalName: 'Jasminum grandiflorum in Fractionated Coconut Oil',
+    brand: 'dōTERRA',
+    type: 'touch',
+    category: 'beauty',
+    categoryLabel: 'Confianza & Magnetismo Femenino',
+    aroma: 'Exótico, floral dulce, cálido y seductor',
+    methods: ['T', 'A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la pureza sensual, el magnetismo y la autoestima',
+    keyBenefits: [
+      'Extracto de flores recolectadas a mano al amanecer antes de que abra el sol',
+      'Aporta luminosidad y juventud a la piel del rostro y cuello',
+      'Perfume botánico natural embriagador que eleva la autoconfianza'
+    ],
+    description: 'Apodado "el rey de los aromas nocturnos" por su aroma magnético y sensual.',
+    aromaticGuide: 'Inhalar de muñecas.',
+    topicalGuide: 'Aplicar como perfume exquisito en muñecas, clavícula y rostro.',
+    ingestionGuide: 'No ingerir. Uso tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Uno de los perfumes naturales más codiciados en el mundo de la aromaterapia.'
+  },
+  {
+    id: 'magnolia-touch',
+    name: 'Magnolia Touch',
+    trademarkName: 'Magnolia Touch Roll-on 10ml',
+    botanicalName: 'Michelia alba in Fractionated Coconut Oil',
+    brand: 'dōTERRA',
+    type: 'touch',
+    category: 'calm',
+    categoryLabel: 'Compasión & Calma Floral',
+    aroma: 'Floral frutal, dulce, fresco y sofisticado',
+    methods: ['T', 'A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite de la compasión, la empatía y la suavidad del alma',
+    keyBenefits: [
+      'Rico en linalool (incluso más que la lavanda) para una calma profunda inmediata',
+      'Calma irritaciones dérmicas y deja la piel suave e hidratada',
+      'Aroma floral moderno que disuelve la ansiedad en segundos'
+    ],
+    description: 'Extraído de las flores de magnolia en Asia, brinda una relajación placentera y un perfume inolvidable.',
+    aromaticGuide: 'Inhalar de muñecas.',
+    topicalGuide: 'Aplicar en nuca, muñecas y escote a lo largo del día.',
+    ingestionGuide: 'No ingerir. Uso tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Más potente que la lavanda en linalool pero con un aroma mucho más chic y floral.'
+  },
+  {
+    id: 'neroli-touch',
+    name: 'Neroli Touch (Azahar)',
+    trademarkName: 'Neroli Touch Roll-on 10ml',
+    botanicalName: 'Citrus aurantium in Fractionated Coconut Oil',
+    brand: 'dōTERRA',
+    type: 'touch',
+    category: 'calm',
+    categoryLabel: 'Paz de Azahar & Unión',
+    aroma: 'Floral cítrico, dulce, verde y delicado',
+    methods: ['T', 'A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El aceite del propósito compartido, la fidelidad y la calma emocional',
+    keyBenefits: [
+      'Destilado de las flores del naranjo amargo (flores de azahar)',
+      'Excelente para calmar palpitaciones por ansiedad repentina',
+      'Nutre y revitaliza la piel madura o estresada'
+    ],
+    description: 'El aceite sagrado de las novias reales en Europa por su poder para calmar los nervios y embellecer la piel.',
+    aromaticGuide: 'Inhalar de muñecas.',
+    topicalGuide: 'Aplicar sobre el corazón, sienes y rostro.',
+    ingestionGuide: 'No ingerir. Uso tópico.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Un rescate botánico infalible para ataques de nervios o agobio.'
+  },
+
+  // ============================================================================
+  // 6. SISTEMA METAPWR, SUPLEMENTOS & BIENESTAR INTERNO
+  // ============================================================================
+  {
+    id: 'metapwr-advantage',
+    name: 'MetaPWR Advantage con Colágeno Marino + NMN',
+    trademarkName: 'MetaPWR Advantage Collagen + NMN (30 sobres)',
+    botanicalName: 'Marine Collagen (9 types), NMN, Resveratrol, Rose Apple, Phytoceramides, Citrus Essential Oils',
+    brand: 'dōTERRA',
+    type: 'metapwr',
+    category: 'metabolic',
+    categoryLabel: 'Longevidad & Colágeno Celular',
+    aroma: 'Cítrico naranja natural y fresco al diluir en agua',
+    methods: ['I'], // Ingerir
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'La nutrición celular de la juventud, vitalidad biológica y regeneración profunda',
+    keyBenefits: [
+      'Contiene 9 tipos de tripéptidos de colágeno marino de absorción 12 veces superior al colágeno estándar',
+      'Aumenta los niveles de NAD+ en el cuerpo mediante NMN y Resveratrol para rejuvenecimiento celular',
+      'Mejora la elasticidad de la piel, la densidad ósea, la masa muscular magra y la claridad mental'
+    ],
+    description: 'El suplemento estrella de longevidad de dōTERRA. Diseñado por científicos para ralentizar el envejecimiento biológico.',
+    aromaticGuide: 'No aplica para aromaterapia difusora.',
+    topicalGuide: 'No aplica para uso tópico.',
+    ingestionGuide: 'Disolver 1 sobre al día en 150-240 ml de agua fresca o fría y beber de inmediato por la mañana.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Tomar diario en ayunas o con el desayuno. No disolver en agua caliente para no desnaturalizar los péptidos.'
+  },
+  {
+    id: 'metapwr-assist',
+    name: 'MetaPWR Assist (Control de Glucosa)',
+    trademarkName: 'MetaPWR Assist 30 Cápsulas',
+    botanicalName: 'Mulberry Leaf Extract, Berberine, Cinnamon Bark, MetaPWR Essential Oil Blend',
+    brand: 'dōTERRA',
+    type: 'metapwr',
+    category: 'metabolic',
+    categoryLabel: 'Regulador de Glucosa & Carbohidratos',
+    aroma: 'Herbáceo especiado encapsulado',
+    methods: ['I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El equilibrio de los picos energéticos y la estabilidad corporal',
+    keyBenefits: [
+      'Reduce hasta en un 44% el pico de glucosa tras consumir comidas con carbohidratos',
+      'Disminuye la somnolencia y pesadez post-comida ("mal del puerco")',
+      'Optimiza la sensibilidad a la insulina y la quema de energía'
+    ],
+    description: 'Formulado con extracto de hoja de morera que inhibe la absorción rápida de carbohidratos en el intestino.',
+    aromaticGuide: 'No aplica.',
+    topicalGuide: 'No aplica.',
+    ingestionGuide: 'Tomar 1 cápsula 15 a 30 minutos antes de tu comida más abundante del día con un vaso grande de agua.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Clave antes de comer pastas, panes, arroz o postres.'
+  },
+  {
+    id: 'metapwr-softgels',
+    name: 'MetaPWR Cápsulas Blandas (Softgels)',
+    trademarkName: 'MetaPWR Metabolic Blend Softgels 90ct',
+    botanicalName: 'Grapefruit, Lemon, Peppermint, Ginger, Cinnamon Bark in Tapioca Softgel',
+    brand: 'dōTERRA',
+    type: 'metapwr',
+    category: 'metabolic',
+    categoryLabel: 'Cápsulas Metabólicas Diarias',
+    aroma: 'Cítrico y mentolado encapsulado',
+    methods: ['I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El compromiso diario con la salud metabólica y el control de apetito',
+    keyBenefits: [
+      'Formato práctico para consumir la mezcla MetaPWR sin sabor intenso en la boca',
+      'Apoya el metabolismo de grasas a lo largo de la jornada',
+      'Controla los antojos vespertinos'
+    ],
+    description: 'La mezcla metabólica MetaPWR en cápsulas blandas vegetales para consumir fácilmente en cualquier lugar.',
+    aromaticGuide: 'No aplica.',
+    topicalGuide: 'No aplica.',
+    ingestionGuide: 'Tomar 1 cápsula blanda 3 a 5 veces al día antes de las comidas principales o entre horas.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Llevar en el pastillero diario para tomar con agua en la oficina.'
+  },
+  {
+    id: 'on-guard-beadlets',
+    name: 'Perlas On Guard (Beadlets)',
+    trademarkName: 'On Guard Beadlets 125ct',
+    botanicalName: 'Wild Orange, Clove, Cinnamon, Eucalyptus, Rosemary',
+    brand: 'dōTERRA',
+    type: 'wellness',
+    category: 'immunity',
+    categoryLabel: 'Perlas Protectoras Bucales',
+    aroma: 'Cálido, especiado y picante al explotar',
+    methods: ['I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Defensa rápida y aliento limpio',
+    keyBenefits: [
+      'Micro-perlas vegetales que contienen 1/4 de gota de On Guard pura',
+      'Refrescan el aliento y protegen la garganta en aeropuertos, oficinas o reuniones',
+      'Fácil de llevar en el bolsillo o bolso'
+    ],
+    description: 'Mini perlas que explotan en la boca liberando una explosión protectora y especiada.',
+    aromaticGuide: 'No aplica.',
+    topicalGuide: 'No aplica.',
+    ingestionGuide: 'Colocar 1-2 perlas en la boca y morder para refrescar garganta o tragar enteras con agua.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'El salvavidas en aviones, cines o eventos concurridos.'
+  },
+  {
+    id: 'peppermint-beadlets',
+    name: 'Perlas de Menta (Beadlets)',
+    trademarkName: 'Peppermint Beadlets 125ct',
+    botanicalName: 'Mentha piperita',
+    brand: 'dōTERRA',
+    type: 'wellness',
+    category: 'focus',
+    categoryLabel: 'Explosión de Menta & Enfoque',
+    aroma: 'Ultra fresco y mentolado',
+    methods: ['I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Despertar instantáneo y claridad mental',
+    keyBenefits: [
+      'Proporcionan 1/4 de gota de Menta pura en cada perla vegetal',
+      'Aliento fresco gourmet instantáneo tras comidas o café',
+      'Despierta la concentración y despeja las vías aéreas'
+    ],
+    description: 'Microperlas que estallan en el paladar con una ola helada de frescura botánica.',
+    aromaticGuide: 'No aplica.',
+    topicalGuide: 'No aplica.',
+    ingestionGuide: 'Morder 1 perla para frescura bucal y energía mental inmediata.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Reemplaza pastillas o chicles artificiales por menta botánica pura.'
+  },
+  {
+    id: 'veggie-caps',
+    name: 'Cápsulas Vegetales Vacías dōTERRA',
+    trademarkName: 'Veggie Caps 160ct',
+    botanicalName: 'Hypromellose (Vegetal puro libre de conservadores)',
+    brand: 'dōTERRA',
+    type: 'wellness',
+    category: 'wellness',
+    categoryLabel: 'Dosificación Interna Personalizada',
+    aroma: 'Neutro',
+    methods: ['I'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Autonomía y personalización de remedios botánicos',
+    keyBenefits: [
+      'Permiten crear tus propias combinaciones terapéuticas internas (ej. Incienso + Copaiba + Orégano)',
+      '100% vegetales, libres de gelatina animal, gluten o conservadores',
+      'Se disuelven rápidamente en el estómago asegurando biodisponibilidad'
+    ],
+    description: 'El vehículo ideal para ingerir aceites esenciales calientes (como Orégano o Canela) de forma segura.',
+    aromaticGuide: 'No aplica.',
+    topicalGuide: 'No aplica.',
+    ingestionGuide: 'Abrir una cápsula, agregar las gotas de aceites esenciales deseados (1-3 gotas), cerrar y tomar de inmediato con un vaso de agua.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Llenar y consumir en el momento (no guardar llenas porque el aceite disuelve la cápsula con el tiempo).'
+  },
+
+  // ============================================================================
+  // 7. PORTADORES, CUIDADO PERSONAL, SPA & DIFUSORES
+  // ============================================================================
+  {
+    id: 'fractionated-coconut-oil',
+    name: 'Aceite Fraccionado de Coco (FCO)',
+    trademarkName: 'Fractionated Coconut Oil 115ml',
+    botanicalName: 'Caprylic/Capric Triglyceride (Cocos nucifera)',
+    brand: 'dōTERRA',
+    type: 'carrier',
+    category: 'wellness',
+    categoryLabel: 'Vehículo Portador & Dilución',
+    aroma: 'Neutro, inodoro y ligero',
+    methods: ['T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El vehículo de suavidad, nutrición dérmica y absorción profunda',
+    keyBenefits: [
+      'Aceite portador totalmente líquido, transparente, no comedogénico y sin olor',
+      'No mancha la ropa ni se vuelve rancio con el tiempo como otros aceites vegetales',
+      'Maximiza la absorción dérmica de los aceites esenciales reduciendo la evaporación'
+    ],
+    description: 'El compañero indispensable de todo boticario para preparar roll-ons y aplicar aceites en la piel con seguridad.',
+    aromaticGuide: 'No es para difusor ultrasónico.',
+    topicalGuide: 'Usar como base para diluir cualquier aceite esencial (ej. 1 cucharada de Coco con 2 gotas de aceite esencial o rellenar frascos roll-on de 10ml).',
+    ingestionGuide: 'No ingerir. Uso cosmético y tópico.',
+    defaultInInventory: true,
+    level: '100%',
+    notes: 'El básico número 1 que nunca debe faltar en tu kit dōTERRA.'
+  },
+  {
+    id: 'deep-blue-rub',
+    name: 'Crema Deep Blue Rub 120ml',
+    trademarkName: 'Deep Blue Rub Soothing Lotion',
+    botanicalName: 'Deep Blue Essential Oil Blend with Natural Plant Extracts',
+    brand: 'dōTERRA',
+    type: 'personal_care',
+    category: 'relief',
+    categoryLabel: 'Crema Alivio Muscular & Frío-Calor',
+    aroma: 'Mentolado, alcanforado y reconfortante',
+    methods: ['T'],
+    sensitivity: 'S',
+    photosensitive: false,
+    emotionalProperty: 'Alivio profundo y ligereza corporal',
+    keyBenefits: [
+      'Contiene 5ml enteros de aceite Deep Blue puro en una base de crema emoliente rica',
+      'Efecto térmico dual (frío calmante seguido de calor relajante muscular)',
+      'La favorita de atletas y profesionales de oficina para cuello, hombros y lumbares'
+    ],
+    description: 'La crema para dolores musculares más vendida de dōTERRA en todo el mundo.',
+    aromaticGuide: 'No aplica.',
+    topicalGuide: 'Aplicar una porción del tamaño de una moneda en hombros, espalda, rodillas o piernas y masajear profundamente.',
+    ingestionGuide: '¡Prohibido ingerir! Solo para uso tópico.',
+    defaultInInventory: true,
+    level: '100%',
+    notes: '¡No ingerir! Lavarse las manos tras aplicarla para no tocarse los ojos.'
+  },
+  {
+    id: 'on-guard-mist',
+    name: 'Bruma Sanitizante On Guard (Mist)',
+    trademarkName: 'On Guard Sanitizing Mist 27ml',
+    botanicalName: 'USP Alcohol (64%), On Guard Blend, Apple Fruit Extract',
+    brand: 'dōTERRA',
+    type: 'personal_care',
+    category: 'immunity',
+    categoryLabel: 'Sanitizante Gourmet de Manos & Superficies',
+    aroma: 'Cítrico y especiado a canela y clavo',
+    methods: ['T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Protección limpia y límites higiénicos',
+    keyBenefits: [
+      'Elimina el 99.9% de bacterias y gérmenes sin resecar la piel gracias al extracto de manzana',
+      'Aroma limpio y especiado gourmet sin olor a químico o cloro',
+      'Frasco ultra compacto para llevar en el bolsillo o coche'
+    ],
+    description: 'El sanitizante de manos que deja la piel suave, protegida y con aroma delicioso.',
+    aromaticGuide: 'Rociar en el ambiente o sobre el volante del coche.',
+    topicalGuide: 'Rociar 1-2 disparos en las palmas de las manos y frotar hasta que seque.',
+    ingestionGuide: 'No ingerir.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Ideal para limpiar manijas de puertas, mesas de restaurantes y manos en cualquier lugar.'
+  },
+  {
+    id: 'diffuser-petal',
+    name: 'Difusor Ultrasónico Petal 2.0',
+    trademarkName: 'Petal Diffuser 2.0 dōTERRA',
+    botanicalName: 'Ultrasonic Diffusion Technology (330 sq ft coverage)',
+    brand: 'dōTERRA',
+    type: 'diffuser',
+    category: 'home',
+    categoryLabel: 'Difusión Ultrasónica de Alto Rendimiento',
+    aroma: 'Emisor de bruma aromática fría',
+    methods: ['A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'El templo del ambiente aromático en tu hogar',
+    keyBenefits: [
+      'Nebuliza aceites esenciales puros en micropartículas sin quemar ni alterar su química',
+      'Configuraciones de tiempo de 2, 6 y 12 horas continuas o intermitentes',
+      'Luz nocturna ambiental suave opcional'
+    ],
+    description: 'El difusor ultrasónico más confiable y resistente de dōTERRA para recámaras y salas.',
+    aromaticGuide: 'Llenar el depósito con agua fresca hasta la marca roja, agregar de 5 a 8 gotas de tus aceites favoritos y encender.',
+    topicalGuide: 'No aplica.',
+    ingestionGuide: 'No aplica.',
+    defaultInInventory: true,
+    level: '100%',
+    notes: 'Limpiar el depósito cada 15 días con un poco de vinagre blanco y agua para evitar acumulación de residuos.'
+  },
+  {
+    id: 'diffuser-laluz',
+    name: 'Difusor de Cristal Esculpido Laluz',
+    trademarkName: 'Laluz Ultrasonic Diffuser Glass',
+    botanicalName: 'Hand-crafted frosted glass cover, Ultrasonic mist up to 8 hrs',
+    brand: 'dōTERRA',
+    type: 'diffuser',
+    category: 'home',
+    categoryLabel: 'Diseño Escandinavo & Cristal Esmerilado',
+    aroma: 'Bruma fina de lujo',
+    methods: ['A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Elegancia, calidez y estética zen en el hogar',
+    keyBenefits: [
+      'Cubierta artesanal de cristal esmerilado con opciones de luz cálida o lavanda',
+      'Difunde hasta 8 horas continuas cubriendo espacios de hasta 30 m²',
+      'Diseño escultórico contemporáneo que eleva la decoración de cualquier espacio'
+    ],
+    description: 'Una pieza de arte escultórica que combina la aromaterapia de lujo con la iluminación ambiental.',
+    aromaticGuide: 'Llenar con agua purificada, agregar 6-8 gotas de mezclas dōTERRA y seleccionar modo de luz cálida.',
+    topicalGuide: 'No aplica.',
+    ingestionGuide: 'No aplica.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'El difusor estético definitivo para buró o mesa de centro.'
+  },
+  {
+    id: 'diffuser-roam',
+    name: 'Difusor Portátil Inalámbrico Roam',
+    trademarkName: 'Roam Cordless Portable Diffuser',
+    botanicalName: 'Cordless rechargeable lithium-ion battery, Polished ground stone',
+    brand: 'dōTERRA',
+    type: 'diffuser',
+    category: 'home',
+    categoryLabel: 'Libertad Inalámbrica & Piedra Pulida',
+    aroma: 'Bruma portátil a donde vayas',
+    methods: ['A'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Libertad, portabilidad y bienestar en movimiento',
+    keyBenefits: [
+      'Batería recargable para usarlo sin cables en el auto, jardín, baño o terraza',
+      'Fabricado con piedra natural pulida sustentable',
+      'Base de carga inalámbrica elegante'
+    ],
+    description: 'El difusor inalámbrico de última generación para llevar la aromaterapia a cualquier rincón sin depender de enchufes.',
+    aromaticGuide: 'Cargar en su base, llenar con agua y 5 gotas de aceite, y trasladar libremente a cualquier habitación.',
+    topicalGuide: 'No aplica.',
+    ingestionGuide: 'No aplica.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'La mejor opción para sesiones de yoga al aire libre, terraza o baños de tina.'
   }
 ];
 
-// ==========================================
-// RECETARIO CURADO DE DIFUSORES Y ROLL-ONS
-// ==========================================
+// ============================================================================
+// RECETARIO CURADO DE DIFUSORES Y ROLL-ONS (SINERGIAS MAESTRAS)
+// ============================================================================
 export const DEFAULT_DIFFUSER_BLENDS = [
   {
     id: 'blend-focus-master',
@@ -631,7 +2454,7 @@ export const DEFAULT_DIFFUSER_BLENDS = [
       { oilId: 'frankincense', oilName: 'Incienso', drops: 2 }
     ],
     totalDrops: 8,
-    bestTime: 'Mañanas o tardes de trabajo intenso',
+    bestTime: 'Mañanas o tardes de trabajo intenso y estudio',
     notes: 'La menta despeja, la naranja eleva el ánimo y el incienso ancla el foco.'
   },
   {
@@ -714,12 +2537,28 @@ export const DEFAULT_DIFFUSER_BLENDS = [
     totalDrops: 14,
     bestTime: 'Aplicar al primer síntoma de dolor de cabeza o tensión',
     notes: 'Rellenar roll-on de 10ml con Aceite Fraccionado de Coco. Aplicar en sienes y cuello.'
+  },
+  {
+    id: 'blend-metapwr-crush',
+    name: 'Activador Metabólico & Cero Antojos',
+    category: 'metabolic',
+    categoryLabel: 'Metabolismo & Energía',
+    type: 'diffuser',
+    targetVibe: 'Frenar la ansiedad por picar comida y activar el fuego digestivo',
+    ingredients: [
+      { oilId: 'metapwr-oil', oilName: 'MetaPWR (o Toronja)', drops: 4 },
+      { oilId: 'peppermint', oilName: 'Menta', drops: 2 },
+      { oilId: 'wild-orange', oilName: 'Naranja Silvestre', drops: 2 }
+    ],
+    totalDrops: 8,
+    bestTime: 'Tardes de bajón de energía o antes de entrenar',
+    notes: 'Inhibe el deseo de azúcar y aumenta el gasto energético.'
   }
 ];
 
-// ==========================================
-// ARQUETIPOS DE ESTADO DE ÁNIMO
-// ==========================================
+// ============================================================================
+// ARQUETIPOS DE ESTADO DE ÁNIMO (BARÓMETRO EMOCIONAL)
+// ============================================================================
 export const MOOD_ARCHETYPES = [
   {
     id: 'burnout',
@@ -743,7 +2582,7 @@ export const MOOD_ARCHETYPES = [
     label: 'Desánimo o Tristeza',
     subtitle: 'Baja vibra, falta de motivación o alegría',
     targetEmotion: 'Optimismo, calidez y elevación del espíritu',
-    recommendedOils: ['wild-orange', 'bergamot', 'citrus-bliss', 'frankincense']
+    recommendedOils: ['wild-orange', 'bergamot', 'citrus-bliss', 'cheer']
   },
   {
     id: 'racing-mind',
@@ -759,7 +2598,7 @@ export const MOOD_ARCHETYPES = [
     label: 'Falta de Foco / Procrastinación',
     subtitle: 'Dispersión, bloqueo creativo, falta de inicio',
     targetEmotion: 'Mente láser, determinación y flujo de trabajo',
-    recommendedOils: ['peppermint', 'rosemary', 'lemon', 'frankincense']
+    recommendedOils: ['peppermint', 'rosemary', 'lemon', 'motivate']
   },
   {
     id: 'irritation',
@@ -767,6 +2606,6 @@ export const MOOD_ARCHETYPES = [
     label: 'Irritabilidad & Tensión',
     subtitle: 'Impaciencia, enojo, tensión física acumulada',
     targetEmotion: 'Serenidad, soltar el control y suavidad',
-    recommendedOils: ['pasttense', 'lavender', 'bergamot', 'deep-blue']
+    recommendedOils: ['pasttense', 'lavender', 'forgive', 'deep-blue']
   }
 ];
