@@ -1776,6 +1776,12 @@ export const generateFallbackAromatherapyMood = (moodText = '', userOils = []) =
         applicationPoints: 'Muñecas, detrás de las orejas, base del cuello y sobre el esternón (chakra del corazón)'
       },
       scientificRationale: 'Los monoterpenos y ésteres (linalol y acetato de linalilo) modulan los receptores GABA en el cerebro, desacelerando la cascada adrenérgica en menos de 20 segundos tras la inhalación.',
+      ingestionProtocol: {
+        isIngestible: !hasOil('adaptiv') && !hasOil('balance'),
+        details: (!hasOil('adaptiv') && !hasOil('balance'))
+          ? 'Toma 1 gota de Incienso o Lavanda en una cápsula vegetal o sublingual para soporte celular y calma interior.'
+          : 'Precaución: Mezclas como Balance o Adaptiv son exclusivamente de uso aromático y tópico (no ingerir). Para apoyo interno toma Incienso o Copaiba.'
+      },
       applicationRitual: 'Aplica 2 gotas en las palmas de las manos, frota suavemente, coloca en forma de copa sobre nariz y boca (sin tocar los ojos) e inhala profundamente durante 4 tiempos, sostén 4 y exhala en 6 tiempos.',
       affirmation: '«Inhalo calma, exhalo control. Estoy a salvo en este momento presente.»',
       suggestedUpgrade: !hasOil('adaptiv') ? 'Adaptiv (dōTERRA Blend)' : (!hasOil('copaiba') ? 'Copaiba' : 'Serenity')
@@ -1813,6 +1819,10 @@ export const generateFallbackAromatherapyMood = (moodText = '', userOils = []) =
         applicationPoints: 'Sienes (lejos de los ojos), nuca, sienes y puntos de pulso'
       },
       scientificRationale: 'El mentol interactúa con los termorreceptores TRPM8 activando el sistema reticular ascendente, aumentando el flujo de oxígeno al cerebro y mejorando la agudeza mental.',
+      ingestionProtocol: {
+        isIngestible: true,
+        details: 'Agrega 1 gota de Menta o Limón en un vaso de agua fresca de vidrio o acero inoxidable (nunca vaso de plástico) para activar el metabolismo y brindar un despertar celular.'
+      },
       applicationRitual: 'Difunde en tu espacio de trabajo y bebe un vaso de agua fresca. Haz 3 respiraciones profundas mientras estiras los brazos hacia arriba.',
       affirmation: '«Mi energía se renueva a cada instante. Elijo la vitalidad y el entusiasmo.»',
       suggestedUpgrade: !hasOil('rosemary') ? 'Romero (Rosemary)' : 'Citrus Bliss'
@@ -1850,6 +1860,10 @@ export const generateFallbackAromatherapyMood = (moodText = '', userOils = []) =
         applicationPoints: 'Planta de los pies, nuca, detrás de las orejas y clavículas'
       },
       scientificRationale: 'El cedrol y los sesquiterpenos atraviesan la barrera hematoencefálica favoreciendo la transición de ondas beta a ondas alfa y theta, facilitando la fase de sueño profundo.',
+      ingestionProtocol: {
+        isIngestible: false,
+        details: 'La mezcla Serenity es exclusivamente para uso aromático y tópico (no ingerir). Si buscas soporte interno nocturno, toma 1-2 gotas de Copaiba pura sublingual o en cápsula vegetal.'
+      },
       applicationRitual: 'Enciende el difusor 30 minutos antes de acostarte. Aplica el roll-on en la planta de los pies con un suave masaje y cúbrete con calcetines tibios.',
       affirmation: '«Suelto las tareas del día. Mi cuerpo sabe descansar y regenerarse.»',
       suggestedUpgrade: !hasOil('serenity') ? 'Serenity (dōTERRA Blend)' : (!hasOil('cedarwood') ? 'Cedro (Cedarwood)' : 'Vetiver')
@@ -1886,6 +1900,10 @@ export const generateFallbackAromatherapyMood = (moodText = '', userOils = []) =
       applicationPoints: 'Muñecas, nuca y plexo solar'
     },
     scientificRationale: 'La combinación de terpenos aromáticos actúa como adaptógeno olfativo, estabilizando el estado de ánimo y modulando las respuestas ante el estrés diario.',
+    ingestionProtocol: {
+      isIngestible: true,
+      details: '1 gota de Limón o Naranja Silvestre en 250 ml de agua fresca en vaso de vidrio al iniciar el día para estimulación celular y antioxidantes.'
+    },
     applicationRitual: 'Inhala conscientemente frente a tu difusor durante 1 minuto al iniciar o cerrar tu jornada.',
     affirmation: '«Estoy en armonía con mi cuerpo, mi mente y mi entorno.»',
     suggestedUpgrade: !hasOil('balance') ? 'Balance (dōTERRA Blend)' : 'Incienso (Frankincense)'
@@ -1923,8 +1941,9 @@ Los aceites esenciales que la usuaria TIENE ACTIVOS EN SU BOTICARIO / INVENTARIO
 Tu tarea:
 1. Diseña la fórmula perfecta de aromaterapia para difusor y roll-on PRIORIZANDO LOS ACEITES QUE LA USUARIA YA TIENE DISPONIBLES.
 2. Explica con rigor botánico/científico (neurobiología, receptores olfativos, terpenos, sistema límbico) por qué esta sinergia aborda esa emoción.
-3. Brinda un ritual de aplicación y una afirmación de anclaje mental.
-4. Si hay algún aceite del catálogo dōTERRA que la usuaria NO TIENE pero que sería la adición maestra para su botiquín según este estado de ánimo, recomiéndalo en "suggestedUpgrade".
+3. Evalúa si los aceites de la mezcla son aptos para uso interno seguro según los estándares dōTERRA CPTG. Si lo son, brinda una sugerencia segura en "ingestionProtocol" (ej. 1 gota en vaso de agua de vidrio o cápsula). Si alguno NO se debe ingerir (como Deep Blue, Breathe, mezclas sólo tópicas), indícalo claramente con advertencia de seguridad.
+4. Brinda un ritual de aplicación y una afirmación de anclaje mental.
+5. Si hay algún aceite del catálogo dōTERRA que la usuaria NO TIENE pero que sería la adición maestra para su botiquín según este estado de ánimo, recomiéndalo en "suggestedUpgrade".
 
 Responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicional, sin bloques de código ni texto antes o después) con la siguiente estructura exacta:
 
@@ -1951,6 +1970,10 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicion
       { "oilName": "Nombre del aceite", "drops": 3 }
     ],
     "applicationPoints": "Puntos exactos de aplicación (ej. muñecas, nuca, plexo solar, sienes)"
+  },
+  "ingestionProtocol": {
+    "isIngestible": true,
+    "details": "Protocolo de uso interno seguro si los aceites son aptos (ej. 1 gota en vaso de agua de vidrio) o advertencia clara de no ingerir si algún aceite es exclusivamente aromático/tópico."
   },
   "scientificRationale": "Explicación breve pero científica del efecto neuroquímico y botánico de los compuestos aromáticos.",
   "applicationRitual": "Instrucciones de respiración consciente o ritual para potenciar el anclaje olfativo.",
@@ -2007,6 +2030,7 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicion
           drops: [{ oilName: 'Lavanda', drops: 6 }, { oilName: 'Menta', drops: 6 }],
           applicationPoints: 'Muñecas y nuca'
         },
+        ingestionProtocol: parsed.ingestionProtocol || null,
         scientificRationale: parsed.scientificRationale || 'Sinergia botánica que modula el sistema nervioso autónomo.',
         applicationRitual: parsed.applicationRitual || 'Inhala 3 veces profundamente.',
         affirmation: parsed.affirmation || '«Estoy en paz y balance.»',

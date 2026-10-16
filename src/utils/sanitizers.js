@@ -51,7 +51,7 @@ export const sanitizeHouseholdItem = (item) => {
   }
 
   let repurchaseVerdict = 'yes';
-  if (['yes', 'maybe', 'no', 'need_to_buy'].includes(item.repurchaseVerdict)) {
+  if (['yes', 'maybe', 'no', 'need_to_buy', 'running_low'].includes(item.repurchaseVerdict)) {
     repurchaseVerdict = item.repurchaseVerdict;
   }
 
@@ -201,7 +201,8 @@ export const sanitizeExperienceItem = (exp) => {
     verdict: ['yes', 'maybe', 'no'].includes(exp.verdict) ? exp.verdict : 'yes',
     placeOrBrand: safeString(exp.placeOrBrand || exp.brand || exp.place || ''),
     date: safeString(exp.date || getLocalDateString()),
-    notes: safeString(exp.notes || '')
+    notes: safeString(exp.notes || ''),
+    image: exp.image ? safeString(exp.image) : null
   };
 };
 

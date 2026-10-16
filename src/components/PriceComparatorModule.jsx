@@ -23,7 +23,8 @@ import {
   ShoppingCart,
   ShoppingBag,
   Pencil,
-  Store
+  Store,
+  AlertTriangle
 } from 'lucide-react';
 import { compressImage, analyzeProductImage } from '../utils/geminiService';
 import { findSimilarity } from '../utils/similarity';
@@ -275,13 +276,11 @@ export default function PriceComparatorModule({
       }
       return item;
     }));
-    const label = newVerdict === 'need_to_buy' 
-      ? 'Marcado como: Necesito Comprar 🛒' 
-      : newVerdict === 'yes' 
-      ? 'Marcado como: Compraría ✓' 
-      : newVerdict === 'maybe' 
-      ? 'Marcado como: En Duda ?' 
-      : 'Marcado como: No Volver a Comprar ✕';
+    let label = 'Marcado como: Ya tengo (En uso) 🏠';
+    if (newVerdict === 'running_low') label = 'Marcado como: Ya casi se necesita ⚠️';
+    else if (newVerdict === 'need_to_buy') label = 'Marcado como: Necesito Comprar 🛒';
+    else if (newVerdict === 'maybe') label = 'Marcado como: Por Probar / En la mira ✨';
+    else if (newVerdict === 'no') label = 'Marcado como: No volver a comprar ✕';
     showToast('info', 'Estado Actualizado', label);
   };
 
@@ -358,6 +357,7 @@ export default function PriceComparatorModule({
   // Safe normalized list & Filter
   const safeItemsList = sanitizeHouseholdList(householdItems);
   const needToBuyCount = safeItemsList.filter(i => i && i.repurchaseVerdict === 'need_to_buy').length;
+  const runningLowCount = safeItemsList.filter(i => i && i.repurchaseVerdict === 'running_low').length;
 
   const filteredItems = safeItemsList.filter(item => {
     if (!item) return false;
@@ -371,6 +371,14 @@ export default function PriceComparatorModule({
     let matchesCategory = true;
     if (categoryFilter === 'need_to_buy') {
       matchesCategory = item.repurchaseVerdict === 'need_to_buy';
+    } else if (categoryFilter === 'running_low') {
+      matchesCategory = item.repurchaseVerdict === 'running_low';
+    } else if (categoryFilter === 'to_buy_all') {
+      matchesCategory = item.repurchaseVerdict === 'need_to_buy' || item.repurchaseVerdict === 'running_low';
+    } else if (categoryFilter === 'in_stock') {
+      matchesCategory = item.repurchaseVerdict === 'yes';
+    } else if (categoryFilter === 'wishlist') {
+      matchesCategory = item.repurchaseVerdict === 'maybe';
     } else if (categoryFilter !== 'All') {
       matchesCategory = item.category === categoryFilter;
     }
@@ -432,27 +440,53 @@ export default function PriceComparatorModule({
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-300 text-sm focus:outline-none focus:border-[#e0a96d] cursor-pointer"
           >
-            <option value="All">Todas las categorías</option>
-            <option value="need_to_buy" className="text-amber-400 font-bold">🛒 Lista: Necesito Comprar ({needToBuyCount})</option>
-            {categories.filter(c => c !== 'All').map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
+            <option value="All">Todas las categorías y estados</option>
+            <optgroup label="Filtrar por Estado">
+              <option value="need_to_buy" className="text-amber-400 font-bold">🛒 Necesito Comprar ({needToBuyCount})</option>
+              <option value="running_low" className="text-orange-400 font-bold">⚠️ Ya casi se necesita ({runningLowCount})</option>
+              <option value="to_buy_all" className="text-amber-300 font-bold">🛍️ Por Comprar + Ya casi ({needToBuyCount + runningLowCount})</option>
+              <option value="in_stock" className="text-emerald-400 font-bold">🏠 Ya tengo / En uso</option>
+              <option value="wishlist" className="text-purple-300 font-bold">✨ Por probar / En la mira</option>
+            </optgroup>
+            <optgroup label="Categorías de Insumos">
+              {categories.filter(c => c !== 'All').map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </optgroup>
           </select>
 
-          {/* Quick Filter Pill for Need to Buy */}
-          <button
-            type="button"
-            onClick={() => setCategoryFilter(prev => prev === 'need_to_buy' ? 'All' : 'need_to_buy')}
-            className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
-              categoryFilter === 'need_to_buy'
-                ? 'bg-amber-500 text-[#0b0c10] border-amber-400 shadow-lg shadow-amber-500/20'
-                : 'bg-[#0b0c10] hover:bg-[#0b0c10]/80 text-amber-300 border-amber-500/30'
-            }`}
-            title="Filtrar únicamente productos marcados como 'Necesito Comprar'"
-          >
-            <ShoppingCart className="w-3.5 h-3.5" />
-            <span>Por Comprar ({needToBuyCount})</span>
-          </button>
+          {/* Quick Filter Pills */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter(prev => prev === 'need_to_buy' ? 'All' : 'need_to_buy')}
+              className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
+                categoryFilter === 'need_to_buy'
+                  ? 'bg-amber-500 text-[#0b0c10] border-amber-400 shadow-lg shadow-amber-500/20'
+                  : 'bg-[#0b0c10] hover:bg-[#0b0c10]/80 text-amber-300 border-amber-500/30'
+              }`}
+              title="Filtrar productos que necesitas comprar"
+            >
+              <ShoppingCart className="w-3.5 h-3.5" />
+              <span>Por Comprar ({needToBuyCount})</span>
+            </button>
+
+            {runningLowCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setCategoryFilter(prev => prev === 'running_low' ? 'All' : 'running_low')}
+                className={`py-2 px-2.5 sm:px-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
+                  categoryFilter === 'running_low'
+                    ? 'bg-orange-500 text-[#0b0c10] border-orange-400 shadow-lg shadow-orange-500/20'
+                    : 'bg-[#0b0c10] hover:bg-[#0b0c10]/80 text-orange-300 border-orange-500/30'
+                }`}
+                title="Filtrar productos que ya casi se terminan"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>Ya casi ({runningLowCount})</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <button
@@ -589,16 +623,17 @@ export default function PriceComparatorModule({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1">Estado de Compra / Intención</label>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">Estado del Insumo / Compra</label>
               <select
                 value={itemVerdict}
                 onChange={(e) => setItemVerdict(e.target.value)}
                 className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
               >
-                <option value="yes">✓ Compraría / Aprobado</option>
+                <option value="yes">🏠 Ya tengo / En uso</option>
+                <option value="running_low">⚠️ Ya casi se necesita</option>
                 <option value="need_to_buy">🛒 Necesito Comprar</option>
-                <option value="maybe">? Duda / En Evaluación</option>
-                <option value="no">✕ No volvería a comprar</option>
+                <option value="maybe">✨ Por probar / En la mira</option>
+                <option value="no">✕ No volver a comprar</option>
               </select>
             </div>
           </div>
@@ -738,17 +773,20 @@ export default function PriceComparatorModule({
                           className={`text-[11px] font-bold py-1.5 pl-3 pr-7 rounded-full border transition-all cursor-pointer focus:outline-none appearance-none ${
                             item.repurchaseVerdict === 'need_to_buy' 
                               ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-500/30' 
-                              : item.repurchaseVerdict === 'yes' 
-                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25' 
+                              : item.repurchaseVerdict === 'running_low'
+                              ? 'bg-orange-500/20 text-orange-300 border-orange-500/50 hover:bg-orange-500/30'
                               : item.repurchaseVerdict === 'maybe'
-                              ? 'bg-sky-500/15 text-sky-400 border-sky-500/40 hover:bg-sky-500/25'
-                              : 'bg-rose-500/15 text-rose-400 border-rose-500/40 hover:bg-rose-500/25'
+                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 hover:bg-purple-500/30'
+                              : item.repurchaseVerdict === 'no'
+                              ? 'bg-rose-500/15 text-rose-400 border-rose-500/40 hover:bg-rose-500/25'
+                              : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25'
                           }`}
-                          title="Seleccionar veredicto / estado de compra"
+                          title="Seleccionar estado de insumo / compra"
                         >
-                          <option value="yes" className="bg-[#171a24] text-emerald-400">✓ Compraría</option>
+                          <option value="yes" className="bg-[#171a24] text-emerald-400">🏠 Ya tengo</option>
+                          <option value="running_low" className="bg-[#171a24] text-orange-400">⚠️ Ya casi</option>
                           <option value="need_to_buy" className="bg-[#171a24] text-amber-300">🛒 Necesito Comprar</option>
-                          <option value="maybe" className="bg-[#171a24] text-sky-400">? Duda</option>
+                          <option value="maybe" className="bg-[#171a24] text-purple-300">✨ Por probar</option>
                           <option value="no" className="bg-[#171a24] text-rose-400">✕ No Comprar</option>
                         </select>
                         <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
@@ -980,15 +1018,16 @@ export default function PriceComparatorModule({
 
               {/* Purchase Verdict */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Estado de Compra / Intención</label>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Estado del Insumo / Compra</label>
                 <select
                   value={editingItem.repurchaseVerdict || 'yes'}
                   onChange={(e) => setEditingItem({ ...editingItem, repurchaseVerdict: e.target.value })}
                   className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
                 >
-                  <option value="yes">✓ Compraría / Aprobado</option>
+                  <option value="yes">🏠 Ya tengo / En uso</option>
+                  <option value="running_low">⚠️ Ya casi se necesita</option>
                   <option value="need_to_buy">🛒 Necesito Comprar</option>
-                  <option value="maybe">? Duda / En Evaluación</option>
+                  <option value="maybe">✨ Por probar / En la mira</option>
                   <option value="no">✕ No volver a comprar</option>
                 </select>
               </div>

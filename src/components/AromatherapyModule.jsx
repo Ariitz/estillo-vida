@@ -275,6 +275,7 @@ export default function AromatherapyModule({
   const [moodDescription, setMoodDescription] = useState('');
   const [isAnalyzingMood, setIsAnalyzingMood] = useState(false);
   const [moodRecommendation, setMoodRecommendation] = useState(null);
+  const [showRollonGuide, setShowRollonGuide] = useState(false);
 
   const handleSelectArchetype = (arch) => {
     setSelectedArchetype(arch.id);
@@ -1243,8 +1244,78 @@ export default function AromatherapyModule({
                       📍 <strong>Puntos de aplicación:</strong> {moodRecommendation.rollonFormula.applicationPoints}
                     </p>
                   )}
+
+                  {/* Guía didáctica de cómo armar y medir gotas en el Roll-on */}
+                  <div className="pt-2 border-t border-slate-800/80">
+                    <button
+                      type="button"
+                      onClick={() => setShowRollonGuide(!showRollonGuide)}
+                      className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>{showRollonGuide ? 'Ocultar guía de preparación' : '¿Cómo se miden las gotas y se prepara el roll-on?'}</span>
+                    </button>
+
+                    {showRollonGuide && (
+                      <div className="mt-2.5 p-3 rounded-xl bg-[#11131a] border border-emerald-500/20 text-[11px] text-slate-300 space-y-2.5 animate-fade-in">
+                        <div className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+                          <p><strong className="text-white">Retira el cabezal de la esfera:</strong> Quita la tapa del frasco vacío de 10 ml y desengancha el soporte de la bolita (*rollerball*) haciendo palanca hacia arriba con los dedos o la propia tapa inclinada para que la boca del frasco quede abierta.</p>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+                          <p><strong className="text-white">Dosifica con el gotero dōTERRA:</strong> Los frascos dōTERRA tienen gotero reductor (euro-dropper) integrado. Inclina cada botella a 45° directo sobre la boca abierta y cuenta una a una las gotas exactas de la receta.</p>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+                          <p><strong className="text-white">Rellena con Coco (FCO):</strong> Llena el resto del frasco (~9.5 ml) con Aceite Fraccionado de Coco dejando unos milímetros libres en el cuello para evitar derrames al insertar la bola.</p>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">4</span>
+                          <p><strong className="text-white">Encaja con "clic" y mezcla:</strong> Coloca de nuevo la esfera y presiona firmemente hacia abajo hasta escuchar un "clic". Tapa y agita suavemente. ¡Listo para deslizar en muñecas y nuca!</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {/* Opción de Ingesta / Vía Interna Segura */}
+              {moodRecommendation.ingestionProtocol && (
+                <div className={`p-4 rounded-2xl border text-xs flex items-start gap-3 ${
+                  moodRecommendation.ingestionProtocol.isIngestible
+                    ? 'bg-amber-500/5 border-amber-500/20 text-amber-200/90'
+                    : 'bg-rose-500/5 border-rose-500/20 text-rose-200/90'
+                }`}>
+                  <div className={`p-2 rounded-xl shrink-0 ${
+                    moodRecommendation.ingestionProtocol.isIngestible
+                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                  }`}>
+                    {moodRecommendation.ingestionProtocol.isIngestible ? (
+                      <CheckCircle2 className="w-4 h-4" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4" />
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`font-bold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded border ${
+                        moodRecommendation.ingestionProtocol.isIngestible
+                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                          : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                      }`}>
+                        {moodRecommendation.ingestionProtocol.isIngestible
+                          ? 'Vía Interna / Ingesta Segura [I]'
+                          : 'Seguridad: No Ingerible [Sólo Uso Aromático y Tópico]'}
+                      </span>
+                    </div>
+                    <p className="text-slate-300 text-xs leading-relaxed pt-0.5">
+                      {moodRecommendation.ingestionProtocol.details}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Scientific Rationale & Sacred Affirmation */}
               <div className="space-y-3 bg-[#11131a] p-5 rounded-2xl border border-slate-800">
