@@ -130,9 +130,52 @@ const initialHousehold = [
       { storeName: 'Bodega Aurrera', variety: 'FUD Virginia de Pavo', price: 54.00, quantity: 250, unitPrice: 54.00 / 250 },
       { storeName: 'Chedraui', variety: 'Pierna Peñaranda Selecto', price: 115.00, quantity: 200, unitPrice: 115.00 / 200 }
     ],
+    favoriteVariety: 'Pechuga de Pavo San Rafael',
+    varietyOpinions: {
+      'Pechuga de Pavo San Rafael': {
+        opinion: 'Es mi favorito hasta ahorita, sabor suave y magro, no se reseca.',
+        rating: 'favorite',
+        isFavorite: true
+      },
+      'FUD Virginia de Pavo': {
+        opinion: 'Económico y rico para quesadillas o sándwiches rápidos.',
+        rating: 'liked',
+        isFavorite: false
+      },
+      'Pierna Peñaranda Selecto': {
+        opinion: 'Muy buen sabor gourmet aunque más salado, excelente para tablas de quesos.',
+        rating: 'liked',
+        isFavorite: false
+      }
+    },
     preferredStore: 'Costco',
     repurchaseVerdict: 'yes',
     notes: 'San Rafael para diario, Peñaranda para botanas especiales.'
+  },
+  {
+    id: 'h-5',
+    name: 'Jabón',
+    category: 'Higiene',
+    stores: [
+      { storeName: 'Walmart', variety: 'Sedal Hidratación', price: 32.00, quantity: 3, unitPrice: 32 / 3 },
+      { storeName: 'Bodega Aurrera', variety: 'Dove Original', price: 58.00, quantity: 4, unitPrice: 58 / 4 }
+    ],
+    favoriteVariety: 'Dove Original',
+    varietyOpinions: {
+      'Dove Original': {
+        opinion: 'Super humectante, no reseca la piel.',
+        rating: 'favorite',
+        isFavorite: true
+      },
+      'Sedal Hidratación': {
+        opinion: 'Aroma fresco y duradero.',
+        rating: 'liked',
+        isFavorite: false
+      }
+    },
+    preferredStore: 'Walmart',
+    repurchaseVerdict: 'yes',
+    notes: 'Comprar paquete múltiple en Walmart.'
   }
 ];
 

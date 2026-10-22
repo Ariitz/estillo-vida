@@ -60,12 +60,47 @@ export const sanitizeHouseholdItem = (item) => {
     ? Array.from(new Set([...item.subproducts.map(safeString).filter(Boolean), ...stores.map(s => s.variety).filter(Boolean)]))
     : Array.from(new Set(stores.map(s => s.variety).filter(Boolean)));
 
+  let favoriteVariety = safeString(item.favoriteVariety || '');
+
+  const rawOpinions = (item.varietyOpinions && typeof item.varietyOpinions === 'object') ? item.varietyOpinions : {};
+  const varietyOpinions = {};
+  for (const [varKey, val] of Object.entries(rawOpinions)) {
+    const cleanKey = safeString(varKey).trim();
+    if (!cleanKey) continue;
+    if (typeof val === 'string') {
+      const isFav = cleanKey === favoriteVariety;
+      varietyOpinions[cleanKey] = {
+        opinion: safeString(val),
+        rating: isFav ? 'favorite' : 'liked',
+        isFavorite: isFav
+      };
+    } else if (val && typeof val === 'object') {
+      const validRatings = ['favorite', 'liked', 'neutral', 'disliked'];
+      const rating = validRatings.includes(val.rating) ? val.rating : (val.isFavorite ? 'favorite' : 'liked');
+      const isFav = Boolean(val.isFavorite || (favoriteVariety && cleanKey === favoriteVariety));
+      if (isFav && !favoriteVariety) {
+        favoriteVariety = cleanKey;
+      }
+      varietyOpinions[cleanKey] = {
+        opinion: safeString(val.opinion || val.notes || val.comment || ''),
+        rating: rating,
+        isFavorite: isFav
+      };
+    }
+  }
+
+  if (favoriteVariety && varietyOpinions[favoriteVariety]) {
+    varietyOpinions[favoriteVariety].isFavorite = true;
+  }
+
   return {
     id: safeString(item.id || 'item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
     name: name,
     category: category,
     stores: stores,
     subproducts: subproducts,
+    favoriteVariety: favoriteVariety,
+    varietyOpinions: varietyOpinions,
     preferredStore: preferredStore,
     repurchaseVerdict: repurchaseVerdict,
     notes: notes

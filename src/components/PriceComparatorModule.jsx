@@ -26,10 +26,13 @@ import {
   Store,
   AlertTriangle,
   Layers,
-  Tag
+  Tag,
+  Heart,
+  MessageSquare,
+  Check
 } from 'lucide-react';
 import { compressImage, analyzeProductImage } from '../utils/geminiService';
-import { findSimilarity } from '../utils/similarity';
+import { findSimilarity, findSimilarHouseholdItems, findHouseholdSimilarity } from '../utils/similarity';
 import { safeNumber, sanitizeHouseholdItem, sanitizeHouseholdList } from '../utils/sanitizers';
 
 /**
@@ -90,6 +93,9 @@ export default function PriceComparatorModule({
   const [newStoreVariety, setNewStoreVariety] = useState('');
   const [newStorePrice, setNewStorePrice] = useState('');
   const [newStoreQty, setNewStoreQty] = useState('');
+  const [newStoreRating, setNewStoreRating] = useState('liked');
+  const [newStoreOpinion, setNewStoreOpinion] = useState('');
+  const [newStoreIsFavorite, setNewStoreIsFavorite] = useState(false);
 
   // Full item editing state
   const [editingItem, setEditingItem] = useState(null);
@@ -192,7 +198,15 @@ export default function PriceComparatorModule({
     showToast('success', 'Insumo Registrado', `Se guardó "${trimmedName}" en el comparador.`);
   };
 
-  const handleMergeAndCompareWithExisting = (targetItem, newStores = [], newNotes = '', asVarietyName = '') => {
+  const handleMergeAndCompareWithExisting = (
+    targetItem,
+    newStores = [],
+    newNotes = '',
+    asVarietyName = '',
+    varietyOpinion = '',
+    varietyRating = 'liked',
+    isFavorite = false
+  ) => {
     if (!targetItem) return;
 
     setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
@@ -241,12 +255,29 @@ export default function PriceComparatorModule({
           ...updatedStores.map(s => s.variety).filter(Boolean)
         ]));
 
+        const updatedOpinions = { ...(item.varietyOpinions || {}) };
+        let updatedFavorite = item.favoriteVariety || '';
+
+        const effectiveVariety = asVarietyName || newStores[0]?.variety || '';
+        if (effectiveVariety && (varietyOpinion || varietyRating || isFavorite)) {
+          updatedOpinions[effectiveVariety] = {
+            opinion: varietyOpinion || updatedOpinions[effectiveVariety]?.opinion || '',
+            rating: varietyRating || updatedOpinions[effectiveVariety]?.rating || 'liked',
+            isFavorite: Boolean(isFavorite || updatedOpinions[effectiveVariety]?.isFavorite)
+          };
+          if (isFavorite) {
+            updatedFavorite = effectiveVariety;
+          }
+        }
+
         return {
           ...item,
           stores: updatedStores,
           subproducts: updatedSubproducts,
           preferredStore: preferred,
-          notes: combinedNotes
+          notes: combinedNotes,
+          varietyOpinions: updatedOpinions,
+          favoriteVariety: updatedFavorite
         };
       }
       return item;
@@ -258,6 +289,114 @@ export default function PriceComparatorModule({
       ? `Se guardó "${asVarietyName}" dentro de "${targetItem.name}". ¡Evitaste duplicar productos!`
       : `Se añadieron los precios a "${targetItem.name}". ¡Ya puedes comparar entre tiendas!`;
     showToast('success', asVarietyName ? 'Subproducto Registrado' : 'Comparativa Creada', msg);
+  };
+
+  const handleToggleFavoriteVariety = (itemId, varietyName) => {
+    if (!varietyName) return;
+    const cleanVariety = String(varietyName).trim();
+    setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
+        const isCurrentFav = (item.favoriteVariety || '').toLowerCase().trim() === cleanVariety.toLowerCase();
+        const newFav = isCurrentFav ? '' : cleanVariety;
+        const currentOpinions = { ...(item.varietyOpinions || {}) };
+
+        // Clear favorite flag on other varieties
+        Object.keys(currentOpinions).forEach(k => {
+          if (currentOpinions[k]) {
+            currentOpinions[k] = { ...currentOpinions[k], isFavorite: false };
+          }
+        });
+
+        if (newFav) {
+          const existing = currentOpinions[newFav] || { opinion: '', rating: 'favorite' };
+          currentOpinions[newFav] = {
+            ...existing,
+            rating: existing.rating === 'disliked' ? 'favorite' : (existing.rating || 'favorite'),
+            isFavorite: true
+          };
+        }
+
+        showToast('success', newFav ? '⭐ Subproducto Favorito' : 'Favorito Removido',
+          newFav ? `"${cleanVariety}" marcado como tu favorito en ${item.name}` : `Se quitó la marca de favorito`);
+
+        return {
+          ...item,
+          favoriteVariety: newFav,
+          varietyOpinions: currentOpinions
+        };
+      }
+      return item;
+    }));
+  };
+
+  const handleSetVarietyRating = (itemId, varietyName, rating) => {
+    if (!varietyName) return;
+    const cleanVariety = String(varietyName).trim();
+    setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
+        const currentOpinions = { ...(item.varietyOpinions || {}) };
+        const existing = currentOpinions[cleanVariety] || { opinion: '', rating: 'neutral', isFavorite: false };
+        const isFav = rating === 'favorite' || existing.isFavorite;
+
+        currentOpinions[cleanVariety] = {
+          ...existing,
+          rating,
+          isFavorite: isFav
+        };
+
+        let newFav = item.favoriteVariety;
+        if (rating === 'favorite') {
+          newFav = cleanVariety;
+        }
+
+        const label = rating === 'liked' ? 'Me gustó 👍' : rating === 'disliked' ? 'No me gustó 👎' : rating === 'favorite' ? 'Favorito ⭐' : 'Neutral 😐';
+        showToast('info', 'Calificación Actualizada', `"${cleanVariety}": ${label}`);
+
+        return {
+          ...item,
+          favoriteVariety: newFav,
+          varietyOpinions: currentOpinions
+        };
+      }
+      return item;
+    }));
+  };
+
+  const handleUpdateVarietyOpinion = (itemId, varietyName, opinionText) => {
+    if (!varietyName) return;
+    const cleanVariety = String(varietyName).trim();
+    const cleanText = String(opinionText || '').trim();
+    setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
+        const currentOpinions = { ...(item.varietyOpinions || {}) };
+        const existing = currentOpinions[cleanVariety] || { opinion: '', rating: 'liked', isFavorite: false };
+        currentOpinions[cleanVariety] = {
+          ...existing,
+          opinion: cleanText
+        };
+        return {
+          ...item,
+          varietyOpinions: currentOpinions
+        };
+      }
+      return item;
+    }));
+    if (cleanText) {
+      showToast('success', 'Opinión Guardada', `"${cleanText.slice(0, 45)}${cleanText.length > 45 ? '...' : ''}"`);
+    }
+  };
+
+  const handleOpenAddStore = (item, defaultVariety = '') => {
+    setNewStoreName('Costco');
+    const chosenVariety = defaultVariety || (selectedVarieties[item.id] !== 'ALL' ? selectedVarieties[item.id] || '' : '');
+    setNewStoreVariety(chosenVariety);
+    setNewStorePrice('');
+    setNewStoreQty('');
+    const existingOp = chosenVariety ? item.varietyOpinions?.[chosenVariety] : null;
+    setNewStoreRating(existingOp?.rating || 'liked');
+    setNewStoreOpinion(existingOp?.opinion || '');
+    setNewStoreIsFavorite(chosenVariety ? (item.favoriteVariety === chosenVariety || existingOp?.isFavorite) : false);
+    setAddingStoreToItem(item);
   };
 
   const handleAddItem = (e) => {
@@ -281,12 +420,18 @@ export default function PriceComparatorModule({
       })
       .filter(s => s.price > 0 && s.quantity > 0);
 
-    // Scan for duplicate/similar items before adding manually
-    const similarProduct = findSimilarity(trimmedName, householdItems, 'name');
-    if (similarProduct) {
-      const suggestedVariety = deriveVarietySuggestion(trimmedName, similarProduct.name);
+    // Scan for duplicate/similar items (checking both main item name and subproducts) before adding manually
+    const similarMatches = findSimilarHouseholdItems(trimmedName, householdItems, 3);
+    if (similarMatches && similarMatches.length > 0) {
+      const topMatch = similarMatches[0];
+      const suggestedVariety = topMatch.matchType === 'subproduct'
+        ? topMatch.matchedSubproduct
+        : deriveVarietySuggestion(trimmedName, topMatch.item.name);
+
       setSimilarProductPrompt({
-        similarProduct,
+        matches: similarMatches,
+        topMatch,
+        similarProduct: topMatch.item,
         newName: trimmedName,
         suggestedVariety,
         newCategory: itemCategory || 'Skincare',
@@ -317,6 +462,8 @@ export default function PriceComparatorModule({
       category: item.category || 'Higiene',
       repurchaseVerdict: item.repurchaseVerdict || 'yes',
       preferredStore: item.preferredStore || '',
+      favoriteVariety: item.favoriteVariety || '',
+      varietyOpinions: { ...(item.varietyOpinions || {}) },
       notes: item.notes || '',
       stores: currentStores.length > 0
         ? currentStores.map(s => ({
@@ -369,6 +516,8 @@ export default function PriceComparatorModule({
       category: editingItem.category || 'Higiene',
       stores: validStores,
       preferredStore: prefStore,
+      favoriteVariety: editingItem.favoriteVariety || '',
+      varietyOpinions: editingItem.varietyOpinions || {},
       repurchaseVerdict: editingItem.repurchaseVerdict || 'yes',
       notes: editingItem.notes || ''
     };
@@ -438,11 +587,27 @@ export default function PriceComparatorModule({
           ...updatedStores.map(s => s.variety).filter(Boolean)
         ]));
 
+        const updatedOpinions = { ...(item.varietyOpinions || {}) };
+        let updatedFavorite = item.favoriteVariety || '';
+
+        if (trimmedVariety && (newStoreOpinion || newStoreRating || newStoreIsFavorite)) {
+          updatedOpinions[trimmedVariety] = {
+            opinion: newStoreOpinion.trim(),
+            rating: newStoreRating || 'liked',
+            isFavorite: Boolean(newStoreIsFavorite)
+          };
+          if (newStoreIsFavorite) {
+            updatedFavorite = trimmedVariety;
+          }
+        }
+
         return {
           ...item,
           stores: updatedStores,
           subproducts: updatedSubproducts,
-          preferredStore: item.preferredStore || trimmedStore
+          preferredStore: item.preferredStore || trimmedStore,
+          varietyOpinions: updatedOpinions,
+          favoriteVariety: updatedFavorite
         };
       }
       return item;
@@ -452,6 +617,9 @@ export default function PriceComparatorModule({
     setNewStorePrice('');
     setNewStoreQty('');
     setNewStoreVariety('');
+    setNewStoreRating('liked');
+    setNewStoreOpinion('');
+    setNewStoreIsFavorite(false);
     setAddingStoreToItem(null);
   };
 
@@ -736,102 +904,147 @@ export default function PriceComparatorModule({
                 required
               />
               {itemName.trim().length >= 3 && (() => {
-                const sim = findSimilarity(itemName.trim(), householdItems, 'name');
-                if (!sim) return null;
-                const suggestedSub = deriveVarietySuggestion(itemName.trim(), sim.name);
+                const matches = findSimilarHouseholdItems(itemName.trim(), householdItems, 3);
+                if (!matches || matches.length === 0) return null;
 
                 return (
-                  <div className="mt-2 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2.5 text-xs animate-fade-in shadow-inner">
-                    <div className="flex items-start justify-between gap-2">
+                  <div className="mt-2.5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-3 text-xs animate-fade-in shadow-inner">
+                    <div className="flex items-center justify-between gap-2 border-b border-amber-500/20 pb-2">
                       <div className="flex items-center gap-1.5 text-amber-300 font-bold">
                         <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>Producto similar detectado en tu comparador</span>
+                        <span>Sugerencias de productos y subproductos existentes ({matches.length})</span>
                       </div>
-                      <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        {sim.category}
+                      <span className="text-[10px] text-amber-300/80 font-medium">
+                        Detección por nombre y subpresentación
                       </span>
                     </div>
 
-                    <div className="bg-[#0b0c10]/70 p-2.5 rounded-lg border border-slate-800 text-slate-300">
-                      <div className="font-bold text-slate-100 text-sm">{sim.name}</div>
-                      {Array.isArray(sim.subproducts) && sim.subproducts.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1 mt-1">
-                          <span className="text-[10px] text-slate-400 font-semibold">Subproductos actuales:</span>
-                          {sim.subproducts.map((sp, sIdx) => (
-                            <span key={sIdx} className="text-[10px] bg-[#e0a96d]/15 text-[#e0a96d] px-1.5 py-0.5 rounded border border-[#e0a96d]/25">
-                              {sp}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="text-[11px] text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
-                        <span className="font-semibold text-slate-400">Tiendas registradas:</span>
-                        {Array.isArray(sim.stores) && sim.stores.length > 0 ? (
-                          sim.stores.map((s, idx) => (
-                            <span key={idx} className="font-medium text-slate-200 bg-slate-800/80 px-2 py-0.5 rounded text-[10px] border border-slate-700/60">
-                              {s.storeName}{s.variety ? ` (${s.variety})` : ''}: <strong>${s.price}</strong>
-                            </span>
-                          ))
-                        ) : (
-                          <span className="italic text-slate-500">Sin precios registrados aún</span>
-                        )}
-                      </div>
-                    </div>
+                    <div className="space-y-2.5">
+                      {matches.map(({ item: matchedItem, matchType, matchedSubproduct }, mIdx) => {
+                        const suggestedSub = matchType === 'subproduct' 
+                          ? (deriveVarietySuggestion(itemName.trim(), matchedItem.name) || matchedSubproduct)
+                          : deriveVarietySuggestion(itemName.trim(), matchedItem.name);
+                        const hasFavorite = matchedItem.favoriteVariety;
+                        const matchedVarietyOpinion = matchedSubproduct ? matchedItem.varietyOpinions?.[matchedSubproduct] : null;
 
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                      {suggestedSub && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const valid = (storePrices || [])
-                              .filter(s => s && s.storeName && s.price && s.quantity)
-                              .map(s => ({
-                                storeName: String(s.storeName).trim() || 'Tienda',
-                                variety: s.variety || suggestedSub,
-                                price: safeNumber(s.price, 0),
-                                quantity: safeNumber(s.quantity, 1),
-                                unitPrice: safeNumber(s.quantity, 1) > 0 ? safeNumber(s.price, 0) / safeNumber(s.quantity, 1) : 0
-                              }))
-                              .filter(s => s.price > 0 && s.quantity > 0);
+                        return (
+                          <div key={matchedItem.id || mIdx} className="bg-[#0b0c10]/85 p-3 rounded-xl border border-slate-800 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-slate-100 text-sm">{matchedItem.name}</span>
+                                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                    {matchedItem.category}
+                                  </span>
+                                  {matchType === 'name' && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                      ✓ Mismo producto principal
+                                    </span>
+                                  )}
+                                  {matchType === 'subproduct' && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                                      <Tag className="w-2.5 h-2.5 text-amber-400" />
+                                      <span>Ya tienes el subproducto "{matchedSubproduct}" aquí</span>
+                                    </span>
+                                  )}
+                                  {matchType === 'both' && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                      ⭐ Coincide en producto y subproducto
+                                    </span>
+                                  )}
+                                </div>
 
-                            handleMergeAndCompareWithExisting(sim, valid, itemNotes, suggestedSub);
-                          }}
-                          className="btn-rose-gold text-xs font-bold py-2 px-3.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md"
-                        >
-                          <Tag className="w-3.5 h-3.5" />
-                          <span>🏷️ Guardar como subproducto "{suggestedSub}" en "{sim.name}" (Recomendado)</span>
-                        </button>
-                      )}
+                                {hasFavorite && (
+                                  <div className="text-[11px] text-amber-400 font-medium flex items-center gap-1 mt-1">
+                                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                    <span>Tu favorito registrado en este producto: <strong>"{hasFavorite}"</strong></span>
+                                  </div>
+                                )}
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const valid = (storePrices || [])
-                            .filter(s => s && s.storeName && s.price && s.quantity)
-                            .map(s => ({
-                              storeName: String(s.storeName).trim() || 'Tienda',
-                              variety: s.variety || '',
-                              price: safeNumber(s.price, 0),
-                              quantity: safeNumber(s.quantity, 1),
-                              unitPrice: safeNumber(s.quantity, 1) > 0 ? safeNumber(s.price, 0) / safeNumber(s.quantity, 1) : 0
-                            }))
-                            .filter(s => s.price > 0 && s.quantity > 0);
+                                {matchedVarietyOpinion && (
+                                  <div className="text-[10.5px] text-slate-300 italic bg-slate-900/90 p-1.5 rounded mt-1 border border-slate-800">
+                                    💬 Opinión guardada de "{matchedSubproduct}": <strong>"{matchedVarietyOpinion.opinion || 'Sin comentario escrito'}"</strong>
+                                    {matchedVarietyOpinion.rating && ` (${matchedVarietyOpinion.rating === 'liked' ? '👍 Me gustó' : matchedVarietyOpinion.rating === 'disliked' ? '👎 No me gustó' : matchedVarietyOpinion.rating === 'favorite' ? '⭐ Favorito' : '😐 Regular'})`}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
 
-                          handleMergeAndCompareWithExisting(sim, valid, itemNotes);
-                        }}
-                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold py-2 px-3.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md"
-                      >
-                        <ArrowUpDown className="w-3.5 h-3.5 text-[#e0a96d]" />
-                        <span>⚖️ Comparar directamente en "{sim.name}"</span>
-                      </button>
+                            {/* Subproducts list preview */}
+                            {Array.isArray(matchedItem.subproducts) && matchedItem.subproducts.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                                <span className="text-[10px] text-slate-400 font-semibold">Otras variedades:</span>
+                                {matchedItem.subproducts.map((sp, sIdx) => (
+                                  <span key={sIdx} className={`text-[10px] px-1.5 py-0.2 rounded border ${
+                                    sp === matchedItem.favoriteVariety 
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
+                                      : 'bg-[#e0a96d]/10 text-[#e0a96d] border-[#e0a96d]/20'
+                                  }`}>
+                                    {sp === matchedItem.favoriteVariety ? `⭐ ${sp}` : sp}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
 
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEdit(sim)}
-                        className="text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer border border-slate-800"
-                      >
-                        Ver / Editar ficha existente
-                      </button>
+                            {/* Quick action buttons */}
+                            <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-slate-800/60">
+                              {suggestedSub && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const valid = (storePrices || [])
+                                      .filter(s => s && s.storeName && s.price && s.quantity)
+                                      .map(s => ({
+                                        storeName: String(s.storeName).trim() || 'Tienda',
+                                        variety: s.variety || suggestedSub,
+                                        price: safeNumber(s.price, 0),
+                                        quantity: safeNumber(s.quantity, 1),
+                                        unitPrice: safeNumber(s.quantity, 1) > 0 ? safeNumber(s.price, 0) / safeNumber(s.quantity, 1) : 0
+                                      }))
+                                      .filter(s => s.price > 0 && s.quantity > 0);
+
+                                    handleMergeAndCompareWithExisting(matchedItem, valid, itemNotes, suggestedSub);
+                                  }}
+                                  className="btn-rose-gold text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md"
+                                >
+                                  <Tag className="w-3.5 h-3.5" />
+                                  <span>🏷️ Guardar como subproducto "{suggestedSub}" en "{matchedItem.name}"</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const valid = (storePrices || [])
+                                    .filter(s => s && s.storeName && s.price && s.quantity)
+                                    .map(s => ({
+                                      storeName: String(s.storeName).trim() || 'Tienda',
+                                      variety: s.variety || '',
+                                      price: safeNumber(s.price, 0),
+                                      quantity: safeNumber(s.quantity, 1),
+                                      unitPrice: safeNumber(s.quantity, 1) > 0 ? safeNumber(s.price, 0) / safeNumber(s.quantity, 1) : 0
+                                    }))
+                                    .filter(s => s.price > 0 && s.quantity > 0);
+
+                                  handleMergeAndCompareWithExisting(matchedItem, valid, itemNotes);
+                                }}
+                                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer"
+                              >
+                                <ArrowUpDown className="w-3.5 h-3.5 text-[#e0a96d]" />
+                                <span>⚖️ Comparar en "{matchedItem.name}"</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEdit(matchedItem)}
+                                className="text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg font-medium transition-colors cursor-pointer border border-slate-800"
+                              >
+                                Ver Ficha
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -990,7 +1203,10 @@ export default function PriceComparatorModule({
           </div>
         ) : (
           filteredItems.map(item => {
-            const itemVarieties = Array.from(new Set((item.stores || []).map(s => s.variety?.trim()).filter(Boolean)));
+            const itemVarieties = Array.from(new Set([
+              ...(Array.isArray(item.subproducts) ? item.subproducts : []),
+              ...(item.stores || []).map(s => s.variety?.trim()).filter(Boolean)
+            ]));
             const currentVariety = selectedVarieties[item.id] || 'ALL';
             
             const visibleStores = (item.stores || []).filter(s => {
@@ -1015,6 +1231,12 @@ export default function PriceComparatorModule({
                           <span className="text-[10px] font-semibold text-amber-300/90 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded flex items-center gap-1">
                             <Layers className="w-3 h-3 text-amber-400" />
                             <span>{itemVarieties.length} subproducto{itemVarieties.length > 1 ? 's' : ''}</span>
+                          </span>
+                        )}
+                        {item.favoriteVariety && (
+                          <span className="text-[10px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-sm">
+                            <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+                            <span>Fav: {item.favoriteVariety}</span>
                           </span>
                         )}
                       </div>
@@ -1094,6 +1316,10 @@ export default function PriceComparatorModule({
                       {itemVarieties.map(v => {
                         const count = (item.stores || []).filter(s => (s.variety || '').toLowerCase().trim() === v.toLowerCase().trim()).length;
                         const isSelected = currentVariety.toLowerCase().trim() === v.toLowerCase().trim();
+                        const isFav = (item.favoriteVariety || '').toLowerCase().trim() === v.toLowerCase().trim();
+                        const op = item.varietyOpinions?.[v];
+                        const r = op?.rating;
+
                         return (
                           <button
                             key={v}
@@ -1105,13 +1331,137 @@ export default function PriceComparatorModule({
                                 : 'bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700/60'
                             }`}
                           >
+                            {isFav && (
+                              <Star className={`w-3 h-3 ${isSelected ? 'fill-[#0b0c10] text-[#0b0c10]' : 'fill-amber-400 text-amber-400'}`} />
+                            )}
                             <span>{v}</span>
+                            {r === 'liked' && !isFav && <span>👍</span>}
+                            {r === 'disliked' && <span>👎</span>}
+                            {r === 'neutral' && <span>😐</span>}
                             <span className={`text-[9px] px-1 rounded ${isSelected ? 'bg-black/20 text-[#0b0c10]' : 'bg-slate-900 text-slate-400'}`}>
                               {count}
                             </span>
                           </button>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {/* Global Favorite Spotlight when looking at all varieties */}
+                  {currentVariety === 'ALL' && item.favoriteVariety && (
+                    <div className="mt-2.5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2.5">
+                      <div className="p-1 rounded-lg bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+                        <Star className="w-3.5 h-3.5 fill-amber-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-amber-300">
+                            ⭐ Subproducto Favorito: <strong>{item.favoriteVariety}</strong>
+                          </span>
+                          {item.varietyOpinions?.[item.favoriteVariety]?.rating && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30">
+                              {item.varietyOpinions[item.favoriteVariety].rating === 'liked' ? '👍 Me gustó' : '⭐ El mejor'}
+                            </span>
+                          )}
+                        </div>
+                        {item.varietyOpinions?.[item.favoriteVariety]?.opinion ? (
+                          <p className="text-[11px] text-slate-300 italic mt-1 leading-relaxed">
+                            "{item.varietyOpinions[item.favoriteVariety].opinion}"
+                          </p>
+                        ) : (
+                          <p className="text-[10px] text-slate-400 italic mt-0.5">
+                            Selecciona la pestaña "{item.favoriteVariety}" para anotar tu opinión o comentario.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Interactive Subproduct Opinion Panel when a specific variety is selected */}
+                  {currentVariety !== 'ALL' && (
+                    <div className="mt-2.5 p-3 rounded-xl bg-[#0b0c10] border border-[#e0a96d]/20 space-y-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-[#e0a96d]" />
+                          <span className="text-xs font-bold text-slate-200">
+                            Opinión de "{currentVariety}":
+                          </span>
+                        </div>
+
+                        {/* Favorite Toggle Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFavoriteVariety(item.id, currentVariety)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                            (item.favoriteVariety || '').toLowerCase().trim() === currentVariety.toLowerCase().trim()
+                              ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/20'
+                              : 'bg-slate-800 text-slate-300 hover:text-amber-300 hover:bg-slate-700 border border-slate-700'
+                          }`}
+                          title={(item.favoriteVariety || '').toLowerCase().trim() === currentVariety.toLowerCase().trim() ? 'Quitar marca de favorito' : 'Marcar este subproducto como tu favorito'}
+                        >
+                          <Star className={`w-3.5 h-3.5 ${(item.favoriteVariety || '').toLowerCase().trim() === currentVariety.toLowerCase().trim() ? 'fill-slate-950 text-slate-950' : 'text-amber-400'}`} />
+                          <span>{(item.favoriteVariety || '').toLowerCase().trim() === currentVariety.toLowerCase().trim() ? '⭐ Es tu favorito' : 'Marcar como favorito'}</span>
+                        </button>
+                      </div>
+
+                      {/* Quick Reaction Buttons */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] text-slate-400 font-semibold">¿Qué tal te pareció?</span>
+                        <button
+                          type="button"
+                          onClick={() => handleSetVarietyRating(item.id, currentVariety, 'liked')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                            item.varietyOpinions?.[currentVariety]?.rating === 'liked'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/60'
+                          }`}
+                        >
+                          <span>👍 Me gustó</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSetVarietyRating(item.id, currentVariety, 'neutral')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                            item.varietyOpinions?.[currentVariety]?.rating === 'neutral'
+                              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                              : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/60'
+                          }`}
+                        >
+                          <span>😐 Regular</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSetVarietyRating(item.id, currentVariety, 'disliked')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                            item.varietyOpinions?.[currentVariety]?.rating === 'disliked'
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                              : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/60'
+                          }`}
+                        >
+                          <span>👎 No me gustó</span>
+                        </button>
+                      </div>
+
+                      {/* Text Opinion Input */}
+                      <div className="pt-0.5">
+                        <input
+                          type="text"
+                          defaultValue={item.varietyOpinions?.[currentVariety]?.opinion || ''}
+                          key={`${item.id}-${currentVariety}`}
+                          onBlur={(e) => handleUpdateVarietyOpinion(item.id, currentVariety, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleUpdateVarietyOpinion(item.id, currentVariety, e.currentTarget.value);
+                            }
+                          }}
+                          placeholder={`Ej. "Es mi favorito hasta ahorita aunque el otro no está mal", "Aroma rico, no reseca"...`}
+                          className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-1.5 px-3 text-slate-200 text-xs focus:outline-none focus:border-[#e0a96d] transition-colors placeholder:text-slate-500"
+                        />
+                        <p className="text-[9px] text-slate-500 mt-0.5">
+                          Se guarda automáticamente al escribir o presionar Enter.
+                        </p>
+                      </div>
                     </div>
                   )}
 
@@ -1131,6 +1481,7 @@ export default function PriceComparatorModule({
                           : (q > 0 ? p / q : 0);
                         const isCheapest = cheapestForView && cheapestForView.storeName === store.storeName && (cheapestForView.variety || '') === (store.variety || '');
                         const isPreferred = item.preferredStore === store.storeName;
+                        const isFavoriteVariety = item.favoriteVariety && (item.favoriteVariety || '').toLowerCase().trim() === (store.variety || '').toLowerCase().trim();
                         
                         return (
                           <div 
@@ -1155,9 +1506,16 @@ export default function PriceComparatorModule({
                               </button>
                               <span className="font-semibold text-slate-300 truncate">{store.storeName}</span>
                               {store.variety && (
-                                <span className="text-[10px] font-medium text-amber-300/90 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded inline-flex items-center gap-1 shrink-0">
+                                <span className={`text-[10px] font-medium border px-1.5 py-0.5 rounded inline-flex items-center gap-1 shrink-0 ${
+                                  isFavoriteVariety
+                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
+                                    : 'bg-amber-500/10 text-amber-300/90 border-amber-500/25'
+                                }`}>
                                   <Tag className="w-2.5 h-2.5 text-amber-400" />
                                   <span>{store.variety}</span>
+                                  {isFavoriteVariety && (
+                                    <span className="text-[9px] text-amber-400 font-extrabold">⭐ Fav</span>
+                                  )}
                                 </span>
                               )}
                             </div>
@@ -1256,10 +1614,7 @@ export default function PriceComparatorModule({
 
                 <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
                   <button
-                    onClick={() => {
-                      setNewStoreVariety(currentVariety !== 'ALL' ? currentVariety : '');
-                      setAddingStoreToItem(item);
-                    }}
+                    onClick={() => handleOpenAddStore(item, currentVariety !== 'ALL' ? currentVariety : '')}
                     className="text-xs text-[#e0a96d] hover:text-[#f5d4af] font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -1347,6 +1702,133 @@ export default function PriceComparatorModule({
                   <option value="no">✕ No volver a comprar</option>
                 </select>
               </div>
+
+              {/* Favorite Variety Selector & Opinions Management */}
+              {(() => {
+                const editingVarieties = Array.from(new Set(
+                  (editingItem.stores || []).map(s => String(s.variety || '').trim()).filter(Boolean)
+                ));
+                if (editingVarieties.length === 0) return null;
+
+                return (
+                  <div className="space-y-3 pt-3 border-t border-slate-800">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                        <span>Subproducto Favorito y Calificaciones</span>
+                      </label>
+                      <span className="text-[10px] text-slate-400">
+                        Elige tu variedad favorita y anota tus opiniones o comentarios personales
+                      </span>
+                    </div>
+
+                    {/* Select top favorite variety */}
+                    <div className="bg-[#0b0c10] p-3 rounded-xl border border-amber-500/20 space-y-1.5">
+                      <label className="block text-[11px] font-semibold text-amber-300">
+                        ⭐ ¿Cuál es tu variedad / subproducto favorito de este producto?
+                      </label>
+                      <select
+                        value={editingItem.favoriteVariety || ''}
+                        onChange={(e) => {
+                          const chosen = e.target.value;
+                          const currentOps = { ...(editingItem.varietyOpinions || {}) };
+                          Object.keys(currentOps).forEach(k => {
+                            if (currentOps[k]) currentOps[k] = { ...currentOps[k], isFavorite: false };
+                          });
+                          if (chosen) {
+                            currentOps[chosen] = {
+                              ...(currentOps[chosen] || { opinion: '', rating: 'favorite' }),
+                              rating: currentOps[chosen]?.rating === 'disliked' ? 'favorite' : (currentOps[chosen]?.rating || 'favorite'),
+                              isFavorite: true
+                            };
+                          }
+                          setEditingItem({
+                            ...editingItem,
+                            favoriteVariety: chosen,
+                            varietyOpinions: currentOps
+                          });
+                        }}
+                        className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-1.5 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                      >
+                        <option value="">(Ninguno seleccionado como favorito aún)</option>
+                        {editingVarieties.map(v => (
+                          <option key={v} value={v}>⭐ {v}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Individual opinions & ratings per variety */}
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                        Opiniones y comentarios por tipo o marca:
+                      </span>
+                      {editingVarieties.map(v => {
+                        const opObj = editingItem.varietyOpinions?.[v] || { opinion: '', rating: 'liked', isFavorite: false };
+                        const isFav = (editingItem.favoriteVariety || '') === v || opObj.isFavorite;
+
+                        return (
+                          <div key={v} className="bg-[#0b0c10] p-2.5 rounded-xl border border-slate-800 space-y-2">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-1.5">
+                                <Tag className="w-3.5 h-3.5 text-[#e0a96d]" />
+                                <span className="font-bold text-slate-200 text-xs">{v}</span>
+                                {isFav && (
+                                  <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold flex items-center gap-0.5">
+                                    <Star className="w-2.5 h-2.5 fill-amber-400" />
+                                    <span>Favorito</span>
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Rating buttons */}
+                              <div className="flex items-center gap-1">
+                                {['liked', 'neutral', 'disliked'].map(r => (
+                                  <button
+                                    key={r}
+                                    type="button"
+                                    onClick={() => {
+                                      const currentOps = { ...(editingItem.varietyOpinions || {}) };
+                                      currentOps[v] = {
+                                        ...(currentOps[v] || { opinion: '', isFavorite: isFav }),
+                                        rating: r
+                                      };
+                                      setEditingItem({ ...editingItem, varietyOpinions: currentOps });
+                                    }}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                                      opObj.rating === r
+                                        ? (r === 'liked' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : r === 'disliked' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40')
+                                        : 'text-slate-400 hover:text-slate-200 bg-slate-800/60'
+                                    }`}
+                                  >
+                                    {r === 'liked' ? '👍 Me gustó' : r === 'disliked' ? '👎 No me gustó' : '😐 Regular'}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <input
+                                type="text"
+                                value={opObj.opinion || ''}
+                                onChange={(e) => {
+                                  const currentOps = { ...(editingItem.varietyOpinions || {}) };
+                                  currentOps[v] = {
+                                    ...(currentOps[v] || { rating: 'liked', isFavorite: isFav }),
+                                    opinion: e.target.value
+                                  };
+                                  setEditingItem({ ...editingItem, varietyOpinions: currentOps });
+                                }}
+                                placeholder={`Opinión de "${v}" (ej. Es mi favorito hasta ahorita aunque el otro no está mal...)`}
+                                className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-1.5 px-2.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Stores and Subproducts Management */}
               <div className="space-y-2.5 pt-2 border-t border-slate-800">
@@ -1628,6 +2110,76 @@ export default function PriceComparatorModule({
                   required
                 />
               </div>
+
+              {/* Optional Opinion and Favorite rating for this variety */}
+              <div className="p-3 rounded-xl bg-[#0b0c10] border border-[#e0a96d]/20 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Opinión del Subproducto</span>
+                  </label>
+                  
+                  {/* Favorite checkbox toggle */}
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold text-amber-300">
+                    <input
+                      type="checkbox"
+                      checked={newStoreIsFavorite}
+                      onChange={(e) => setNewStoreIsFavorite(e.target.checked)}
+                      className="rounded border-[#e0a96d]/40 text-[#e0a96d] focus:ring-0 cursor-pointer"
+                    />
+                    <span>⭐ Marcar como favorito</span>
+                  </label>
+                </div>
+
+                {/* Rating selector buttons */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] text-slate-400">Calificación:</span>
+                  <button
+                    type="button"
+                    onClick={() => setNewStoreRating('liked')}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                      newStoreRating === 'liked'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/60'
+                    }`}
+                  >
+                    <span>👍 Me gustó</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewStoreRating('neutral')}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                      newStoreRating === 'neutral'
+                        ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                        : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/60'
+                    }`}
+                  >
+                    <span>😐 Regular</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewStoreRating('disliked')}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                      newStoreRating === 'disliked'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                        : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/60'
+                    }`}
+                  >
+                    <span>👎 No me gustó</span>
+                  </button>
+                </div>
+
+                {/* Opinion comment input */}
+                <div>
+                  <input
+                    type="text"
+                    placeholder={`Comentario (ej. "Es mi favorito hasta ahorita", "Sabor rico")...`}
+                    value={newStoreOpinion}
+                    onChange={(e) => setNewStoreOpinion(e.target.value)}
+                    className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-1.5 px-2.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-slate-800/80 shrink-0">
@@ -1653,7 +2205,7 @@ export default function PriceComparatorModule({
       {/* Similar Product Confirmation / Subproduct Comparison Prompt Modal */}
       {similarProductPrompt && createPortal(
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
-          <div className="bg-[#171a24] border border-[#e0a96d]/40 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-scale-up my-auto">
+          <div className="bg-[#171a24] border border-[#e0a96d]/40 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 animate-scale-up my-auto">
             <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -1661,10 +2213,12 @@ export default function PriceComparatorModule({
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-100 font-outfit">
-                    ¿Deseas agregarlo como subproducto de un producto existente?
+                    ¿Deseas agregarlo como subproducto o variedad?
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Detectamos que ya tienes "<strong>{similarProductPrompt.similarProduct.name}</strong>". Puedes guardarlo como subproducto para mantener tu comparador ordenado y comparar entre variedades.
+                    {similarProductPrompt.topMatch?.matchType === 'subproduct'
+                      ? `Detectamos que ya registraste la variedad "${similarProductPrompt.topMatch.matchedSubproduct}" dentro de "${similarProductPrompt.similarProduct.name}".`
+                      : `Detectamos que ya tienes "${similarProductPrompt.similarProduct.name}". Puedes guardarlo como subproducto para mantener tu comparador ordenado.`}
                   </p>
                 </div>
               </div>
@@ -1677,6 +2231,60 @@ export default function PriceComparatorModule({
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* If multiple matches found (e.g. name match + subproduct match on another item), let user pick */}
+            {similarProductPrompt.matches && similarProductPrompt.matches.length > 1 && (
+              <div className="p-3 bg-[#0b0c10] border border-amber-500/20 rounded-xl space-y-2">
+                <span className="text-[11px] font-bold text-amber-300">
+                  Coincidencias encontradas ({similarProductPrompt.matches.length}):
+                </span>
+                <div className="space-y-1.5">
+                  {similarProductPrompt.matches.map(({ item: mItem, matchType, matchedSubproduct }, idx) => {
+                    const isSelected = mItem.id === similarProductPrompt.similarProduct.id;
+                    const altSuggested = matchType === 'subproduct'
+                      ? (deriveVarietySuggestion(similarProductPrompt.newName, mItem.name) || matchedSubproduct)
+                      : deriveVarietySuggestion(similarProductPrompt.newName, mItem.name);
+
+                    return (
+                      <div
+                        key={mItem.id || idx}
+                        onClick={() => {
+                          setSimilarProductPrompt(prev => ({
+                            ...prev,
+                            similarProduct: mItem,
+                            topMatch: similarProductPrompt.matches[idx],
+                            suggestedVariety: altSuggested
+                          }));
+                        }}
+                        className={`p-2 rounded-lg border text-xs flex items-center justify-between cursor-pointer transition-all ${
+                          isSelected
+                            ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-100">{mItem.name}</span>
+                          <span className="text-[10px] text-slate-400">({mItem.category})</span>
+                          {matchType === 'subproduct' && (
+                            <span className="text-[10px] text-amber-300 bg-amber-500/20 px-1.5 py-0.2 rounded border border-amber-500/30">
+                              Tiene variedad "{matchedSubproduct}"
+                            </span>
+                          )}
+                          {matchType === 'name' && (
+                            <span className="text-[10px] text-emerald-300 bg-emerald-500/20 px-1.5 py-0.2 rounded border border-emerald-500/30">
+                              Mismo Producto
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-semibold text-[#e0a96d]">
+                          {isSelected ? '✓ Seleccionado' : 'Seleccionar'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Comparison Cards Side-by-Side */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -1693,6 +2301,19 @@ export default function PriceComparatorModule({
                 <h4 className="text-sm font-bold text-slate-100 truncate" title={similarProductPrompt.similarProduct.name}>
                   {similarProductPrompt.similarProduct.name}
                 </h4>
+
+                {similarProductPrompt.similarProduct.favoriteVariety && (
+                  <div className="text-[11px] text-amber-400 font-medium flex items-center gap-1">
+                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    <span>Favorito: <strong>{similarProductPrompt.similarProduct.favoriteVariety}</strong></span>
+                  </div>
+                )}
+
+                {similarProductPrompt.topMatch?.matchedSubproduct && similarProductPrompt.similarProduct.varietyOpinions?.[similarProductPrompt.topMatch.matchedSubproduct]?.opinion && (
+                  <div className="text-[10.5px] text-slate-300 italic bg-slate-900/90 p-1.5 rounded border border-slate-800">
+                    💬 "{similarProductPrompt.similarProduct.varietyOpinions[similarProductPrompt.topMatch.matchedSubproduct].opinion}"
+                  </div>
+                )}
 
                 <div className="space-y-1.5 pt-1">
                   <span className="text-[10px] font-semibold text-slate-400 block">Precios actuales:</span>
