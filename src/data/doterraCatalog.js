@@ -2355,6 +2355,222 @@ export const DOTERRA_CATALOG = [
     notes: 'Ideal para limpiar manijas de puertas, mesas de restaurantes y manos en cualquier lugar.'
   },
   {
+    id: 'on-guard-cleaner',
+    name: 'On Guard Concentrado Limpiador Multiusos',
+    trademarkName: 'On Guard Cleaner Concentrate (355ml)',
+    botanicalName: 'Plant-based surfactants infused with On Guard Protective Blend',
+    brand: 'dōTERRA',
+    type: 'home_cleaning',
+    category: 'home',
+    categoryLabel: 'Limpieza No Tóxica & Multiusos',
+    aroma: 'Cítrico especiado a naranja dulce, clavo y canela',
+    methods: ['T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Pureza ambiental y hogar libre de toxinas',
+    keyBenefits: [
+      'Fórmula ultraconcentrada no tóxica y biodegradable para todo el hogar',
+      '2 cucharadas en un atomizador de 500ml de agua rinden hasta 18 botellas de limpiador',
+      'Limpia a fondo grasa en cocina, sarro en baños, cubiertas de granito y pisos'
+    ],
+    description: 'El limpiador multiusos concentrado insignia de dōTERRA con aceites esenciales puros On Guard para un hogar impecable y libre de químicos sintéticos.',
+    aromaticGuide: 'Deja una estela aromática fresca y desinfectante en toda la casa mientras limpias.',
+    topicalGuide: 'Uso directo en superficies del hogar. Seguro para el contacto con las manos.',
+    ingestionGuide: 'No ingerir. Uso doméstico exclusivo.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Dilución sugerida: 2 cdas por 500ml de agua para multiusos; 3 cdas por litro de agua para pisos; directo para manchas rebeldes.'
+  },
+  {
+    id: 'abode-multipurpose',
+    name: 'abōde Concentrado Limpiador de Superficies',
+    trademarkName: 'abōde Multi-Surface Cleaner Concentrate (4x)',
+    botanicalName: 'Distilled Lime, Litsea, Cassia, Lemon Eucalyptus, Tea Tree, Arborvitae, Kochii Eucalyptus',
+    brand: 'dōTERRA',
+    type: 'home_cleaning',
+    category: 'home',
+    categoryLabel: 'Línea Sustentable para el Hogar',
+    aroma: 'Cítrico verde, limpio, vibrante y refrescante',
+    methods: ['T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Hogar en armonía con la naturaleza y bienestar ecológico',
+    keyBenefits: [
+      'Fórmula botánica con la exclusiva mezcla abōde de alta potencia desengrasante',
+      'Empaque de vidrio recargable con concentrado que ahorra plástico y huella de carbono',
+      'Libre de sulfatos, cloro, fosfatos, ftalatos y fragancias sintéticas'
+    ],
+    description: 'La línea ecológica prémium de dōTERRA para limpiar mesetas, azulejos, estufas y accesorios con el poder de aceites con alto contenido de timol y monoterpenos.',
+    aromaticGuide: 'Perfuma la casa con notas de eucalipto limón y litsea.',
+    topicalGuide: 'Diluir una botellita concentrada en atomizador con agua purificada y rociar sobre cualquier superficie no porosa.',
+    ingestionGuide: 'No ingerir.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'La línea insignia de dōTERRA para un estilo de vida de cero toxinas ("Zero-Tox Living").'
+  },
+  {
+    id: 'abode-dish-soap',
+    name: 'abōde Jabón Líquido Lavavajillas',
+    trademarkName: 'abōde Liquid Dish Soap (473ml)',
+    botanicalName: 'Grapefruit, Lemon Eucalyptus, Litsea, Tea Tree with Plant-based Cleansers',
+    brand: 'dōTERRA',
+    type: 'home_cleaning',
+    category: 'home',
+    categoryLabel: 'Cocina Limpia & Cortagrasa',
+    aroma: 'Cítrico brillante y efervescente',
+    methods: ['T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Claridad, frescura y pulcritud en la cocina',
+    keyBenefits: [
+      'Corta grasa difícil en sartenes y platos con extractos botánicos naturales',
+      'Espuma suave que no reseca ni agrieta las manos al lavar',
+      'Fórmula 100% biodegradable apta para fosas sépticas y respetuosa del agua'
+    ],
+    description: 'Jabón lavaplatos botánico de alta eficacia que desengrasa ollas y vajillas sin químicos agresivos ni aromas artificiales.',
+    aromaticGuide: 'Aroma energizante a pomelo y eucalipto limón mientras lavas los trastes.',
+    topicalGuide: 'Verter un chorrito en la esponja húmeda o en la tarja llena de agua tibia.',
+    ingestionGuide: 'No ingerir.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Combina a la perfección con el dispensador de vidrio ámbar recargable abōde.'
+  },
+  {
+    id: 'on-guard-laundry',
+    name: 'On Guard Detergente para Ropa Ultraconcentrado',
+    trademarkName: 'On Guard Laundry Detergent (947ml)',
+    botanicalName: 'Bio-originated enzymes & On Guard Essential Oil Blend',
+    brand: 'dōTERRA',
+    type: 'home_cleaning',
+    category: 'home',
+    categoryLabel: 'Cuidado de Prendas & Textiles',
+    aroma: 'Especiado limpio y cálido',
+    methods: ['T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Cobijo protector en cada prenda de vestir',
+    keyBenefits: [
+      'Contiene 10ml enteros de aceite On Guard puro en cada botella',
+      'Ultraconcentrado 6x: solo 1 cucharada (15ml) lava una carga completa de 5-7 kg (rinde hasta 64 cargas)',
+      'Enzimas bioactivas que eliminan manchas difíciles de comida, sudor y grasa sin desteñir'
+    ],
+    description: 'Detergente ecológico que desinfecta y perfuma la ropa de toda la familia con el aroma protector de On Guard.',
+    aromaticGuide: 'Sábanas, toallas y ropa con un aroma reconfortante a canela y naranja.',
+    topicalGuide: 'Uso directo en lavadora o pre-tratamiento en manchas.',
+    ingestionGuide: 'No ingerir.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Ideal para personas con piel sensible, eccema o alergias a los detergentes comerciales.'
+  },
+  {
+    id: 'on-guard-toothpaste',
+    name: 'Pasta Dental Blanqueadora On Guard',
+    trademarkName: 'On Guard Natural Whitening Toothpaste (114g)',
+    botanicalName: 'Hydroxyapatite, Hydrated Silica, On Guard, Peppermint & Wintergreen',
+    brand: 'dōTERRA',
+    type: 'personal_care',
+    category: 'beauty',
+    categoryLabel: 'Salud Bucal Natural & Blanqueamiento',
+    aroma: 'Menta dulce, canela y clavo fresco',
+    methods: ['T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Sonrisa radiante, fresca y protegida',
+    keyBenefits: [
+      'Con hidroxiapatita que remineraliza el esmalte dental y alivia la sensibilidad',
+      'Sílice hidratada suave que elimina manchas de café y té sin rayar el esmalte',
+      'Sin flúor, sin sulfatos SLS, sin colorantes ni edulcorantes artificiales'
+    ],
+    description: 'La pasta dental botánica más vendida de dōTERRA que limpia dientes y encías a profundidad con On Guard y menta silvestre.',
+    aromaticGuide: 'Aliento ultra fresco durante horas.',
+    topicalGuide: 'Aplicar una pequeña porción en el cepillo tras cada comida.',
+    ingestionGuide: 'Uso bucal seguro, escupir tras el cepillado.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Uno de los favoritos de estilo de vida para una rutina de baño 100% natural.'
+  },
+  {
+    id: 'verage-skin-care',
+    name: 'Veráge Skin Care Collection (Set Facial)',
+    trademarkName: 'Veráge Botanical Skin Care Collection (4 piezas)',
+    botanicalName: 'Cleanser, Toner, Immortelle Hydrating Serum, Moisturizer with CPTG Oils',
+    brand: 'dōTERRA',
+    type: 'personal_care',
+    category: 'beauty',
+    categoryLabel: 'Sistema Facial Botánico Antiedad',
+    aroma: 'Floral exquisito, limpio y herbal',
+    methods: ['T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Amor propio, renovación celular y rejuvenecimiento',
+    keyBenefits: [
+      'Sistema completo de 4 pasos: Limpiador, Tónico reafirmante, Suero hidratante Salubelle y Crema humectante',
+      'Atenúa signos visibles de la edad, líneas de expresión y empareja el tono del cutis',
+      'Ingredientes botánicos puros sin parabenos, ftalatos ni derivados del petróleo'
+    ],
+    description: 'La colección de skincare botánico prémium de dōTERRA creada para nutrir la piel y restaurar su luminosidad juvenil natural.',
+    aromaticGuide: 'Convierte tu rutina de skincare en una sesión de aromaterapia de spa de 5 estrellas.',
+    topicalGuide: 'Paso 1: Limpiador Veráge; Paso 2: Bruma de Tónico; Paso 3: Suero Immortelle; Paso 4: Crema Humectante mañana y noche.',
+    ingestionGuide: 'No ingerir. Uso cosmético facial exclusivo.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Resultados visibles en elasticidad e hidratación desde las primeras 2 semanas de uso constante.'
+  },
+  {
+    id: 'doterra-natural-deodorant',
+    name: 'Desodorante Natural dōTERRA con Balance',
+    trademarkName: 'Natural Deodorant with dōTERRA Balance (75g)',
+    botanicalName: 'Arrowroot powder, Shea butter, Coconut oil, Balance Grounding Blend',
+    brand: 'dōTERRA',
+    type: 'personal_care',
+    category: 'beauty',
+    categoryLabel: 'Cuidado Corporal Libre de Aluminio',
+    aroma: 'Cálido, amaderado y relajante (abeto, incienso, tanaceto azul)',
+    methods: ['T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Enraizamiento, frescura y tranquilidad todo el día',
+    keyBenefits: [
+      'Libre de aluminio, parabenos, ftalatos y talco',
+      'El almidón de arrurruz y bicarbonato absorben la humedad axilar manteniendo la piel fresca',
+      'La manteca de karité nutre la piel y previene la irritación post-afeitado'
+    ],
+    description: 'Desodorante axilar natural que neutraliza olores corporales respetando el proceso natural de transpiración de la piel.',
+    aromaticGuide: 'Aroma terroso y tranquilizante durante toda la jornada.',
+    topicalGuide: 'Aplicar 2-3 pasadas suaves sobre axilas limpias y secas.',
+    ingestionGuide: 'No ingerir.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'Una transición indispensable para desintoxicar las axilas de antitranspirantes químicos tradicionales.'
+  },
+  {
+    id: 'salon-hair-serum',
+    name: 'Suero Capilar Protector Salon Essentials',
+    trademarkName: 'dōTERRA Salon Essentials Root to Tip Serum (30ml)',
+    botanicalName: 'Lavender, Peppermint, Cedarwood, Rosemary, Clary Sage, Marjoram, Argan & Meadowfoam seed oils',
+    brand: 'dōTERRA',
+    type: 'personal_care',
+    category: 'beauty',
+    categoryLabel: 'Cuidado Capilar de Raíz a Puntas',
+    aroma: 'Herbal aromático, fresco y silvestre',
+    methods: ['T'],
+    sensitivity: 'N',
+    photosensitive: false,
+    emotionalProperty: 'Vitalidad, fuerza y brillo capilar',
+    keyBenefits: [
+      'Tratamiento intensivo con aceites de Romero, Cedro y Lavanda para cuero cabelludo y puntas',
+      'Sella la cutícula capilar, previene la orzuela y reduce el frizz sin dejar residuo graso',
+      'Protege el cabello contra el daño térmico de planchas, secadoras y rayos UV'
+    ],
+    description: 'Suero profesional botánico para fortalecer el crecimiento desde la raíz y reparar puntas abiertas o maltratadas.',
+    aromaticGuide: 'Fragancia fresca y herbal en tu melena durante todo el día.',
+    topicalGuide: 'Aplicar unas gotas en cuero cabelludo con masaje circular, o en las puntas húmedas antes de secar.',
+    ingestionGuide: 'No ingerir. Uso capilar exclusivo.',
+    defaultInInventory: false,
+    level: '100%',
+    notes: 'El secreto dōTERRA para un cabello denso, sedoso y con volumen natural.'
+  },
+  {
     id: 'diffuser-petal',
     name: 'Difusor Ultrasónico Petal 2.0',
     trademarkName: 'Petal Diffuser 2.0 dōTERRA',
@@ -2553,6 +2769,289 @@ export const DEFAULT_DIFFUSER_BLENDS = [
     totalDrops: 8,
     bestTime: 'Tardes de bajón de energía o antes de entrenar',
     notes: 'Inhibe el deseo de azúcar y aumenta el gasto energético.'
+  },
+
+  // ============================================================================
+  // FÓRMULAS DE LIMPIEZA DEL HOGAR NO TÓXICA (DIY ZERO-TOX CLEANING)
+  // ============================================================================
+  {
+    id: 'clean-all-purpose',
+    name: 'Spray Limpiador Multiusos & Desinfectante',
+    category: 'cleaning',
+    categoryLabel: 'Limpieza del Hogar',
+    type: 'cleaning',
+    targetVibe: 'Desinfectar cubiertas de cocina, mesas y superficies sin químicos tóxicos',
+    container: 'Atomizador de vidrio ámbar 500ml',
+    baseIngredients: '2 tazas de agua purificada + 2 cdas de vinagre blanco (o 2 cdas de On Guard Concentrado)',
+    ingredients: [
+      { oilId: 'on-guard', oilName: 'On Guard', drops: 10 },
+      { oilId: 'lemon', oilName: 'Limón', drops: 10 },
+      { oilId: 'tea-tree', oilName: 'Árbol de Té (Tea Tree)', drops: 5 }
+    ],
+    totalDrops: 25,
+    bestTime: 'Limpieza diaria de cocinas, mesas, perillas y barras',
+    notes: 'Agitar antes de cada uso. Rociar sobre cubiertas y limpiar con paño de microfibra. Desinfecta a fondo y deja un aroma cítrico-especiado limpio.'
+  },
+  {
+    id: 'clean-degreaser-paste',
+    name: 'Pasta Antisarro & Desengrasante Profunda',
+    category: 'cleaning',
+    categoryLabel: 'Limpieza Profunda',
+    type: 'cleaning',
+    targetVibe: 'Eliminar cochambre en estufas, sarro en azulejos y devolver brillo a grifería',
+    container: 'Frasco de vidrio de boca ancha 250ml',
+    baseIngredients: '1 taza de bicarbonato de sodio + 1/4 taza de jabón de castilla o abōde + 2 cdas de agua',
+    ingredients: [
+      { oilId: 'lemon', oilName: 'Limón', drops: 8 },
+      { oilId: 'purify', oilName: 'Purify', drops: 6 }
+    ],
+    totalDrops: 14,
+    bestTime: 'Limpieza profunda de estufas, hornos, tarjas y regaderas',
+    notes: 'Mezclar hasta formar una pasta cremosa. Aplicar con esponja, dejar reposar 10-15 minutos y retirar con paño húmedo.'
+  },
+  {
+    id: 'clean-glass-mirror',
+    name: 'Bruma Limpia Cristales & Espejos Extra Brillo',
+    category: 'cleaning',
+    categoryLabel: 'Cristales & Ventanas',
+    type: 'cleaning',
+    targetVibe: 'Espejos y ventanas relucientes sin marcas de agua ni vapores tóxicos',
+    container: 'Atomizador de vidrio 500ml',
+    baseIngredients: '1.5 tazas de agua destilada + 1/2 taza de vinagre blanco + 1 cda de alcohol al 70%',
+    ingredients: [
+      { oilId: 'lemon', oilName: 'Limón', drops: 10 },
+      { oilId: 'peppermint', oilName: 'Menta', drops: 5 }
+    ],
+    totalDrops: 15,
+    bestTime: 'Limpieza de espejos, canceles de baño y ventanas panorámicas',
+    notes: 'Rociar a 20 cm y secar con papel periódico o paño de microfibra seco. No deja residuos ni marcas empañadas.'
+  },
+  {
+    id: 'clean-mattress-carpet',
+    name: 'Polvo Desodorizante de Colchones & Tapetes',
+    category: 'cleaning',
+    categoryLabel: 'Textiles & Colchones',
+    type: 'cleaning',
+    targetVibe: 'Eliminar ácaros, humedad y neutralizar malos olores en camas y alfombras',
+    container: 'Frasco con tapa talquera o perforada 300g',
+    baseIngredients: '1 taza de bicarbonato de sodio puro',
+    ingredients: [
+      { oilId: 'purify', oilName: 'Purify', drops: 8 },
+      { oilId: 'eucalyptus', oilName: 'Eucalipto', drops: 6 },
+      { oilId: 'lavender', oilName: 'Lavanda', drops: 6 }
+    ],
+    totalDrops: 20,
+    bestTime: 'Mantenimiento quincenal de colchones y alfombras',
+    notes: 'Espolvorear uniformemente sobre el colchón desnudo. Dejar actuar de 1 a 2 horas para absorber humedad y olores, luego aspirar a fondo.'
+  },
+  {
+    id: 'clean-shoe-trash-spray',
+    name: 'Spray Purificador de Calzado & Botes de Basura',
+    category: 'cleaning',
+    categoryLabel: 'Cero Malos Olores',
+    type: 'cleaning',
+    targetVibe: 'Erradicar bacterias causantes del mal olor en tenis, calzado y áreas de basura',
+    container: 'Atomizador compacto de vidrio 120ml',
+    baseIngredients: '100ml de agua destilada + 20ml de alcohol al 70%',
+    ingredients: [
+      { oilId: 'tea-tree', oilName: 'Árbol de Té (Tea Tree)', drops: 8 },
+      { oilId: 'lemongrass', oilName: 'Limoncillo (Lemongrass)', drops: 6 },
+      { oilId: 'peppermint', oilName: 'Menta', drops: 4 }
+    ],
+    totalDrops: 18,
+    bestTime: 'Al llegar a casa o tras cada cambio de bolsa de basura',
+    notes: 'Rociar 2 disparos dentro del calzado deportivo tras hacer ejercicio, o en el fondo del bote de basura antes de poner la bolsa nueva.'
+  },
+
+  // ============================================================================
+  // FÓRMULAS CULINARIAS GOURMET & ESPECIAS dōTERRA (COOKING & SPICES)
+  // ============================================================================
+  {
+    id: 'culinary-tuscan-oil',
+    name: 'Aceite de Oliva Toscano Infusionado',
+    category: 'cooking',
+    categoryLabel: 'Cocina Mediterránea',
+    type: 'cooking',
+    targetVibe: 'Aceite de mesa aromático gourmet para pastas, pizzas, ensaladas y pan rústico',
+    container: 'Botella de vidrio oscuro para aceite 250ml',
+    baseIngredients: '250ml de Aceite de Oliva Extra Virgen de primera presión en frío',
+    ingredients: [
+      { oilId: 'basil', oilName: 'Albahaca (Basil)', drops: 2 },
+      { oilId: 'rosemary', oilName: 'Romero (Rosemary)', drops: 2 },
+      { oilId: 'oregano', oilName: 'Orégano', drops: 1, displayAmount: '1 gota (o toque de palillo)' }
+    ],
+    totalDrops: 5,
+    bestTime: 'Condimento gourmet diario en mesa o acabado de platillos',
+    notes: '¡Regla Culinaria dōTERRA!: 1 gota de aceite esencial puro equivale botánicamente a ~50 hojas de hierba seca. Dejar reposar 24 hrs en oscuridad antes del primer uso.'
+  },
+  {
+    id: 'culinary-citrus-marinade',
+    name: 'Marinada Cítrica Gourmet para Salmón & Aves',
+    category: 'cooking',
+    categoryLabel: 'Parrilla & Proteínas',
+    type: 'cooking',
+    targetVibe: 'Sabor fresco, herbal y especiado de alta cocina sin necesidad de picar hierbas',
+    container: 'Tazón hondo de vidrio',
+    baseIngredients: '1/3 taza de aceite de oliva + jugo de 1 limón verde + 1 diente de ajo picado + pizca de sal marina',
+    ingredients: [
+      { oilId: 'lemon', oilName: 'Limón', drops: 2 },
+      { oilId: 'rosemary', oilName: 'Romero', drops: 1 },
+      { oilId: 'black-pepper', oilName: 'Pimienta Negra', drops: 1 }
+    ],
+    totalDrops: 4,
+    bestTime: '15 minutos antes de cocinar salmón, pechuga de pollo o vegetales al grill',
+    notes: 'Barnizar la proteína 15 min antes de sellar en sartén o parrilla. El calor volatiliza los aromas creando una costra caramelizada deliciosa.'
+  },
+  {
+    id: 'culinary-golden-milk',
+    name: 'Leche Dorada Antiinflamatoria (Golden Milk)',
+    category: 'cooking',
+    categoryLabel: 'Bebidas Medicinales',
+    type: 'cooking',
+    targetVibe: 'Elixir nocturno reparador para articulaciones, inflamación digestiva y relajación',
+    container: 'Taza para tisana caliente',
+    baseIngredients: '1 taza de leche vegetal tibia (coco o almendra) + 1 cdita de miel de abeja + pizca de pimienta molida',
+    ingredients: [
+      { oilId: 'turmeric', oilName: 'Cúrcuma (Turmeric)', drops: 1 },
+      { oilId: 'ginger', oilName: 'Jengibre (Ginger)', drops: 1 },
+      { oilId: 'cinnamon-bark', oilName: 'Canela (Cinnamon Bark)', drops: 1, displayAmount: '1 toque con palillo de dientes' }
+    ],
+    totalDrops: 2,
+    isToothpickMethod: true,
+    bestTime: 'Noches antes de dormir o tardes frías',
+    notes: '⭐ Método del Palillo (Toothpick Method): Para la canela, sumerge la punta de un palillo de madera limpio en el gotero y revuélvelo en tu leche. ¡Una gota entera de Canela es demasiado picante para una sola taza!'
+  },
+  {
+    id: 'culinary-honey-vinaigrette',
+    name: 'Vinagreta Cítrica con Miel de Flores',
+    category: 'cooking',
+    categoryLabel: 'Ensaladas & Aderezos',
+    type: 'cooking',
+    targetVibe: 'Aderezo agridulce y vibrante para ensaladas con queso de cabra, espinacas y nueces',
+    container: 'Frasco de vidrio para aderezos 150ml',
+    baseIngredients: '4 cdas de aceite de oliva + 2 cdas de vinagre de manzana + 1 cda de miel cruda + sal rosa al gusto',
+    ingredients: [
+      { oilId: 'wild-orange', oilName: 'Naranja Silvestre', drops: 2 },
+      { oilId: 'lemon', oilName: 'Limón', drops: 2 },
+      { oilId: 'cardamom', oilName: 'Cardamomo', drops: 1, displayAmount: '1 toque de palillo (o 1 gota sutil)' }
+    ],
+    totalDrops: 4,
+    bestTime: 'Comidas y cenas para aderezar ensaladas frescas',
+    notes: 'Cerrar el frasco y agitar con fuerza para emulsionar. Los aceites cítricos se integran a la perfección con la miel y realzan el sabor de las hojas verdes.'
+  },
+  {
+    id: 'culinary-digestive-tisane',
+    name: 'Tisana Digestiva & Vientre Desinflamado',
+    category: 'cooking',
+    categoryLabel: 'Sobremesa & Digestión',
+    type: 'cooking',
+    targetVibe: 'Alivio instantáneo de pesadez estomacal, reflujo o exceso tras comidas copiosas',
+    container: 'Taza de té tibia',
+    baseIngredients: '1 taza de agua tibia (no hirviendo) + 1/2 cdita de miel de abeja',
+    ingredients: [
+      { oilId: 'peppermint', oilName: 'Menta', drops: 1 },
+      { oilId: 'lemon', oilName: 'Limón', drops: 1 },
+      { oilId: 'ginger', oilName: 'Jengibre', drops: 1, displayAmount: '1 toque de palillo' }
+    ],
+    totalDrops: 2,
+    isToothpickMethod: true,
+    bestTime: 'Inmediatamente después de comidas pesadas o copiosas',
+    notes: 'Disuelve primero las gotas en la cucharadita de miel antes de agregar el agua tibia para asegurar que los aceites se dispersen de manera uniforme.'
+  },
+
+  // ============================================================================
+  // FÓRMULAS DE BELLEZA, SKINCARE & CUIDADO PERSONAL (DIY BEAUTY & GLOW)
+  // ============================================================================
+  {
+    id: 'beauty-glow-serum',
+    name: 'Suero Facial Glow "Piel de Porcelana"',
+    category: 'beauty',
+    categoryLabel: 'Skincare Antiedad',
+    type: 'beauty',
+    targetVibe: 'Regeneración celular nocturna, atenuación de manchas y luminosidad radiante',
+    container: 'Frasco gotero de vidrio ámbar 30ml',
+    baseIngredients: '25ml de Aceite de Jojoba o Rosa Mosqueta + 5ml de Aceite Fraccionado de Coco',
+    ingredients: [
+      { oilId: 'frankincense', oilName: 'Incienso (Frankincense)', drops: 5 },
+      { oilId: 'lavender', oilName: 'Lavanda', drops: 4 },
+      { oilId: 'copaiba', oilName: 'Copaiba', drops: 4 },
+      { oilId: 'yarrow-pom', oilName: 'Yarrow|Pom', drops: 3 }
+    ],
+    totalDrops: 16,
+    bestTime: 'Todas las noches tras la limpieza facial',
+    notes: 'Aplicar 3-4 gotas en rostro y cuello limpio con suaves toquecitos ascendentes. Promueve la síntesis natural de colágeno y calma rojeces.'
+  },
+  {
+    id: 'beauty-hair-tonic',
+    name: 'Tónico Capilar Fortalecedor Anticaída',
+    category: 'beauty',
+    categoryLabel: 'Cuidado Capilar',
+    type: 'beauty',
+    targetVibe: 'Estimular microcirculación en el folículo, frenar caída y dar densidad capilar',
+    container: 'Atomizador de vidrio 120ml',
+    baseIngredients: '100ml de agua de rosas pura + 1 cda de gel de aloe vera puro',
+    ingredients: [
+      { oilId: 'rosemary', oilName: 'Romero (Rosemary)', drops: 8 },
+      { oilId: 'cedarwood', oilName: 'Cedro (Cedarwood)', drops: 6 },
+      { oilId: 'tea-tree', oilName: 'Árbol de Té (Tea Tree)', drops: 4 },
+      { oilId: 'peppermint', oilName: 'Menta', drops: 3 }
+    ],
+    totalDrops: 21,
+    bestTime: 'Diario tras lavar el cabello o por las noches',
+    notes: 'Agitar y pulverizar directamente en las raíces del cuero cabelludo. Masajear durante 2 minutos con las yemas para activar el riego sanguíneo. No necesita enjuague.'
+  },
+  {
+    id: 'beauty-coffee-scrub',
+    name: 'Exfoliante Corporal Café & Toronja Anticelulitis',
+    category: 'beauty',
+    categoryLabel: 'Cuerpo & Drenaje',
+    type: 'beauty',
+    targetVibe: 'Activar el drenaje linfático, alisar la piel de naranja y suavizar zonas ásperas',
+    container: 'Tarro de vidrio hermético 200g',
+    baseIngredients: '1/2 taza de café molido fresco + 1/4 taza de azúcar morena + 1/3 taza de Aceite Fraccionado de Coco',
+    ingredients: [
+      { oilId: 'grapefruit', oilName: 'Toronja (Grapefruit)', drops: 8 },
+      { oilId: 'cypress', oilName: 'Ciprés (Cypress)', drops: 6 }
+    ],
+    totalDrops: 14,
+    bestTime: '1 a 2 veces por semana en la ducha matutina',
+    notes: 'Frotar con movimientos circulares ascendentes en muslos, glúteos y abdomen. ¡Precaución!: La toronja es fotosensible; no exponerse al sol en las siguientes 12 horas.'
+  },
+  {
+    id: 'beauty-rose-mist',
+    name: 'Bruma Facial Hidratante & Calmante',
+    category: 'beauty',
+    categoryLabel: 'Hidratación & Calma',
+    type: 'beauty',
+    targetVibe: 'Refrescar cutis deshidratado, calmar irritaciones y sellar el maquillaje natural',
+    container: 'Atomizador de bruma fina 60ml',
+    baseIngredients: '50ml de agua de rosas pura + 1 cdita de glicerina vegetal pura',
+    ingredients: [
+      { oilId: 'lavender', oilName: 'Lavanda', drops: 3 },
+      { oilId: 'frankincense', oilName: 'Incienso', drops: 2 },
+      { oilId: 'geranium', oilName: 'Geranio', drops: 2 }
+    ],
+    totalDrops: 7,
+    bestTime: 'Durante el día frente a la pantalla o tras tomar el sol',
+    notes: 'Cerrar los ojos y rociar a 20 cm del rostro para un respiro instantáneo de frescura y equilibrio dérmico.'
+  },
+  {
+    id: 'beauty-eye-contour',
+    name: 'Roll-on Contorno de Ojos Anti-Bolsas & Ojeras',
+    category: 'beauty',
+    categoryLabel: 'Mirada Descansada',
+    type: 'beauty',
+    targetVibe: 'Drenar bolsas matutinas, iluminar el contorno y suavizar líneas de expresión',
+    container: 'Roll-on de vidrio con esfera de acero 10ml',
+    baseIngredients: '9ml de Aceite Fraccionado de Coco o Aceite de Semilla de Uva',
+    ingredients: [
+      { oilId: 'frankincense', oilName: 'Incienso', drops: 3 },
+      { oilId: 'lavender', oilName: 'Lavanda', drops: 2 },
+      { oilId: 'helichrysum', oilName: 'Helicriso (Helichrysum)', drops: 2 }
+    ],
+    totalDrops: 7,
+    bestTime: 'Mañana y noche antes de la crema facial',
+    notes: 'Deslizar la esfera fría con suavidad sobre el contorno del hueso orbital (alrededor de los ojos, nunca dentro del ojo). Atenúa la hinchazón y las ojeras visiblemente.'
   }
 ];
 

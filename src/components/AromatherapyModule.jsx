@@ -33,7 +33,8 @@ import {
   Activity,
   Compass,
   Layers,
-  Wind
+  Wind,
+  Utensils
 } from 'lucide-react';
 import {
   DOTERRA_CATALOG,
@@ -141,8 +142,26 @@ export default function AromatherapyModule({
       if (boticarioFilter === 'emotional' && oil.type !== 'emotional') return false;
       if (boticarioFilter === 'kids' && oil.type !== 'kids') return false;
       if (boticarioFilter === 'metapwr' && oil.type !== 'metapwr') return false;
-      if (boticarioFilter === 'diffuser_carrier' && !['carrier', 'diffuser', 'personal_care', 'wellness'].includes(oil.type)) return false;
-      if (!['all', 'owned', 'wishlist', 'singles', 'blends', 'touch', 'emotional', 'kids', 'metapwr', 'diffuser_carrier'].includes(boticarioFilter)) {
+      if (boticarioFilter === 'diffuser_carrier' && !['carrier', 'diffuser'].includes(oil.type)) return false;
+      if (boticarioFilter === 'home_cleaning') {
+        const isCleaningProduct = ['on-guard-cleaner', 'abode-multipurpose', 'abode-dish-soap', 'on-guard-laundry', 'on-guard-mist'].includes(oil.id) || oil.type === 'home_cleaning';
+        const isCleaningOil = ['purify', 'lemon', 'tea-tree', 'eucalyptus', 'on-guard'].includes(oil.id);
+        if (!isCleaningProduct && !isCleaningOil) return false;
+      }
+      if (boticarioFilter === 'beauty_skincare') {
+        const isBeautyProduct = ['salubelle-immortelle', 'yarrow-pom', 'verage-skin-care', 'on-guard-toothpaste', 'doterra-natural-deodorant', 'salon-hair-serum', 'deep-blue-rub'].includes(oil.id) || oil.category === 'beauty' || (oil.type === 'personal_care' && !['on-guard-cleaner', 'abode-multipurpose', 'abode-dish-soap', 'on-guard-laundry'].includes(oil.id));
+        const isBeautyOil = ['rose-touch', 'helichrysum', 'geranium', 'frankincense', 'copaiba', 'lavender', 'myrrh', 'sandalwood-hawaiian', 'jasmin-touch', 'neroli-touch'].includes(oil.id);
+        if (!isBeautyProduct && !isBeautyOil) return false;
+      }
+      if (boticarioFilter === 'culinary_spices') {
+        const culinaryIds = [
+          'oregano', 'rosemary', 'basil', 'thyme', 'cinnamon-bark', 'ginger',
+          'cardamom', 'clove', 'turmeric', 'black-pepper', 'pink-pepper',
+          'spearmint', 'marjoram', 'lime', 'lemon', 'wild-orange', 'grapefruit', 'tangerine', 'cilantro', 'fennel'
+        ];
+        if (!culinaryIds.includes(oil.id)) return false;
+      }
+      if (!['all', 'owned', 'wishlist', 'singles', 'blends', 'touch', 'emotional', 'kids', 'metapwr', 'diffuser_carrier', 'home_cleaning', 'beauty_skincare', 'culinary_spices'].includes(boticarioFilter)) {
         if (oil.category !== boticarioFilter) return false;
       }
 
@@ -456,7 +475,12 @@ export default function AromatherapyModule({
       });
 
       if (recipeFilter === 'can-make') return canMake;
-      if (recipeFilter !== 'all') return recipe.category === recipeFilter;
+      if (recipeFilter !== 'all') {
+        if (['diffuser', 'rollon', 'cleaning', 'cooking', 'beauty'].includes(recipeFilter)) {
+          return recipe.type === recipeFilter;
+        }
+        return recipe.category === recipeFilter;
+      }
       return true;
     });
   }, [allBlends, recipeFilter, mergedOils]);
@@ -799,6 +823,39 @@ export default function AromatherapyModule({
                 }`}
               >
                 MetaPWR & Bienestar
+              </button>
+
+              <button
+                onClick={() => setBoticarioFilter('home_cleaning')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
+                  boticarioFilter === 'home_cleaning'
+                    ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                🧹 Hogar & Limpieza
+              </button>
+
+              <button
+                onClick={() => setBoticarioFilter('culinary_spices')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
+                  boticarioFilter === 'culinary_spices'
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                🍳 Especias de Cocina
+              </button>
+
+              <button
+                onClick={() => setBoticarioFilter('beauty_skincare')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-colors shrink-0 cursor-pointer ${
+                  boticarioFilter === 'beauty_skincare'
+                    ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                ✨ Belleza & Skincare
               </button>
 
               <button
@@ -1583,7 +1640,7 @@ export default function AromatherapyModule({
         <div className="space-y-6 animate-fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             {/* Filter Buttons */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
               <button
                 onClick={() => setRecipeFilter('all')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer ${
@@ -1604,7 +1661,63 @@ export default function AromatherapyModule({
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Puedo Prepararlas Ahora</span>
+                <span>Puedo Prepararlas</span>
+              </button>
+
+              <button
+                onClick={() => setRecipeFilter('cleaning')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+                  recipeFilter === 'cleaning'
+                    ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                🧹 Limpieza Hogar
+              </button>
+
+              <button
+                onClick={() => setRecipeFilter('cooking')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 flex items-center gap-1 cursor-pointer ${
+                  recipeFilter === 'cooking'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                <Utensils className="w-3.5 h-3.5" />
+                <span>Cocina Gourmet</span>
+              </button>
+
+              <button
+                onClick={() => setRecipeFilter('beauty')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+                  recipeFilter === 'beauty'
+                    ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                ✨ Belleza & Skincare
+              </button>
+
+              <button
+                onClick={() => setRecipeFilter('diffuser')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+                  recipeFilter === 'diffuser'
+                    ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                💨 Difusores
+              </button>
+
+              <button
+                onClick={() => setRecipeFilter('rollon')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+                  recipeFilter === 'rollon'
+                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                    : 'bg-[#171a24] text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                💧 Roll-ons
               </button>
 
               <button
@@ -1651,43 +1764,89 @@ export default function AromatherapyModule({
                 return Array.from(ownedNames).some(owned => n.includes(owned) || owned.includes(n));
               });
 
+              const typeBadge = (() => {
+                if (recipe.type === 'cleaning') {
+                  return { label: '🧹 Limpieza Hogar', color: 'bg-teal-500/10 text-teal-300 border-teal-500/20' };
+                }
+                if (recipe.type === 'cooking') {
+                  return { label: '🍳 Cocina Gourmet', color: 'bg-amber-500/10 text-amber-300 border-amber-500/20' };
+                }
+                if (recipe.type === 'beauty') {
+                  return { label: '✨ Belleza & Skincare', color: 'bg-pink-500/10 text-pink-300 border-pink-500/20' };
+                }
+                if (recipe.type === 'rollon') {
+                  return { label: '💧 Roll-on 10ml', color: 'bg-rose-500/10 text-rose-300 border-rose-500/20' };
+                }
+                return { label: '💨 Difusor', color: 'bg-sky-500/10 text-sky-300 border-sky-500/20' };
+              })();
+
               return (
                 <div
                   key={recipe.id}
                   className={`rounded-2xl border p-5 flex flex-col justify-between transition-all bg-[#171a24] ${
                     canMakeAll
-                      ? 'border-[#e0a96d]/30 shadow-lg shadow-[#e0a96d]/5'
+                      ? 'border-[#e0a96d]/40 shadow-lg shadow-[#e0a96d]/5'
                       : 'border-slate-800 opacity-90'
                   }`}
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <div>
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#e0a96d]/10 text-[#e0a96d] border border-[#e0a96d]/20">
                           {recipe.categoryLabel || 'Sinergia'}
                         </span>
-                        <h3 className="text-base font-bold font-outfit text-slate-100 mt-1">
-                          {recipe.name}
-                        </h3>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${typeBadge.color}`}>
+                          {typeBadge.label}
+                        </span>
                       </div>
 
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
                         canMakeAll
                           ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                           : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
                       }`}>
-                        {canMakeAll ? '✓ Listo' : 'Faltan aceites'}
+                        {canMakeAll ? '✓ En Stock' : 'Faltan aceites'}
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-300 italic mb-4">
+                    <h3 className="text-base font-bold font-outfit text-slate-100 mt-1 mb-1">
+                      {recipe.name}
+                    </h3>
+
+                    <p className="text-xs text-slate-300 italic mb-3">
                       "{recipe.targetVibe}"
                     </p>
 
+                    {/* Container Badge */}
+                    {recipe.container && (
+                      <div className="mb-3 flex items-center gap-1.5 text-[11px] text-slate-400 bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-800/80">
+                        <span className="text-slate-500">Envase sugerido:</span>
+                        <span className="font-semibold text-slate-200">{recipe.container}</span>
+                      </div>
+                    )}
+
+                    {/* Base Non-Oil Ingredients */}
+                    {recipe.baseIngredients && (
+                      <div className="mb-3 p-2.5 rounded-xl bg-[#0b0c10] border border-slate-800/80 text-[11px]">
+                        <span className="text-[#e0a96d] font-bold block mb-0.5">Ingredientes Base:</span>
+                        <p className="text-slate-300 leading-relaxed font-sans">{recipe.baseIngredients}</p>
+                      </div>
+                    )}
+
+                    {/* Toothpick Method Alert for spices */}
+                    {recipe.isToothpickMethod && (
+                      <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 leading-tight">
+                        ⭐ <strong>Método del Palillo:</strong> Sumerge la punta de un palillo limpio para no saturar de picor el platillo.
+                      </div>
+                    )}
+
                     {/* Ingredients drop counts */}
-                    <div className="space-y-1.5 mb-4">
+                    <div className="space-y-1.5 mb-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                        Aceites Esenciales dōTERRA:
+                      </span>
                       {recipe.ingredients.map((ing, iIdx) => {
-                        const hasThis = ing.oilId && ownedIds.has(ing.oilId) || Array.from(ownedNames).some(owned => ing.oilName?.toLowerCase().includes(owned));
+                        const hasThis = (ing.oilId && ownedIds.has(ing.oilId)) || Array.from(ownedNames).some(owned => ing.oilName?.toLowerCase().includes(owned));
                         return (
                           <div
                             key={iIdx}
@@ -1699,18 +1858,26 @@ export default function AromatherapyModule({
                           >
                             <span className="font-semibold">{ing.oilName}</span>
                             <span className="font-extrabold text-[#e0a96d]">
-                              {ing.drops} gotas
+                              {ing.displayAmount || `${ing.drops} gotas`}
                             </span>
                           </div>
                         );
                       })}
                     </div>
+
+                    {/* Notes / Preparación */}
+                    {recipe.notes && (
+                      <div className="p-2.5 rounded-xl bg-slate-900/40 border border-slate-800/60 text-[11px] text-slate-400 leading-relaxed mb-3">
+                        <strong className="text-slate-300 block mb-0.5">Preparación & Modo de Uso:</strong>
+                        <p className="italic text-slate-300">{recipe.notes}</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Footer */}
                   <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-                    <span>Total: <strong>{recipe.totalDrops} gotas</strong></span>
-                    <span>{recipe.type === 'rollon' ? 'Roll-on 10ml' : 'Difusor'}</span>
+                    <span>Total Aceites: <strong>{recipe.totalDrops} gotas</strong></span>
+                    <span>{recipe.type === 'rollon' ? 'Roll-on' : recipe.type === 'cleaning' ? 'Spray / Pasta' : recipe.type === 'cooking' ? 'Gourmet' : recipe.type === 'beauty' ? 'Cosmético' : 'Difusor'}</span>
                   </div>
                 </div>
               );

@@ -64,6 +64,9 @@ export default function PriceComparatorModule({
   // Full item editing state
   const [editingItem, setEditingItem] = useState(null);
 
+  // Similar product prompt modal state
+  const [similarProductPrompt, setSimilarProductPrompt] = useState(null);
+
   // Handle Photo Upload with Multimodal AI Vision
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -96,14 +99,14 @@ export default function PriceComparatorModule({
 
   // Body scroll lock on modals open
   useEffect(() => {
-    if (addingStoreToItem || editingItem) {
+    if (addingStoreToItem || editingItem || similarProductPrompt) {
       const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => {
         document.body.style.overflow = prevOverflow;
       };
     }
-  }, [addingStoreToItem, editingItem]);
+  }, [addingStoreToItem, editingItem, similarProductPrompt]);
 
   const categories = ['All', 'Skincare', 'Dental', 'Higiene', 'Despensa', 'Limpieza', 'Otros'];
   const storesPreset = [
@@ -123,22 +126,89 @@ export default function PriceComparatorModule({
     "Liverpool"
   ];
 
+  const resetAddForm = () => {
+    setItemName('');
+    setItemNotes('');
+    setProductImage('');
+    setStorePrices([
+      { storeName: "Costco", price: '', quantity: '' },
+      { storeName: "Sam's Club", price: '', quantity: '' }
+    ]);
+    setIsAddingItem(false);
+  };
+
+  const executeSaveNewItem = (trimmedName, category, validStores, verdict, notes) => {
+    const newItem = {
+      id: Date.now().toString(),
+      name: trimmedName,
+      category: category || 'Skincare',
+      stores: validStores,
+      preferredStore: validStores[0]?.storeName || '',
+      repurchaseVerdict: verdict || 'yes',
+      notes: notes || ''
+    };
+
+    const sanitized = sanitizeHouseholdItem(newItem);
+    if (!sanitized) return;
+
+    setHouseholdItems(prev => [...(Array.isArray(prev) ? prev : []), sanitized]);
+    resetAddForm();
+    setSimilarProductPrompt(null);
+    showToast('success', 'Insumo Registrado', `Se guardó "${trimmedName}" en el comparador.`);
+  };
+
+  const handleMergeAndCompareWithExisting = (targetItem, newStores = [], newNotes = '') => {
+    if (!targetItem) return;
+
+    setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === targetItem.id) {
+        const existingStores = Array.isArray(item.stores) ? item.stores : [];
+        const updatedStores = [...existingStores];
+
+        newStores.forEach(ns => {
+          const existingIdx = updatedStores.findIndex(
+            s => s.storeName?.toLowerCase().trim() === ns.storeName?.toLowerCase().trim()
+          );
+          if (existingIdx >= 0) {
+            updatedStores[existingIdx] = ns;
+          } else {
+            updatedStores.push(ns);
+          }
+        });
+
+        let preferred = item.preferredStore;
+        if (!preferred && updatedStores.length > 0) {
+          preferred = updatedStores[0].storeName;
+        }
+
+        let combinedNotes = item.notes || '';
+        if (newNotes && newNotes.trim() && !combinedNotes.includes(newNotes.trim())) {
+          combinedNotes = combinedNotes ? `${combinedNotes} | ${newNotes.trim()}` : newNotes.trim();
+        }
+
+        return {
+          ...item,
+          stores: updatedStores,
+          preferredStore: preferred,
+          notes: combinedNotes
+        };
+      }
+      return item;
+    }));
+
+    resetAddForm();
+    setSimilarProductPrompt(null);
+    showToast(
+      'success',
+      'Comparativa Creada',
+      `Se añadieron los precios a "${targetItem.name}". ¡Ya puedes comparar entre tiendas!`
+    );
+  };
+
   const handleAddItem = (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     const trimmedName = itemName.trim();
     if (!trimmedName) return;
-
-    // Scan for duplicate/similar items before adding manually
-    const similarProduct = findSimilarity(trimmedName, householdItems, 'name');
-    if (similarProduct) {
-      const proceed = window.confirm(
-        `⚠️ Detectamos un producto similar en tu lista:\n\n` +
-        `• Ya registrado: "${similarProduct.name}" (${similarProduct.category})\n` +
-        `• Nuevo a agregar: "${trimmedName}"\n\n` +
-        `¿Estás seguro de que deseas agregarlo de todos modos como un nuevo producto?`
-      );
-      if (!proceed) return;
-    }
 
     // Build stores list (only those with values)
     const validStores = (storePrices || [])
@@ -155,29 +225,21 @@ export default function PriceComparatorModule({
       })
       .filter(s => s.price > 0 && s.quantity > 0);
 
-    const newItem = {
-      id: Date.now().toString(),
-      name: trimmedName,
-      category: itemCategory || 'Skincare',
-      stores: validStores,
-      preferredStore: validStores[0]?.storeName || '',
-      repurchaseVerdict: itemVerdict || 'yes',
-      notes: itemNotes || ''
-    };
+    // Scan for duplicate/similar items before adding manually
+    const similarProduct = findSimilarity(trimmedName, householdItems, 'name');
+    if (similarProduct) {
+      setSimilarProductPrompt({
+        similarProduct,
+        newName: trimmedName,
+        newCategory: itemCategory || 'Skincare',
+        validStores,
+        newNotes: itemNotes || '',
+        newVerdict: itemVerdict || 'yes'
+      });
+      return;
+    }
 
-    const sanitized = sanitizeHouseholdItem(newItem);
-    if (!sanitized) return;
-
-    setHouseholdItems(prev => [...(Array.isArray(prev) ? prev : []), sanitized]);
-    setItemName('');
-    setItemNotes('');
-    setProductImage('');
-    setStorePrices([
-      { storeName: "Costco", price: '', quantity: '' },
-      { storeName: "Sam's Club", price: '', quantity: '' }
-    ]);
-    setIsAddingItem(false);
-    showToast('success', 'Insumo Registrado', `Se guardó "${trimmedName}" en el comparador.`);
+    executeSaveNewItem(trimmedName, itemCategory, validStores, itemVerdict, itemNotes);
   };
 
   const handleDeleteItem = (id, name) => {
@@ -599,15 +661,68 @@ export default function PriceComparatorModule({
               />
               {itemName.trim().length >= 3 && (() => {
                 const sim = findSimilarity(itemName.trim(), householdItems, 'name');
-                if (sim) {
-                  return (
-                    <div className="mt-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-1.5 text-[11px] text-amber-300">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                      <span>Probablemente similar a <strong className="text-slate-100 font-bold">"{sim.name}"</strong> ({sim.category}).</span>
+                if (!sim) return null;
+
+                return (
+                  <div className="mt-2 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2.5 text-xs animate-fade-in shadow-inner">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>Producto similar detectado en tu comparador</span>
+                      </div>
+                      <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        {sim.category}
+                      </span>
                     </div>
-                  );
-                }
-                return null;
+
+                    <div className="bg-[#0b0c10]/70 p-2.5 rounded-lg border border-slate-800 text-slate-300">
+                      <div className="font-bold text-slate-100 text-sm">{sim.name}</div>
+                      <div className="text-[11px] text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
+                        <span className="font-semibold text-slate-400">Tiendas registradas:</span>
+                        {Array.isArray(sim.stores) && sim.stores.length > 0 ? (
+                          sim.stores.map((s, idx) => (
+                            <span key={idx} className="font-medium text-slate-200 bg-slate-800/80 px-2 py-0.5 rounded text-[10px] border border-slate-700/60">
+                              {s.storeName}: <strong>${s.price}</strong>
+                            </span>
+                          ))
+                        ) : (
+                          <span className="italic text-slate-500">Sin precios registrados aún</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const valid = (storePrices || [])
+                            .filter(s => s && s.storeName && s.price && s.quantity)
+                            .map(s => ({
+                              storeName: String(s.storeName).trim() || 'Tienda',
+                              price: safeNumber(s.price, 0),
+                              quantity: safeNumber(s.quantity, 1),
+                              unitPrice: safeNumber(s.quantity, 1) > 0 ? safeNumber(s.price, 0) / safeNumber(s.quantity, 1) : 0
+                            }))
+                            .filter(s => s.price > 0 && s.quantity > 0);
+
+                          handleMergeAndCompareWithExisting(sim, valid, itemNotes);
+                        }}
+                        className="btn-rose-gold text-xs font-bold py-2 px-3.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md"
+                      >
+                        <ArrowUpDown className="w-3.5 h-3.5" />
+                        <span>⚖️ Comparar con este producto (en vez de crear nuevo)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(sim)}
+                        className="text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer border border-slate-700"
+                      >
+                        Ver / Editar ficha existente
+                      </button>
+                    </div>
+                  </div>
+                );
               })()}
             </div>
             <div>
@@ -1295,6 +1410,147 @@ export default function PriceComparatorModule({
               </button>
             </div>
           </form>
+        </div>,
+        document.body
+      )}
+
+      {/* Similar Product Confirmation / Comparison Prompt Modal */}
+      {similarProductPrompt && createPortal(
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
+          <div className="bg-[#171a24] border border-[#e0a96d]/40 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-scale-up my-auto">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <ArrowUpDown className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-100 font-outfit">
+                    ¿Deseas comparar con un producto similar?
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Detectamos un insumo con nombre muy similar en tu lista. Te sugerimos comparar precios en el mismo producto para no duplicarlo.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSimilarProductPrompt(null)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                aria-label="Cerrar modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Comparison Cards Side-by-Side */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Existing Product */}
+              <div className="p-3.5 rounded-xl bg-[#0b0c10] border border-amber-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                    Ya Registrado 🏠
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {similarProductPrompt.similarProduct.category}
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-100 truncate" title={similarProductPrompt.similarProduct.name}>
+                  {similarProductPrompt.similarProduct.name}
+                </h4>
+
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] font-semibold text-slate-400 block">Precios actuales:</span>
+                  {Array.isArray(similarProductPrompt.similarProduct.stores) && similarProductPrompt.similarProduct.stores.length > 0 ? (
+                    similarProductPrompt.similarProduct.stores.map((s, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded bg-slate-900 border border-slate-800">
+                        <span className="text-slate-300 font-medium truncate">{s.storeName}</span>
+                        <span className="font-bold text-[#e0a96d] shrink-0 ml-1">
+                          ${s.price} {s.quantity > 1 ? `(${s.quantity} u)` : ''}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[11px] text-slate-500 italic">Sin precios registrados</p>
+                  )}
+                </div>
+              </div>
+
+              {/* New Product/Store being added */}
+              <div className="p-3.5 rounded-xl bg-[#0b0c10] border border-[#e0a96d]/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase text-[#e0a96d] bg-[#e0a96d]/10 px-2 py-0.5 rounded border border-[#e0a96d]/20">
+                    Nuevo que intentas guardar ✨
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {similarProductPrompt.newCategory}
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-100 truncate" title={similarProductPrompt.newName}>
+                  {similarProductPrompt.newName}
+                </h4>
+
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] font-semibold text-slate-400 block">Nuevos precios a ingresar:</span>
+                  {Array.isArray(similarProductPrompt.validStores) && similarProductPrompt.validStores.length > 0 ? (
+                    similarProductPrompt.validStores.map((s, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded bg-slate-900 border border-slate-800">
+                        <span className="text-slate-300 font-medium truncate">{s.storeName}</span>
+                        <span className="font-bold text-emerald-400 shrink-0 ml-1">
+                          ${s.price} {s.quantity > 1 ? `(${s.quantity} u)` : ''}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[11px] text-slate-500 italic">No capturaste tiendas aún</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={() => handleMergeAndCompareWithExisting(
+                  similarProductPrompt.similarProduct,
+                  similarProductPrompt.validStores,
+                  similarProductPrompt.newNotes
+                )}
+                className="btn-rose-gold w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all"
+              >
+                <ArrowUpDown className="w-4 h-4" />
+                <span>⚖️ Comparar con "{similarProductPrompt.similarProduct.name}" (Recomendado)</span>
+              </button>
+              <p className="text-[10px] text-center text-slate-400">
+                Añadirá la nueva tienda al producto existente para que veas cuál sale mejor por unidad y evites tener duplicados.
+              </p>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => executeSaveNewItem(
+                    similarProductPrompt.newName,
+                    similarProductPrompt.newCategory,
+                    similarProductPrompt.validStores,
+                    similarProductPrompt.newVerdict,
+                    similarProductPrompt.newNotes
+                  )}
+                  className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 text-slate-400" />
+                  <span>Guardar como nuevo producto</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSimilarProductPrompt(null)}
+                  className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl font-semibold text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all cursor-pointer border border-transparent"
+                >
+                  Volver a editar formulario
+                </button>
+              </div>
+            </div>
+          </div>
         </div>,
         document.body
       )}
