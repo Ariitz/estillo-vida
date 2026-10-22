@@ -119,6 +119,20 @@ const initialHousehold = [
     preferredStore: 'Tiendas 3B',
     repurchaseVerdict: 'yes',
     notes: 'Limpieza dental profunda al mejor precio.'
+  },
+  {
+    id: 'h-4',
+    name: 'Jamón',
+    category: 'Despensa',
+    stores: [
+      { storeName: 'Walmart', variety: 'Pechuga de Pavo San Rafael', price: 82.50, quantity: 250, unitPrice: 82.50 / 250 },
+      { storeName: 'Costco', variety: 'Pechuga de Pavo San Rafael', price: 260.00, quantity: 1000, unitPrice: 260.00 / 1000 },
+      { storeName: 'Bodega Aurrera', variety: 'FUD Virginia de Pavo', price: 54.00, quantity: 250, unitPrice: 54.00 / 250 },
+      { storeName: 'Chedraui', variety: 'Pierna Peñaranda Selecto', price: 115.00, quantity: 200, unitPrice: 115.00 / 200 }
+    ],
+    preferredStore: 'Costco',
+    repurchaseVerdict: 'yes',
+    notes: 'San Rafael para diario, Peñaranda para botanas especiales.'
   }
 ];
 

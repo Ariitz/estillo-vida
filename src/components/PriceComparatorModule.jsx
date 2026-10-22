@@ -24,11 +24,37 @@ import {
   ShoppingBag,
   Pencil,
   Store,
-  AlertTriangle
+  AlertTriangle,
+  Layers,
+  Tag
 } from 'lucide-react';
 import { compressImage, analyzeProductImage } from '../utils/geminiService';
 import { findSimilarity } from '../utils/similarity';
 import { safeNumber, sanitizeHouseholdItem, sanitizeHouseholdList } from '../utils/sanitizers';
+
+/**
+ * Automatically derives a suggested subproduct / variety name when comparing
+ * an incoming specific product name with an existing broader main product.
+ * Example: newName: "Jamón de Pavo San Rafael", mainName: "Jamón" -> "Pavo San Rafael"
+ */
+export const deriveVarietySuggestion = (newName = '', mainName = '') => {
+  if (!newName || !mainName) return '';
+  const cleanNew = String(newName).trim();
+  const cleanMain = String(mainName).trim();
+  if (!cleanNew || !cleanMain) return '';
+  if (cleanNew.toLowerCase() === cleanMain.toLowerCase()) return '';
+
+  const escapedMain = cleanMain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`\\b${escapedMain}\\b`, 'i');
+  let remaining = cleanNew.replace(regex, '').trim();
+
+  // Strip connector punctuation or common prepositions
+  remaining = remaining.replace(/^[\s\-_/:\,]+/, '');
+  remaining = remaining.replace(/^(de\s+|del\s+|con\s+|en\s+|para\s+)/i, '');
+  remaining = remaining.replace(/^[\s\-_/:\,]+/, '').trim();
+
+  return remaining || cleanNew;
+};
 
 export default function PriceComparatorModule({
   householdItems = [],
@@ -39,6 +65,9 @@ export default function PriceComparatorModule({
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   
+  // Selected subproduct / variety filter per product card: { [itemId]: 'ALL' | varietyName }
+  const [selectedVarieties, setSelectedVarieties] = useState({});
+
   // Add item form state
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [itemName, setItemName] = useState('');
@@ -49,15 +78,16 @@ export default function PriceComparatorModule({
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
   const fileInputRef = useRef(null);
   
-  // Store options in form
+  // Store options in form with variety support
   const [storePrices, setStorePrices] = useState([
-    { storeName: "Costco", price: '', quantity: '' },
-    { storeName: "Sam's Club", price: '', quantity: '' }
+    { storeName: "Costco", variety: '', price: '', quantity: '' },
+    { storeName: "Sam's Club", variety: '', price: '', quantity: '' }
   ]);
   
   // Quick Add store modal state
   const [addingStoreToItem, setAddingStoreToItem] = useState(null);
   const [newStoreName, setNewStoreName] = useState('Costco');
+  const [newStoreVariety, setNewStoreVariety] = useState('');
   const [newStorePrice, setNewStorePrice] = useState('');
   const [newStoreQty, setNewStoreQty] = useState('');
 
@@ -84,7 +114,12 @@ export default function PriceComparatorModule({
       if (parsed.category) setItemCategory(parsed.category);
       if (parsed.notes) setItemNotes(parsed.notes);
       if (Array.isArray(parsed.stores) && parsed.stores.length > 0) {
-        setStorePrices(parsed.stores);
+        setStorePrices(parsed.stores.map(s => ({
+          storeName: s.storeName || '',
+          variety: s.variety || s.subproduct || s.brand || '',
+          price: s.price || '',
+          quantity: s.quantity || ''
+        })));
       }
 
       showToast('success', '¡Producto Identificado!', `Se detectó "${parsed.name}" y se autollenaron los datos.`);
@@ -131,8 +166,8 @@ export default function PriceComparatorModule({
     setItemNotes('');
     setProductImage('');
     setStorePrices([
-      { storeName: "Costco", price: '', quantity: '' },
-      { storeName: "Sam's Club", price: '', quantity: '' }
+      { storeName: "Costco", variety: '', price: '', quantity: '' },
+      { storeName: "Sam's Club", variety: '', price: '', quantity: '' }
     ]);
     setIsAddingItem(false);
   };
@@ -157,7 +192,7 @@ export default function PriceComparatorModule({
     showToast('success', 'Insumo Registrado', `Se guardó "${trimmedName}" en el comparador.`);
   };
 
-  const handleMergeAndCompareWithExisting = (targetItem, newStores = [], newNotes = '') => {
+  const handleMergeAndCompareWithExisting = (targetItem, newStores = [], newNotes = '', asVarietyName = '') => {
     if (!targetItem) return;
 
     setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
@@ -166,13 +201,28 @@ export default function PriceComparatorModule({
         const updatedStores = [...existingStores];
 
         newStores.forEach(ns => {
+          const varietyVal = String(ns.variety || asVarietyName || '').trim();
+          const targetStoreName = String(ns.storeName || '').trim() || 'Tienda';
+          const p = safeNumber(ns.price, 0);
+          const q = safeNumber(ns.quantity, 1);
+          const u = q > 0 ? p / q : 0;
+
+          const preparedStore = {
+            storeName: targetStoreName,
+            variety: varietyVal,
+            price: p,
+            quantity: q,
+            unitPrice: u
+          };
+
           const existingIdx = updatedStores.findIndex(
-            s => s.storeName?.toLowerCase().trim() === ns.storeName?.toLowerCase().trim()
+            s => (s.storeName?.toLowerCase().trim() === targetStoreName.toLowerCase()) &&
+                 ((s.variety || '').toLowerCase().trim() === varietyVal.toLowerCase())
           );
           if (existingIdx >= 0) {
-            updatedStores[existingIdx] = ns;
+            updatedStores[existingIdx] = preparedStore;
           } else {
-            updatedStores.push(ns);
+            updatedStores.push(preparedStore);
           }
         });
 
@@ -186,9 +236,15 @@ export default function PriceComparatorModule({
           combinedNotes = combinedNotes ? `${combinedNotes} | ${newNotes.trim()}` : newNotes.trim();
         }
 
+        const updatedSubproducts = Array.from(new Set([
+          ...(Array.isArray(item.subproducts) ? item.subproducts : []),
+          ...updatedStores.map(s => s.variety).filter(Boolean)
+        ]));
+
         return {
           ...item,
           stores: updatedStores,
+          subproducts: updatedSubproducts,
           preferredStore: preferred,
           notes: combinedNotes
         };
@@ -198,11 +254,10 @@ export default function PriceComparatorModule({
 
     resetAddForm();
     setSimilarProductPrompt(null);
-    showToast(
-      'success',
-      'Comparativa Creada',
-      `Se añadieron los precios a "${targetItem.name}". ¡Ya puedes comparar entre tiendas!`
-    );
+    const msg = asVarietyName
+      ? `Se guardó "${asVarietyName}" dentro de "${targetItem.name}". ¡Evitaste duplicar productos!`
+      : `Se añadieron los precios a "${targetItem.name}". ¡Ya puedes comparar entre tiendas!`;
+    showToast('success', asVarietyName ? 'Subproducto Registrado' : 'Comparativa Creada', msg);
   };
 
   const handleAddItem = (e) => {
@@ -218,6 +273,7 @@ export default function PriceComparatorModule({
         const q = safeNumber(s.quantity, 1);
         return {
           storeName: String(s.storeName).trim() || 'Tienda',
+          variety: String(s.variety || '').trim(),
           price: p,
           quantity: q,
           unitPrice: q > 0 ? p / q : 0
@@ -228,9 +284,11 @@ export default function PriceComparatorModule({
     // Scan for duplicate/similar items before adding manually
     const similarProduct = findSimilarity(trimmedName, householdItems, 'name');
     if (similarProduct) {
+      const suggestedVariety = deriveVarietySuggestion(trimmedName, similarProduct.name);
       setSimilarProductPrompt({
         similarProduct,
         newName: trimmedName,
+        suggestedVariety,
         newCategory: itemCategory || 'Skincare',
         validStores,
         newNotes: itemNotes || '',
@@ -263,11 +321,12 @@ export default function PriceComparatorModule({
       stores: currentStores.length > 0
         ? currentStores.map(s => ({
             storeName: s.storeName || '',
+            variety: s.variety || '',
             price: s.price !== undefined && s.price !== null ? s.price : '',
             quantity: s.quantity !== undefined && s.quantity !== null ? s.quantity : '',
             unitPrice: s.unitPrice || 0
           }))
-        : [{ storeName: 'Costco', price: '', quantity: '' }]
+        : [{ storeName: 'Costco', variety: '', price: '', quantity: '' }]
     });
   };
 
@@ -289,6 +348,7 @@ export default function PriceComparatorModule({
         const q = safeNumber(s.quantity, 1);
         return {
           storeName: String(s.storeName).trim() || 'Tienda',
+          variety: String(s.variety || '').trim(),
           price: p,
           quantity: q,
           unitPrice: q > 0 ? p / q : 0
@@ -351,12 +411,14 @@ export default function PriceComparatorModule({
     if (!newStorePrice || !newStoreQty || !addingStoreToItem) return;
 
     const trimmedStore = String(newStoreName || '').trim() || 'Tienda';
+    const trimmedVariety = String(newStoreVariety || '').trim();
     const p = safeNumber(newStorePrice, 0);
     const q = safeNumber(newStoreQty, 1);
     if (p <= 0 || q <= 0) return;
 
     const newStoreObj = {
       storeName: trimmedStore,
+      variety: trimmedVariety,
       price: p,
       quantity: q,
       unitPrice: p / q
@@ -365,46 +427,60 @@ export default function PriceComparatorModule({
     setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
       if (item && item.id === addingStoreToItem.id) {
         const currentStores = (Array.isArray(item.stores) ? item.stores : []).filter(s => s && typeof s === 'object');
-        // If store already exists, overwrite it. Else add it.
-        const filteredStores = currentStores.filter(s => s.storeName !== trimmedStore);
+        // If same store AND variety already exists, overwrite it. Else add it.
+        const filteredStores = currentStores.filter(
+          s => !(s.storeName?.toLowerCase().trim() === trimmedStore.toLowerCase() &&
+                 (s.variety || '').toLowerCase().trim() === trimmedVariety.toLowerCase())
+        );
         const updatedStores = [...filteredStores, newStoreObj];
+        const updatedSubproducts = Array.from(new Set([
+          ...(Array.isArray(item.subproducts) ? item.subproducts : []),
+          ...updatedStores.map(s => s.variety).filter(Boolean)
+        ]));
+
         return {
           ...item,
           stores: updatedStores,
-          // Update preferredStore if empty
+          subproducts: updatedSubproducts,
           preferredStore: item.preferredStore || trimmedStore
         };
       }
       return item;
     }));
 
-    showToast('success', 'Precio Agregado', `Se añadió costo para ${trimmedStore}`);
+    showToast('success', 'Precio Agregado', `Se añadió costo para ${trimmedStore}${trimmedVariety ? ` (${trimmedVariety})` : ''}`);
     setNewStorePrice('');
     setNewStoreQty('');
+    setNewStoreVariety('');
     setAddingStoreToItem(null);
   };
 
-  const removeStoreFromItem = (itemId, storeName) => {
-    if (!window.confirm(`¿Estás seguro de que deseas eliminar la tienda "${storeName}" de este producto?`)) {
+  const removeStoreFromItem = (itemId, storeName, variety = '') => {
+    const label = variety ? `${storeName} (${variety})` : storeName;
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar "${label}" de este producto?`)) {
       return;
     }
     setHouseholdItems(prev => (Array.isArray(prev) ? prev : []).map(item => {
       if (item && item.id === itemId) {
         const currentStores = (Array.isArray(item.stores) ? item.stores : []).filter(s => s && typeof s === 'object');
-        const updatedStores = currentStores.filter(s => s.storeName !== storeName);
+        const updatedStores = currentStores.filter(
+          s => !(s.storeName === storeName && (s.variety || '') === (variety || ''))
+        );
         let newPref = item.preferredStore;
-        if (newPref === storeName) {
+        if (newPref === storeName && !updatedStores.some(s => s.storeName === storeName)) {
           newPref = updatedStores[0]?.storeName || '';
         }
+        const updatedSubproducts = Array.from(new Set(updatedStores.map(s => s.variety).filter(Boolean)));
         return {
           ...item,
           stores: updatedStores,
+          subproducts: updatedSubproducts,
           preferredStore: newPref
         };
       }
       return item;
     }));
-    showToast('info', 'Precio Removido', `Se quitó la tienda ${storeName}`);
+    showToast('info', 'Precio Removido', `Se quitó ${label}`);
   };
 
   const handleUpdateNotes = (itemId, notes) => {
@@ -662,6 +738,7 @@ export default function PriceComparatorModule({
               {itemName.trim().length >= 3 && (() => {
                 const sim = findSimilarity(itemName.trim(), householdItems, 'name');
                 if (!sim) return null;
+                const suggestedSub = deriveVarietySuggestion(itemName.trim(), sim.name);
 
                 return (
                   <div className="mt-2 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2.5 text-xs animate-fade-in shadow-inner">
@@ -677,12 +754,22 @@ export default function PriceComparatorModule({
 
                     <div className="bg-[#0b0c10]/70 p-2.5 rounded-lg border border-slate-800 text-slate-300">
                       <div className="font-bold text-slate-100 text-sm">{sim.name}</div>
+                      {Array.isArray(sim.subproducts) && sim.subproducts.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          <span className="text-[10px] text-slate-400 font-semibold">Subproductos actuales:</span>
+                          {sim.subproducts.map((sp, sIdx) => (
+                            <span key={sIdx} className="text-[10px] bg-[#e0a96d]/15 text-[#e0a96d] px-1.5 py-0.5 rounded border border-[#e0a96d]/25">
+                              {sp}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <div className="text-[11px] text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
                         <span className="font-semibold text-slate-400">Tiendas registradas:</span>
                         {Array.isArray(sim.stores) && sim.stores.length > 0 ? (
                           sim.stores.map((s, idx) => (
                             <span key={idx} className="font-medium text-slate-200 bg-slate-800/80 px-2 py-0.5 rounded text-[10px] border border-slate-700/60">
-                              {s.storeName}: <strong>${s.price}</strong>
+                              {s.storeName}{s.variety ? ` (${s.variety})` : ''}: <strong>${s.price}</strong>
                             </span>
                           ))
                         ) : (
@@ -692,6 +779,30 @@ export default function PriceComparatorModule({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 pt-1">
+                      {suggestedSub && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const valid = (storePrices || [])
+                              .filter(s => s && s.storeName && s.price && s.quantity)
+                              .map(s => ({
+                                storeName: String(s.storeName).trim() || 'Tienda',
+                                variety: s.variety || suggestedSub,
+                                price: safeNumber(s.price, 0),
+                                quantity: safeNumber(s.quantity, 1),
+                                unitPrice: safeNumber(s.quantity, 1) > 0 ? safeNumber(s.price, 0) / safeNumber(s.quantity, 1) : 0
+                              }))
+                              .filter(s => s.price > 0 && s.quantity > 0);
+
+                            handleMergeAndCompareWithExisting(sim, valid, itemNotes, suggestedSub);
+                          }}
+                          className="btn-rose-gold text-xs font-bold py-2 px-3.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md"
+                        >
+                          <Tag className="w-3.5 h-3.5" />
+                          <span>🏷️ Guardar como subproducto "{suggestedSub}" en "{sim.name}" (Recomendado)</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => {
@@ -699,6 +810,7 @@ export default function PriceComparatorModule({
                             .filter(s => s && s.storeName && s.price && s.quantity)
                             .map(s => ({
                               storeName: String(s.storeName).trim() || 'Tienda',
+                              variety: s.variety || '',
                               price: safeNumber(s.price, 0),
                               quantity: safeNumber(s.quantity, 1),
                               unitPrice: safeNumber(s.quantity, 1) > 0 ? safeNumber(s.price, 0) / safeNumber(s.quantity, 1) : 0
@@ -707,16 +819,16 @@ export default function PriceComparatorModule({
 
                           handleMergeAndCompareWithExisting(sim, valid, itemNotes);
                         }}
-                        className="btn-rose-gold text-xs font-bold py-2 px-3.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md"
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold py-2 px-3.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md"
                       >
-                        <ArrowUpDown className="w-3.5 h-3.5" />
-                        <span>⚖️ Comparar con este producto (en vez de crear nuevo)</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 text-[#e0a96d]" />
+                        <span>⚖️ Comparar directamente en "{sim.name}"</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(sim)}
-                        className="text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer border border-slate-700"
+                        className="text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer border border-slate-800"
                       >
                         Ver / Editar ficha existente
                       </button>
@@ -754,10 +866,10 @@ export default function PriceComparatorModule({
           </div>
 
           <div className="space-y-3">
-            <label className="block text-xs font-semibold text-slate-400">Precios por Establecimiento (opcional al inicio)</label>
+            <label className="block text-xs font-semibold text-slate-400">Precios por Establecimiento y Subproducto (opcional al inicio)</label>
             {storePrices.map((sp, idx) => (
               <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-[#0b0c10] p-3 rounded-lg border border-slate-800">
-                <div className="sm:col-span-5 flex flex-col gap-1">
+                <div className="sm:col-span-4 flex flex-col gap-1">
                   <span className="text-[10px] text-slate-400 font-semibold">Tienda</span>
                   <input
                     type="text"
@@ -773,6 +885,20 @@ export default function PriceComparatorModule({
                   />
                 </div>
                 <div className="sm:col-span-3 flex flex-col gap-1">
+                  <span className="text-[10px] text-slate-400 font-semibold">Subproducto / Tipo (opcional)</span>
+                  <input
+                    type="text"
+                    placeholder="Ej. Pavo San Rafael, FUD..."
+                    value={sp.variety || ''}
+                    onChange={(e) => {
+                      const updated = [...storePrices];
+                      updated[idx].variety = e.target.value;
+                      setStorePrices(updated);
+                    }}
+                    className="bg-[#171a24] border border-[#e0a96d]/10 rounded py-1 px-2 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                  />
+                </div>
+                <div className="sm:col-span-2 flex flex-col gap-1">
                   <span className="text-[10px] text-slate-400 font-semibold">Precio Total ($)</span>
                   <input
                     type="number"
@@ -787,8 +913,8 @@ export default function PriceComparatorModule({
                     className="bg-[#171a24] border border-[#e0a96d]/10 rounded py-1 px-2 text-slate-100 text-xs focus:outline-none"
                   />
                 </div>
-                <div className="sm:col-span-3 flex flex-col gap-1">
-                  <span className="text-[10px] text-slate-400 font-semibold">Cantidad (Uds/Rollos/Grs)</span>
+                <div className="sm:col-span-2 flex flex-col gap-1">
+                  <span className="text-[10px] text-slate-400 font-semibold">Cantidad (Uds/Kg/etc)</span>
                   <input
                     type="number"
                     step="0.1"
@@ -818,11 +944,11 @@ export default function PriceComparatorModule({
             ))}
             <button
               type="button"
-              onClick={() => setStorePrices([...storePrices, { storeName: "Costco", price: '', quantity: '' }])}
+              onClick={() => setStorePrices([...storePrices, { storeName: "Costco", variety: '', price: '', quantity: '' }])}
               className="text-[10px] text-[#e0a96d] hover:text-[#f5d4af] font-bold flex items-center gap-1 cursor-pointer transition-colors"
             >
               <PlusCircle className="w-3.5 h-3.5" />
-              <span>Añadir otra tienda</span>
+              <span>Añadir otra tienda / variedad</span>
             </button>
           </div>
 
@@ -864,16 +990,34 @@ export default function PriceComparatorModule({
           </div>
         ) : (
           filteredItems.map(item => {
-            const cheapest = getCheapestStore(item.stores);
+            const itemVarieties = Array.from(new Set((item.stores || []).map(s => s.variety?.trim()).filter(Boolean)));
+            const currentVariety = selectedVarieties[item.id] || 'ALL';
+            
+            const visibleStores = (item.stores || []).filter(s => {
+              if (!s || safeNumber(s.price, 0) <= 0 || safeNumber(s.quantity, 0) <= 0) return false;
+              if (currentVariety === 'ALL') return true;
+              return (s.variety || '').toLowerCase().trim() === currentVariety.toLowerCase().trim();
+            });
+
+            const cheapestOverall = getCheapestStore(item.stores);
+            const cheapestForView = getCheapestStore(visibleStores);
             
             return (
               <div key={item.id} className="bg-[#171a24] border border-[#e0a96d]/15 p-5 rounded-xl flex flex-col justify-between shadow-lg relative group/card">
                 <div>
                   <div className="flex justify-between items-start gap-4 mb-3">
                     <div className="flex-1 min-w-0">
-                      <span className="text-[10px] uppercase font-bold text-[#e0a96d] px-2.5 py-0.5 rounded bg-[#e0a96d]/10 border border-[#e0a96d]/10">
-                        {item.category}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] uppercase font-bold text-[#e0a96d] px-2.5 py-0.5 rounded bg-[#e0a96d]/10 border border-[#e0a96d]/10">
+                          {item.category}
+                        </span>
+                        {itemVarieties.length > 0 && (
+                          <span className="text-[10px] font-semibold text-amber-300/90 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded flex items-center gap-1">
+                            <Layers className="w-3 h-3 text-amber-400" />
+                            <span>{itemVarieties.length} subproducto{itemVarieties.length > 1 ? 's' : ''}</span>
+                          </span>
+                        )}
+                      </div>
                       <h4 className="text-base font-bold text-slate-100 font-outfit mt-1.5 truncate" title={item.name}>
                         {item.name}
                       </h4>
@@ -929,103 +1073,156 @@ export default function PriceComparatorModule({
                     </div>
                   </div>
 
+                  {/* Subproduct / Variety Tabs (if more than 1 variety is recorded) */}
+                  {itemVarieties.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap mt-2.5 pt-2 border-t border-slate-800/60">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1 mr-1">
+                        <Tag className="w-3 h-3 text-[#e0a96d]" />
+                        <span>Tipo / Marca:</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVarieties(prev => ({ ...prev, [item.id]: 'ALL' }))}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                          currentVariety === 'ALL'
+                            ? 'bg-[#e0a96d] text-[#0b0c10] shadow-sm'
+                            : 'bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700'
+                        }`}
+                      >
+                        Todos ({item.stores.length})
+                      </button>
+                      {itemVarieties.map(v => {
+                        const count = (item.stores || []).filter(s => (s.variety || '').toLowerCase().trim() === v.toLowerCase().trim()).length;
+                        const isSelected = currentVariety.toLowerCase().trim() === v.toLowerCase().trim();
+                        return (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setSelectedVarieties(prev => ({ ...prev, [item.id]: isSelected ? 'ALL' : v }))}
+                            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                              isSelected
+                                ? 'bg-[#e0a96d] text-[#0b0c10] font-bold shadow-sm'
+                                : 'bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700/60'
+                            }`}
+                          >
+                            <span>{v}</span>
+                            <span className={`text-[9px] px-1 rounded ${isSelected ? 'bg-black/20 text-[#0b0c10]' : 'bg-slate-900 text-slate-400'}`}>
+                              {count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {/* Stores pricing lists */}
-                  <div className="space-y-2 mt-4">
-                    {!Array.isArray(item.stores) || item.stores.filter(s => s && safeNumber(s.price, 0) > 0 && safeNumber(s.quantity, 0) > 0).length === 0 ? (
+                  <div className="space-y-2 mt-3">
+                    {visibleStores.length === 0 ? (
                       <div className="bg-[#0b0c10]/40 border border-slate-800/80 rounded-lg p-3 text-center">
-                        <p className="text-xs text-slate-400 italic">No hay precios registrados todavía.</p>
-                        <p className="text-[10px] text-slate-500 mt-0.5">Usa "Agregar Precio Tienda" o "Editar Insumo" para registrar costos.</p>
+                        <p className="text-xs text-slate-400 italic">No hay precios registrados para esta selección.</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Usa "Agregar Precio o Subproducto" para registrar costos.</p>
                       </div>
                     ) : (
-                      item.stores
-                        .filter(s => s && typeof s === 'object' && safeNumber(s.price, 0) > 0 && safeNumber(s.quantity, 0) > 0)
-                        .map((store, sIdx) => {
-                          const p = safeNumber(store.price, 0);
-                          const q = safeNumber(store.quantity, 1);
-                          const u = typeof store.unitPrice === 'number' && !isNaN(store.unitPrice)
-                            ? store.unitPrice
-                            : (q > 0 ? p / q : 0);
-                          const isCheapest = cheapest && cheapest.storeName === store.storeName;
-                          const isPreferred = item.preferredStore === store.storeName;
-                          
-                          return (
-                            <div 
-                              key={store.storeName ? `${store.storeName}-${sIdx}` : sIdx}
-                              className={`p-2.5 rounded-lg flex items-center justify-between border text-xs transition-colors ${
-                                isPreferred 
-                                    ? 'bg-[#0b0c10] border-[#e0a96d]/40 shadow-inner' 
-                                    : 'bg-[#0b0c10]/50 border-slate-800 hover:border-slate-700'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                {/* Star icon for manual preference */}
-                                <button
-                                  onClick={() => handleSetPreferred(item.id, store.storeName)}
-                                  className={`p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer ${
-                                    isPreferred ? 'text-[#e0a96d]' : 'text-slate-600 hover:text-slate-400'
-                                  }`}
-                                  title="Marcar como predeterminado/favorito"
-                                  aria-label={`Marcar ${store.storeName} como favorito`}
-                                >
-                                  <Star className={`w-3.5 h-3.5 ${isPreferred ? 'fill-[#e0a96d]' : ''}`} />
-                                </button>
-                                <span className="font-semibold text-slate-300 truncate">{store.storeName}</span>
+                      visibleStores.map((store, sIdx) => {
+                        const p = safeNumber(store.price, 0);
+                        const q = safeNumber(store.quantity, 1);
+                        const u = typeof store.unitPrice === 'number' && !isNaN(store.unitPrice)
+                          ? store.unitPrice
+                          : (q > 0 ? p / q : 0);
+                        const isCheapest = cheapestForView && cheapestForView.storeName === store.storeName && (cheapestForView.variety || '') === (store.variety || '');
+                        const isPreferred = item.preferredStore === store.storeName;
+                        
+                        return (
+                          <div 
+                            key={store.storeName ? `${store.storeName}-${store.variety || ''}-${sIdx}` : sIdx}
+                            className={`p-2.5 rounded-lg flex items-center justify-between border text-xs transition-colors ${
+                              isPreferred 
+                                  ? 'bg-[#0b0c10] border-[#e0a96d]/40 shadow-inner' 
+                                  : 'bg-[#0b0c10]/50 border-slate-800 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                              {/* Star icon for manual preference */}
+                              <button
+                                onClick={() => handleSetPreferred(item.id, store.storeName)}
+                                className={`p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer ${
+                                  isPreferred ? 'text-[#e0a96d]' : 'text-slate-600 hover:text-slate-400'
+                                }`}
+                                title="Marcar como tienda preferida"
+                                aria-label={`Marcar ${store.storeName} como favorito`}
+                              >
+                                <Star className={`w-3.5 h-3.5 ${isPreferred ? 'fill-[#e0a96d]' : ''}`} />
+                              </button>
+                              <span className="font-semibold text-slate-300 truncate">{store.storeName}</span>
+                              {store.variety && (
+                                <span className="text-[10px] font-medium text-amber-300/90 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded inline-flex items-center gap-1 shrink-0">
+                                  <Tag className="w-2.5 h-2.5 text-amber-400" />
+                                  <span>{store.variety}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-3 shrink-0 text-right">
+                              <div>
+                                <span className="text-slate-200 font-bold">${p.toFixed(2)}</span>
+                                <span className="text-slate-500 text-[10px] block">({q} Uds)</span>
+                              </div>
+                              <div className="w-20 pl-2 border-l border-slate-800">
+                                <span className="text-[#e0a96d] font-bold block">${u.toFixed(3)}</span>
+                                <span className="text-slate-500 text-[9px] block">por ud</span>
+                              </div>
+                              
+                              {/* Badges */}
+                              <div className="flex flex-col gap-0.5 items-end justify-center w-20">
+                                {isCheapest && (
+                                  <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                    <Award className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Más Barato</span>
+                                  </span>
+                                )}
+                                {isPreferred && (
+                                  <span className="bg-[#e0a96d]/10 text-[#e0a96d] border border-[#e0a96d]/30 text-[8px] font-bold px-1.5 py-0.5 rounded">
+                                    Favorito
+                                  </span>
+                                )}
                               </div>
 
-                              <div className="flex items-center gap-3 shrink-0 text-right">
-                                <div>
-                                  <span className="text-slate-200 font-bold">${p.toFixed(2)}</span>
-                                  <span className="text-slate-500 text-[10px] block">({q} Uds)</span>
-                                </div>
-                                <div className="w-20 pl-2 border-l border-slate-800">
-                                  <span className="text-[#e0a96d] font-bold block">${u.toFixed(3)}</span>
-                                  <span className="text-slate-500 text-[9px] block">por ud</span>
-                                </div>
-                                
-                                {/* Badges */}
-                                <div className="flex flex-col gap-0.5 items-end justify-center w-20">
-                                  {isCheapest && (
-                                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                      <Award className="w-2.5 h-2.5 shrink-0" />
-                                      <span>Más Barato</span>
-                                    </span>
-                                  )}
-                                  {isPreferred && (
-                                    <span className="bg-[#e0a96d]/10 text-[#e0a96d] border border-[#e0a96d]/30 text-[8px] font-bold px-1.5 py-0.5 rounded">
-                                      Favorito
-                                    </span>
-                                  )}
-                                </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleOpenEdit(item)}
+                                  className="text-slate-500 hover:text-[#e0a96d] p-1 cursor-pointer transition-colors"
+                                  title="Modificar precio o tienda"
+                                  aria-label={`Editar ${store.storeName}`}
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
 
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => handleOpenEdit(item)}
-                                    className="text-slate-500 hover:text-[#e0a96d] p-1 cursor-pointer transition-colors"
-                                    title="Modificar precio o tienda"
-                                    aria-label={`Editar ${store.storeName}`}
-                                  >
-                                    <Pencil className="w-3 h-3" />
-                                  </button>
-
-                                  <button
-                                    onClick={() => removeStoreFromItem(item.id, store.storeName)}
-                                    className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer transition-colors"
-                                    title="Remover este precio"
-                                    aria-label={`Remover precio de ${store.storeName}`}
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
+                                <button
+                                  onClick={() => removeStoreFromItem(item.id, store.storeName, store.variety)}
+                                  className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer transition-colors"
+                                  title="Remover este precio"
+                                  aria-label={`Remover precio de ${store.storeName}`}
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </div>
-                          );
-                        })
+                          </div>
+                        );
+                      })
                     )}
                   </div>
 
-                  {/* Analysis note under preferred store */}
+                  {/* Analysis note under preferred store / variety view */}
                   {(() => {
-                    if (!cheapest || !item.preferredStore || item.preferredStore === cheapest.storeName) return null;
+                    if (currentVariety !== 'ALL' && cheapestForView) {
+                      return (
+                        <div className="mt-3 bg-emerald-500/5 border border-emerald-500/15 p-2 rounded text-[10px] text-emerald-300/90 leading-relaxed">
+                          🏷️ <strong>Mejor opción para "{currentVariety}":</strong> {cheapestForView.storeName} a <strong>${cheapestForView.unitPriceNum?.toFixed(3)}</strong> por unidad.
+                        </div>
+                      );
+                    }
+                    if (!cheapestOverall || !item.preferredStore || item.preferredStore === cheapestOverall.storeName) return null;
                     const prefStore = (Array.isArray(item.stores) ? item.stores : []).find(s => s && s.storeName === item.preferredStore);
                     if (!prefStore) return null;
                     const prefPrice = safeNumber(prefStore.price, 0);
@@ -1033,13 +1230,13 @@ export default function PriceComparatorModule({
                     const prefUnit = typeof prefStore.unitPrice === 'number' && !isNaN(prefStore.unitPrice)
                       ? prefStore.unitPrice
                       : (prefQty > 0 ? prefPrice / prefQty : 0);
-                    if (prefUnit <= 0 || !cheapest.unitPriceNum) return null;
-                    const diff = prefUnit - cheapest.unitPriceNum;
+                    if (prefUnit <= 0 || !cheapestOverall.unitPriceNum) return null;
+                    const diff = prefUnit - cheapestOverall.unitPriceNum;
                     if (diff <= 0.0001) return null;
 
                     return (
                       <div className="mt-3 bg-amber-500/5 border border-amber-500/10 p-2 rounded text-[10px] text-amber-300/80 leading-relaxed">
-                        💡 <strong>Análisis:</strong> El preferido ({item.preferredStore}) cuesta <strong>${diff.toFixed(3)}</strong> más por unidad que el más barato ({cheapest.storeName}).
+                        💡 <strong>Análisis Global:</strong> El preferido ({item.preferredStore}) cuesta <strong>${diff.toFixed(3)}</strong> más por unidad que el más barato ({cheapestOverall.storeName}{cheapestOverall.variety ? ` - ${cheapestOverall.variety}` : ''}).
                       </div>
                     );
                   })()}
@@ -1059,11 +1256,14 @@ export default function PriceComparatorModule({
 
                 <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
                   <button
-                    onClick={() => setAddingStoreToItem(item)}
-                    className="text-xs text-[#e0a96d] hover:text-[#f5d4af] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                    onClick={() => {
+                      setNewStoreVariety(currentVariety !== 'ALL' ? currentVariety : '');
+                      setAddingStoreToItem(item);
+                    }}
+                    className="text-xs text-[#e0a96d] hover:text-[#f5d4af] font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>Agregar Precio Tienda</span>
+                    <span>Agregar Precio o Subproducto</span>
                   </button>
 
                   <button
@@ -1071,7 +1271,7 @@ export default function PriceComparatorModule({
                     className="text-xs text-slate-300 hover:text-slate-100 font-semibold flex items-center gap-1.5 cursor-pointer transition-colors px-2.5 py-1.5 rounded-lg bg-[#0b0c10] border border-[#e0a96d]/20 hover:border-[#e0a96d]/50"
                   >
                     <Pencil className="w-3.5 h-3.5 text-[#e0a96d]" />
-                    <span>Editar Insumo</span>
+                    <span>Editar Ficha</span>
                   </button>
                 </div>
               </div>
@@ -1083,7 +1283,7 @@ export default function PriceComparatorModule({
       {/* Full Edit Item Modal Dialog */}
       {editingItem && createPortal(
         <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-          <form onSubmit={handleSaveEdit} className="bg-[#171a24] border border-[#e0a96d]/25 rounded-2xl p-6 max-w-xl w-full shadow-2xl animate-modal-pop my-auto max-h-[90vh] flex flex-col">
+          <form onSubmit={handleSaveEdit} className="bg-[#171a24] border border-[#e0a96d]/25 rounded-2xl p-6 max-w-2xl w-full shadow-2xl animate-modal-pop my-auto max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-800/80 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-[#e0a96d]/15 flex items-center justify-center text-[#e0a96d] border border-[#e0a96d]/30">
@@ -1091,7 +1291,7 @@ export default function PriceComparatorModule({
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-100 font-outfit">Editar Insumo / Producto</h3>
-                  <p className="text-[11px] text-slate-400">Modifica detalles, tiendas y precios registrados</p>
+                  <p className="text-[11px] text-slate-400">Modifica detalles, subproductos, tiendas y precios registrados</p>
                 </div>
               </div>
               <button 
@@ -1108,7 +1308,7 @@ export default function PriceComparatorModule({
               {/* Name and Category */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre del Insumo / Producto *</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre del Insumo Principal *</label>
                   <input
                     type="text"
                     value={editingItem.name}
@@ -1116,6 +1316,7 @@ export default function PriceComparatorModule({
                     className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                     required
                   />
+                  <p className="text-[10px] text-slate-500 mt-1">Usa nombres genéricos como "Jamón", "Papel Higiénico", "Crema Facial".</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Categoría</label>
@@ -1147,37 +1348,37 @@ export default function PriceComparatorModule({
                 </select>
               </div>
 
-              {/* Stores and Prices Management */}
+              {/* Stores and Subproducts Management */}
               <div className="space-y-2.5 pt-2 border-t border-slate-800">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="block text-xs font-bold text-slate-200">Tiendas y Precios Registrados</label>
-                    <span className="text-[10px] text-slate-400">Puedes escribir cualquier tienda personalizada o seleccionar de la lista</span>
+                    <label className="block text-xs font-bold text-slate-200">Tiendas, Subproductos y Precios</label>
+                    <span className="text-[10px] text-slate-400">Puedes registrar diferentes marcas o tipos dentro de este mismo producto</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
                       setEditingItem({
                         ...editingItem,
-                        stores: [...(editingItem.stores || []), { storeName: '', price: '', quantity: '' }]
+                        stores: [...(editingItem.stores || []), { storeName: '', variety: '', price: '', quantity: '' }]
                       });
                     }}
                     className="text-xs text-[#e0a96d] hover:text-[#f5d4af] font-bold flex items-center gap-1 cursor-pointer bg-[#e0a96d]/10 hover:bg-[#e0a96d]/20 border border-[#e0a96d]/30 px-2.5 py-1 rounded-lg transition-all"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>Añadir Tienda</span>
+                    <span>Añadir Tienda / Subproducto</span>
                   </button>
                 </div>
 
                 {(!editingItem.stores || editingItem.stores.length === 0) ? (
                   <div className="p-4 bg-[#0b0c10] border border-dashed border-slate-800 rounded-xl text-center">
-                    <p className="text-xs text-slate-400">No hay tiendas registradas para este producto.</p>
+                    <p className="text-xs text-slate-400">No hay tiendas o precios registrados.</p>
                     <button
                       type="button"
                       onClick={() => {
                         setEditingItem({
                           ...editingItem,
-                          stores: [{ storeName: 'Costco', price: '', quantity: '' }]
+                          stores: [{ storeName: 'Costco', variety: '', price: '', quantity: '' }]
                         });
                       }}
                       className="mt-2 text-xs text-[#e0a96d] font-semibold underline cursor-pointer"
@@ -1186,7 +1387,7 @@ export default function PriceComparatorModule({
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                  <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
                     {editingItem.stores.map((st, idx) => {
                       const p = safeNumber(st.price, 0);
                       const q = safeNumber(st.quantity, 0);
@@ -1197,12 +1398,12 @@ export default function PriceComparatorModule({
                         <div key={idx} className="bg-[#0b0c10] border border-slate-800 hover:border-slate-700 p-3 rounded-xl space-y-2 transition-colors">
                           <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
                             {/* Store Name Input with Datalist */}
-                            <div className="sm:col-span-5">
-                              <label className="block text-[10px] text-slate-400 font-medium mb-0.5">Tienda / Establecimiento</label>
+                            <div className="sm:col-span-4">
+                              <label className="block text-[10px] text-slate-400 font-medium mb-0.5">Tienda</label>
                               <input
                                 type="text"
                                 list="stores-preset-list"
-                                placeholder="Ej. Costco, Walmart, Local..."
+                                placeholder="Ej. Costco, Walmart..."
                                 value={st.storeName}
                                 onChange={(e) => {
                                   const updated = [...editingItem.stores];
@@ -1213,9 +1414,25 @@ export default function PriceComparatorModule({
                               />
                             </div>
 
-                            {/* Total Price */}
+                            {/* Subproduct / Variety */}
                             <div className="sm:col-span-3">
-                              <label className="block text-[10px] text-slate-400 font-medium mb-0.5">Precio Total ($)</label>
+                              <label className="block text-[10px] text-slate-400 font-medium mb-0.5">Subproducto / Tipo (Opcional)</label>
+                              <input
+                                type="text"
+                                placeholder="Ej. Pavo San Rafael, FUD..."
+                                value={st.variety || ''}
+                                onChange={(e) => {
+                                  const updated = [...editingItem.stores];
+                                  updated[idx].variety = e.target.value;
+                                  setEditingItem({ ...editingItem, stores: updated });
+                                }}
+                                className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-1.5 px-2.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                              />
+                            </div>
+
+                            {/* Total Price */}
+                            <div className="sm:col-span-2">
+                              <label className="block text-[10px] text-slate-400 font-medium mb-0.5">Precio ($)</label>
                               <input
                                 type="number"
                                 step="0.01"
@@ -1231,8 +1448,8 @@ export default function PriceComparatorModule({
                             </div>
 
                             {/* Quantity */}
-                            <div className="sm:col-span-3">
-                              <label className="block text-[10px] text-slate-400 font-medium mb-0.5">Cantidad (Uds/Kg/etc)</label>
+                            <div className="sm:col-span-2">
+                              <label className="block text-[10px] text-slate-400 font-medium mb-0.5">Cant.</label>
                               <input
                                 type="number"
                                 step="0.1"
@@ -1260,7 +1477,7 @@ export default function PriceComparatorModule({
                                   setEditingItem({ ...editingItem, stores: updated, preferredStore: newPref });
                                 }}
                                 className="p-1.5 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer transition-colors"
-                                title="Eliminar tienda"
+                                title="Eliminar este precio"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1336,14 +1553,14 @@ export default function PriceComparatorModule({
         document.body
       )}
 
-      {/* Quick Add Price Store Modal Dialog */}
+      {/* Quick Add Price / Subproduct Modal Dialog */}
       {addingStoreToItem && createPortal(
         <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
           <form onSubmit={handleAddStorePrice} className="bg-[#171a24] border border-[#e0a96d]/25 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-modal-pop my-auto max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-800/80 shrink-0">
               <div>
-                <h3 className="text-md font-bold text-slate-100 font-outfit">Agregar Precio</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">Para: {addingStoreToItem.name}</p>
+                <h3 className="text-md font-bold text-slate-100 font-outfit">Agregar Precio o Subproducto</h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">Para: <strong>{addingStoreToItem.name}</strong></p>
               </div>
               <button 
                 type="button"
@@ -1357,7 +1574,7 @@ export default function PriceComparatorModule({
             
             <div className="space-y-3.5 overflow-y-auto pr-1 flex-1 py-1">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Establecimiento / Tienda</label>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Establecimiento / Tienda *</label>
                 <input
                   type="text"
                   list="stores-preset-list"
@@ -1368,8 +1585,26 @@ export default function PriceComparatorModule({
                   required
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Precio Total ($)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-400">Subproducto / Tipo / Marca (Opcional)</label>
+                  <Tag className="w-3 h-3 text-[#e0a96d]" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Ej. Pechuga de Pavo San Rafael, FUD Virginia..."
+                  value={newStoreVariety}
+                  onChange={(e) => setNewStoreVariety(e.target.value)}
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Permite agrupar diferentes tipos o marcas dentro de {addingStoreToItem.name} sin duplicar tarjetas.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Precio Total ($) *</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1380,12 +1615,13 @@ export default function PriceComparatorModule({
                   required
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Cantidad total en unidades</label>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Cantidad total en unidades *</label>
                 <input
                   type="number"
                   step="0.1"
-                  placeholder="Ej. 12 (rollos, botes, etc)"
+                  placeholder="Ej. 12 (rollos, botes, etc) o 250 (grs)"
                   value={newStoreQty}
                   onChange={(e) => setNewStoreQty(e.target.value)}
                   className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
@@ -1414,7 +1650,7 @@ export default function PriceComparatorModule({
         document.body
       )}
 
-      {/* Similar Product Confirmation / Comparison Prompt Modal */}
+      {/* Similar Product Confirmation / Subproduct Comparison Prompt Modal */}
       {similarProductPrompt && createPortal(
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in overflow-y-auto">
           <div className="bg-[#171a24] border border-[#e0a96d]/40 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-scale-up my-auto">
@@ -1425,10 +1661,10 @@ export default function PriceComparatorModule({
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-100 font-outfit">
-                    ¿Deseas comparar con un producto similar?
+                    ¿Deseas agregarlo como subproducto de un producto existente?
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Detectamos un insumo con nombre muy similar en tu lista. Te sugerimos comparar precios en el mismo producto para no duplicarlo.
+                    Detectamos que ya tienes "<strong>{similarProductPrompt.similarProduct.name}</strong>". Puedes guardarlo como subproducto para mantener tu comparador ordenado y comparar entre variedades.
                   </p>
                 </div>
               </div>
@@ -1463,7 +1699,9 @@ export default function PriceComparatorModule({
                   {Array.isArray(similarProductPrompt.similarProduct.stores) && similarProductPrompt.similarProduct.stores.length > 0 ? (
                     similarProductPrompt.similarProduct.stores.map((s, idx) => (
                       <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded bg-slate-900 border border-slate-800">
-                        <span className="text-slate-300 font-medium truncate">{s.storeName}</span>
+                        <span className="text-slate-300 font-medium truncate">
+                          {s.storeName}{s.variety ? ` (${s.variety})` : ''}
+                        </span>
                         <span className="font-bold text-[#e0a96d] shrink-0 ml-1">
                           ${s.price} {s.quantity > 1 ? `(${s.quantity} u)` : ''}
                         </span>
@@ -1494,7 +1732,9 @@ export default function PriceComparatorModule({
                   {Array.isArray(similarProductPrompt.validStores) && similarProductPrompt.validStores.length > 0 ? (
                     similarProductPrompt.validStores.map((s, idx) => (
                       <div key={idx} className="flex items-center justify-between text-xs p-1.5 rounded bg-slate-900 border border-slate-800">
-                        <span className="text-slate-300 font-medium truncate">{s.storeName}</span>
+                        <span className="text-slate-300 font-medium truncate">
+                          {s.storeName}{s.variety ? ` (${s.variety})` : ''}
+                        </span>
                         <span className="font-bold text-emerald-400 shrink-0 ml-1">
                           ${s.price} {s.quantity > 1 ? `(${s.quantity} u)` : ''}
                         </span>
@@ -1509,6 +1749,22 @@ export default function PriceComparatorModule({
 
             {/* Actions */}
             <div className="space-y-2 pt-2">
+              {similarProductPrompt.suggestedVariety && (
+                <button
+                  type="button"
+                  onClick={() => handleMergeAndCompareWithExisting(
+                    similarProductPrompt.similarProduct,
+                    similarProductPrompt.validStores,
+                    similarProductPrompt.newNotes,
+                    similarProductPrompt.suggestedVariety
+                  )}
+                  className="btn-rose-gold w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all"
+                >
+                  <Tag className="w-4 h-4" />
+                  <span>🏷️ Guardar como subproducto "{similarProductPrompt.suggestedVariety}" dentro de "{similarProductPrompt.similarProduct.name}" (Recomendado)</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => handleMergeAndCompareWithExisting(
@@ -1516,13 +1772,18 @@ export default function PriceComparatorModule({
                   similarProductPrompt.validStores,
                   similarProductPrompt.newNotes
                 )}
-                className="btn-rose-gold w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all"
+                className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                  similarProductPrompt.suggestedVariety
+                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                    : 'btn-rose-gold shadow-lg'
+                }`}
               >
                 <ArrowUpDown className="w-4 h-4" />
-                <span>⚖️ Comparar con "{similarProductPrompt.similarProduct.name}" (Recomendado)</span>
+                <span>⚖️ Comparar directamente en "{similarProductPrompt.similarProduct.name}"</span>
               </button>
+
               <p className="text-[10px] text-center text-slate-400">
-                Añadirá la nueva tienda al producto existente para que veas cuál sale mejor por unidad y evites tener duplicados.
+                Añadirá la información a la ficha existente para comparar precios y evitar tener múltiples tarjetas del mismo insumo.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
@@ -1535,16 +1796,16 @@ export default function PriceComparatorModule({
                     similarProductPrompt.newVerdict,
                     similarProductPrompt.newNotes
                   )}
-                  className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  className="w-full sm:w-1/2 py-2 px-3 rounded-xl font-bold text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                 >
                   <Plus className="w-4 h-4 text-slate-400" />
-                  <span>Guardar como nuevo producto</span>
+                  <span>Crear como producto separado</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setSimilarProductPrompt(null)}
-                  className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl font-semibold text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all cursor-pointer border border-transparent"
+                  className="w-full sm:w-1/2 py-2 px-3 rounded-xl font-semibold text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all cursor-pointer border border-transparent"
                 >
                   Volver a editar formulario
                 </button>

@@ -38,6 +38,7 @@ export const sanitizeHouseholdItem = (item) => {
         : (quantity > 0 ? price / quantity : 0);
       return {
         storeName: safeString(s.storeName || s.name || s.store || 'Tienda'),
+        variety: safeString(s.variety || s.subproduct || s.brand || s.presentation || ''),
         price: price,
         quantity: quantity,
         unitPrice: unitPrice
@@ -55,11 +56,16 @@ export const sanitizeHouseholdItem = (item) => {
     repurchaseVerdict = item.repurchaseVerdict;
   }
 
+  const subproducts = Array.isArray(item.subproducts)
+    ? Array.from(new Set([...item.subproducts.map(safeString).filter(Boolean), ...stores.map(s => s.variety).filter(Boolean)]))
+    : Array.from(new Set(stores.map(s => s.variety).filter(Boolean)));
+
   return {
     id: safeString(item.id || 'item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
     name: name,
     category: category,
     stores: stores,
+    subproducts: subproducts,
     preferredStore: preferredStore,
     repurchaseVerdict: repurchaseVerdict,
     notes: notes
