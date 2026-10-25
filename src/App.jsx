@@ -24,7 +24,8 @@ import {
   Utensils,
   Flame,
   Scale,
-  Droplets
+  Droplets,
+  PawPrint
 } from 'lucide-react';
 
 // Firebase Client SDK
@@ -33,6 +34,7 @@ import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestor
 
 // Import modules
 import ScheduleModule from './components/ScheduleModule';
+import PetCareModule from './components/PetCareModule';
 import NutritionModule from './components/NutritionModule';
 import AromatherapyModule from './components/AromatherapyModule';
 import PriceComparatorModule from './components/PriceComparatorModule';
@@ -60,7 +62,8 @@ import {
   sanitizeNutritionProfile,
   sanitizeDailyNutritionLogList,
   sanitizeAromatherapyInventory,
-  sanitizeAromatherapyBlendList
+  sanitizeAromatherapyBlendList,
+  sanitizePetData
 } from './utils/sanitizers';
 
 // ==========================================
@@ -535,6 +538,20 @@ export default function App() {
     sanitizeAromatherapyBlendList(getSavedArray('aura-custom-blends', []))
   );
 
+  const [petData, setPetData] = useState(() => {
+    const saved = localStorage.getItem('aura-pet-data');
+    try {
+      return saved ? sanitizePetData(JSON.parse(saved)) : sanitizePetData({});
+    } catch (e) {
+      return sanitizePetData({});
+    }
+  });
+
+  // Sync petData to localStorage
+  useEffect(() => {
+    localStorage.setItem('aura-pet-data', JSON.stringify(petData));
+  }, [petData]);
+
   // Sync aromatherapy to localStorage
   useEffect(() => {
     localStorage.setItem('aura-user-oils', JSON.stringify(userOils));
@@ -673,6 +690,7 @@ export default function App() {
       dailyNutritionLogs: dailyNutritionLogs || [],
       userOils: userOils || [],
       customBlends: customBlends || [],
+      petData: petData || {},
       geminiApiKey: (geminiApiKey || localStorage.getItem('aura-gemini-key') || '').trim(),
       lastUpdated: Date.now()
     };
@@ -764,6 +782,11 @@ export default function App() {
       const sanitized = sanitizeAromatherapyBlendList(data.customBlends);
       setCustomBlends(sanitized);
       localStorage.setItem('aura-custom-blends', JSON.stringify(sanitized));
+    }
+    if (data.petData && typeof data.petData === 'object') {
+      const sanitized = sanitizePetData(data.petData);
+      setPetData(sanitized);
+      localStorage.setItem('aura-pet-data', JSON.stringify(sanitized));
     }
     if (typeof data.geminiApiKey === 'string' && data.geminiApiKey.trim()) {
       setGeminiApiKey(data.geminiApiKey.trim());
@@ -981,6 +1004,7 @@ export default function App() {
   // Breadcrumbs title mapper
   const moduleTitles = {
     schedule: 'Rutina Diaria & Cronograma',
+    pet: 'Mascota & Cuidados Geriátricos 🐾',
     nutrition: 'Nutrición, Scanner Calórico IA & Control de Peso',
     aromatherapy: 'Aromaterapia & Boticario dōTERRA con IA',
     copilot: 'AURA Copilot & Conversor de Rutinas IA',
@@ -996,6 +1020,7 @@ export default function App() {
   // Menu items list
   const menuItems = [
     { id: 'schedule', label: 'Rutina Diaria', icon: <Calendar className="w-5 h-5" /> },
+    { id: 'pet', label: 'Mascota & Cuidados', icon: <PawPrint className="w-5 h-5 text-[#e0a96d]" /> },
     { id: 'nutrition', label: 'Nutrición & Calorías IA', icon: <Utensils className="w-5 h-5 text-[#e0a96d]" /> },
     { id: 'aromatherapy', label: 'Aromaterapia & Boticario', icon: <Droplets className="w-5 h-5 text-[#e0a96d]" /> },
     { id: 'copilot', label: 'Chat Copilot IA', icon: <Bot className="w-5 h-5 text-[#e0a96d]" /> },
@@ -1214,6 +1239,16 @@ export default function App() {
                 setSchedule={setSchedule}
                 selfCareActivities={selfCareActivities}
                 setSelfCareActivities={setSelfCareActivities}
+                showToast={showToast}
+              />
+            </ErrorBoundary>
+          )}
+
+          {activeModule === 'pet' && (
+            <ErrorBoundary>
+              <PetCareModule
+                petData={petData}
+                setPetData={setPetData}
                 showToast={showToast}
               />
             </ErrorBoundary>

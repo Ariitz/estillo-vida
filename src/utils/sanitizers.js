@@ -564,4 +564,365 @@ export const sanitizeAromatherapyMoodLogList = (list) => {
   return list.map(sanitizeAromatherapyMoodLog).filter(Boolean);
 };
 
+// 16. Pet Care & Senior Canine Routine (Pastor Alemán Senior - Kira)
+export const sanitizePetData = (raw) => {
+  const data = (raw && typeof raw === 'object') ? raw : {};
+
+  const profile = {
+    name: safeString(data.profile?.name || 'Kira'),
+    breed: safeString(data.profile?.breed || 'Pastor Alemán (Pelo Largo)'),
+    ageYears: safeNumber(data.profile?.ageYears, 12),
+    gender: safeString(data.profile?.gender || 'Hembra'),
+    weightKg: safeNumber(data.profile?.weightKg, 32.5),
+    microchip: safeString(data.profile?.microchip || ''),
+    vetContact: safeString(data.profile?.vetContact || 'Dra. Veterinaria de Cabecera'),
+    vetPhone: safeString(data.profile?.vetPhone || '+52 55 0000 0000'),
+    emergencyClinic: safeString(data.profile?.emergencyClinic || 'Hospital Veterinario 24/7'),
+    emergencyPhone: safeString(data.profile?.emergencyPhone || '+52 55 9999 9999'),
+    daycareName: safeString(data.profile?.daycareName || 'Guardería Canina Campestre'),
+    daycarePhone: safeString(data.profile?.daycarePhone || '+52 55 1234 5678'),
+    notes: safeString(data.profile?.notes || 'Perrita senior de 12 años con displasia de cadera, hipotiroidismo y nubes en ojos. Cuidado con pisos resbaladizos y secado minucioso de su doble manto tras nadar.'),
+    conditions: Array.isArray(data.profile?.conditions)
+      ? data.profile.conditions.map(safeString).filter(Boolean)
+      : [
+          'Hipotiroidismo canino (medicación diaria en ayunas)',
+          'Displasia bilateral de cadera (artrosis senior)',
+          'Nubes en los ojos (esclerosis nuclear / cataratas seniles)'
+        ]
+  };
+
+  const daycare = {
+    schedule: safeString(data.daycare?.schedule || '09:00 AM - 05:00 PM'),
+    transitMinutesLow: safeNumber(data.daycare?.transitMinutesLow, 30),
+    transitMinutesHigh: safeNumber(data.daycare?.transitMinutesHigh, 60),
+    targetDaysPerWeek: safeNumber(data.daycare?.targetDaysPerWeek, 5),
+    plannedDays: Array.isArray(data.daycare?.plannedDays)
+      ? data.daycare.plannedDays.map(safeString)
+      : ['Lunes', 'Miércoles', 'Viernes'],
+    attendanceLogs: Array.isArray(data.daycare?.attendanceLogs)
+      ? data.daycare.attendanceLogs.map(l => ({
+          id: safeString(l.id || 'dc-' + Date.now()),
+          date: safeString(l.date || getLocalDateString()),
+          status: ['attended', 'stayed_home', 'skipped_traffic'].includes(l.status) ? l.status : 'attended',
+          departureTime: safeString(l.departureTime || '08:00 AM'),
+          transitTime: safeNumber(l.transitTime, 45),
+          notes: safeString(l.notes || '')
+        }))
+      : []
+  };
+
+  const hydrotherapy = {
+    frequencyWeeks: safeNumber(data.hydrotherapy?.frequencyWeeks, 2),
+    preferredDay: safeString(data.hydrotherapy?.preferredDay || 'Sábado'),
+    targetSessionMinutes: safeNumber(data.hydrotherapy?.targetSessionMinutes, 20),
+    sessions: Array.isArray(data.hydrotherapy?.sessions)
+      ? data.hydrotherapy.sessions.map(s => ({
+          id: safeString(s.id || 'hydro-' + Date.now()),
+          date: safeString(s.date || getLocalDateString()),
+          durationMinutes: safeNumber(s.durationMinutes, 20),
+          postSwimBath: Boolean(s.postSwimBath !== false),
+          deepDryingDone: Boolean(s.deepDryingDone !== false),
+          earCleaningDone: Boolean(s.earCleaningDone !== false),
+          mobilityAfter: ['excelente', 'buena', 'cansada_positiva', 'con_molestia'].includes(s.mobilityAfter) ? s.mobilityAfter : 'excelente',
+          notes: safeString(s.notes || '')
+        }))
+      : []
+  };
+
+  const defaultRoutine = [
+    {
+      id: 'pr-1',
+      time: '07:30 AM',
+      category: 'medication',
+      title: 'Levotiroxina en ayunas',
+      desc: '1 comprimido en ayunas para el hipotiroidismo (30 min antes del desayuno).',
+      priority: 'high',
+      completedToday: false
+    },
+    {
+      id: 'pr-2',
+      time: '08:00 AM',
+      category: 'walk',
+      title: 'Paseo sanitario matutino suave',
+      desc: '10-15 min paso tranquilo para reactivar articulaciones sin impacto ni sobreesfuerzo.',
+      priority: 'high',
+      completedToday: false
+    },
+    {
+      id: 'pr-3',
+      time: '08:20 AM',
+      category: 'food',
+      title: 'Desayuno Senior + Condroprotectores',
+      desc: 'Croquetas senior / húmedo tibio + Colágeno hidrolizado y Glucosamina para cadera.',
+      priority: 'high',
+      completedToday: false
+    },
+    {
+      id: 'pr-4',
+      time: '08:35 AM',
+      category: 'medication',
+      title: 'Gotas oftálmicas matutinas',
+      desc: '1 gota en cada ojo para hidratación y soporte ante nubes/cataratas seniles.',
+      priority: 'medium',
+      completedToday: false
+    },
+    {
+      id: 'pr-5',
+      time: '08:45 AM',
+      category: 'daycare',
+      title: 'Salida hacia Guardería Canina',
+      desc: 'Considerar 30 a 60 min de tráfico para entrar a las 9:00 AM. Subir al auto con rampa/asistencia.',
+      priority: 'high',
+      completedToday: false
+    },
+    {
+      id: 'pr-6',
+      time: '09:00 AM - 05:00 PM',
+      category: 'daycare',
+      title: 'Estadía en Guardería Canina',
+      desc: 'Socialización moderada, descansos en sombra, evitar saltos con otros perros.',
+      priority: 'medium',
+      completedToday: false
+    },
+    {
+      id: 'pr-7',
+      time: '05:30 PM',
+      category: 'home',
+      title: 'Llegada a casa & Revisión de patas',
+      desc: 'Revisar almohadillas, cepillado superficial para remover basuritas de su manto largo.',
+      priority: 'medium',
+      completedToday: false
+    },
+    {
+      id: 'pr-8',
+      time: '06:15 PM',
+      category: 'walk',
+      title: 'Paseo sanitario vespertino',
+      desc: 'Paseo corto de 10 min sobre césped o tierra blanda para orinar y estirar patitas.',
+      priority: 'medium',
+      completedToday: false
+    },
+    {
+      id: 'pr-9',
+      time: '07:30 PM',
+      category: 'food',
+      title: 'Cena ligera + Vitaminas / Omega-3',
+      desc: 'Porción controlada para cuidar su peso (esencial para displasia) + Omega-3 antiinflamatorio.',
+      priority: 'high',
+      completedToday: false
+    },
+    {
+      id: 'pr-10',
+      time: '08:30 PM',
+      category: 'medication',
+      title: 'Gotas oftálmicas nocturnas',
+      desc: 'Segunda dosis de colirio oftálmico para lubricación corneal nocturna.',
+      priority: 'medium',
+      completedToday: false
+    },
+    {
+      id: 'pr-11',
+      time: '09:45 PM',
+      category: 'walk',
+      title: 'Último pipí nocturno & Cama ortopédica',
+      desc: 'Salida rápida al jardín/patio. Asegurar cama viscoelástica para soporte de cadera.',
+      priority: 'low',
+      completedToday: false
+    }
+  ];
+
+  const routine = Array.isArray(data.routine) && data.routine.length > 0
+    ? data.routine.map(r => ({
+        id: safeString(r.id || 'pr-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
+        time: safeString(r.time || '08:00 AM'),
+        category: ['medication', 'walk', 'food', 'daycare', 'hydro', 'care', 'home'].includes(r.category) ? r.category : 'care',
+        title: safeString(r.title || 'Actividad'),
+        desc: safeString(r.desc || ''),
+        priority: ['high', 'medium', 'low'].includes(r.priority) ? r.priority : 'medium',
+        completedToday: Boolean(r.completedToday)
+      }))
+    : defaultRoutine;
+
+  const defaultMedications = [
+    {
+      id: 'med-1',
+      name: 'Levotiroxina Sódica (Eutirox / Tiroidina)',
+      condition: 'Hipotiroidismo Canino',
+      dosage: '1 comprimido en ayunas',
+      frequency: 'Diario (Mañanas en ayunas, 30 min antes de comer)',
+      timing: 'morning_fasting',
+      lastAdministeredDate: '',
+      notes: 'No dar con alimentos de alto calcio en el mismo minuto para no inhibir absorción.',
+      active: true
+    },
+    {
+      id: 'med-2',
+      name: 'Gotas Oftálmicas Lubricantes / Antiox',
+      condition: 'Nubes en los ojos (Cataratas seniles)',
+      dosage: '1 gota en cada ojo',
+      frequency: 'Cada 12 horas (Mañana y Noche)',
+      timing: 'twice_daily',
+      lastAdministeredMorning: '',
+      lastAdministeredNight: '',
+      notes: 'Limpiar párpados suavemente con gasa tibia si hay lagañitas.',
+      active: true
+    },
+    {
+      id: 'med-3',
+      name: 'Colágeno + Glucosamina & Condroitina',
+      condition: 'Displasia de cadera',
+      dosage: '1 dosis diaria con alimento',
+      frequency: 'Diario (Desayuno)',
+      timing: 'with_breakfast',
+      lastAdministeredDate: '',
+      notes: 'Protector articular de cartílago para aliviar rigidez matutina.',
+      active: true
+    },
+    {
+      id: 'med-4',
+      name: 'Omega-3 (EPA/DHA) & Complejo Vitamínico Senior',
+      condition: 'Soporte geriátrico y articulaciones',
+      dosage: '1 cápsula / bomba dosificadora',
+      frequency: 'Diario (Cena)',
+      timing: 'with_dinner',
+      lastAdministeredDate: '',
+      notes: 'Potente antiinflamatorio natural para cadera y salud del manto.',
+      active: true
+    }
+  ];
+
+  const medications = Array.isArray(data.medications) && data.medications.length > 0
+    ? data.medications.map(m => ({
+        id: safeString(m.id || 'med-' + Date.now()),
+        name: safeString(m.name || 'Medicamento'),
+        condition: safeString(m.condition || ''),
+        dosage: safeString(m.dosage || ''),
+        frequency: safeString(m.frequency || 'Diario'),
+        timing: safeString(m.timing || 'anytime'),
+        lastAdministeredDate: safeString(m.lastAdministeredDate || ''),
+        lastAdministeredMorning: safeString(m.lastAdministeredMorning || ''),
+        lastAdministeredNight: safeString(m.lastAdministeredNight || ''),
+        notes: safeString(m.notes || ''),
+        active: Boolean(m.active !== false)
+      }))
+    : defaultMedications;
+
+  const defaultPreventive = [
+    {
+      id: 'prev-1',
+      type: 'bath_grooming',
+      title: 'Baño bimensual & Secado profundo post-nado',
+      frequencyDesc: 'Cada 2 semanas (coordinado con natación)',
+      intervalDays: 14,
+      lastDate: '2026-10-18',
+      nextDueDate: '2026-11-01',
+      notes: 'Doble manto de pastor alemán: secador a fondo en raíz para evitar hot-spots húmedos y secado ótico con toalla.',
+      status: 'pending'
+    },
+    {
+      id: 'prev-2',
+      type: 'deworming_ext',
+      title: 'Desparasitación Externa (Pulgas, garrapatas & agua)',
+      frequencyDesc: 'Cada 3 meses (por guardería & natación frecuente)',
+      intervalDays: 90,
+      lastDate: '2026-08-15',
+      nextDueDate: '2026-11-15',
+      notes: 'Pipeta o tableta masticable (ej. Simparica / Nexgard / Bravecto).',
+      status: 'pending'
+    },
+    {
+      id: 'prev-3',
+      type: 'deworming_int',
+      title: 'Desparasitación Interna preventiva',
+      frequencyDesc: 'Cada 4 meses (socializa con otros perros en guardería)',
+      intervalDays: 120,
+      lastDate: '2026-07-20',
+      nextDueDate: '2026-11-20',
+      notes: 'Control parasitario de amplio espectro.',
+      status: 'pending'
+    },
+    {
+      id: 'prev-4',
+      type: 'nails_paws',
+      title: 'Corte y limado de uñas preventivo',
+      frequencyDesc: 'Cada 3 semanas',
+      intervalDays: 21,
+      lastDate: '2026-10-12',
+      nextDueDate: '2026-11-02',
+      notes: 'Vital para displasia: uñas largas cambian el apoyo articular y causan dolor de cadera al caminar.',
+      status: 'pending'
+    },
+    {
+      id: 'prev-5',
+      type: 'vet_checkup',
+      title: 'Control geriátrico tiroideo & revisión de cadera',
+      frequencyDesc: 'Cada 6 meses',
+      intervalDays: 180,
+      lastDate: '2026-06-10',
+      nextDueDate: '2026-12-10',
+      notes: 'Perfil tiroideo T4 total/libre y palpación de movilidad articular.',
+      status: 'pending'
+    },
+    {
+      id: 'prev-6',
+      type: 'vaccine',
+      title: 'Refuerzo Bordetella (Tos de las perreras)',
+      frequencyDesc: 'Anual (requisito indispensable de guardería)',
+      intervalDays: 365,
+      lastDate: '2026-02-14',
+      nextDueDate: '2027-02-14',
+      notes: 'Protección para guarderías y convivencia canina.',
+      status: 'completed'
+    },
+    {
+      id: 'prev-7',
+      type: 'vaccine',
+      title: 'Vacuna Múltiple Canina (DHPPI + L) & Rabia',
+      frequencyDesc: 'Anual',
+      intervalDays: 365,
+      lastDate: '2026-02-14',
+      nextDueDate: '2027-02-14',
+      notes: 'Esquema de vacunación senior completo al día.',
+      status: 'completed'
+    }
+  ];
+
+  const preventiveCare = Array.isArray(data.preventiveCare) && data.preventiveCare.length > 0
+    ? data.preventiveCare.map(p => ({
+        id: safeString(p.id || 'prev-' + Date.now()),
+        type: safeString(p.type || 'care'),
+        title: safeString(p.title || 'Cuidado preventivo'),
+        frequencyDesc: safeString(p.frequencyDesc || ''),
+        intervalDays: safeNumber(p.intervalDays, 30),
+        lastDate: safeString(p.lastDate || ''),
+        nextDueDate: safeString(p.nextDueDate || ''),
+        notes: safeString(p.notes || ''),
+        status: ['completed', 'pending', 'overdue'].includes(p.status) ? p.status : 'pending'
+      }))
+    : defaultPreventive;
+
+  const walkLogs = Array.isArray(data.walkLogs)
+    ? data.walkLogs.map(w => ({
+        id: safeString(w.id || 'wlk-' + Date.now()),
+        date: safeString(w.date || getLocalDateString()),
+        time: safeString(w.time || '08:00 AM'),
+        durationMinutes: safeNumber(w.durationMinutes, 15),
+        surface: safeString(w.surface || 'Pasto / Tierra'),
+        hipGaitRating: ['fluido', 'ligera_rigidez', 'rigido_con_cojera'].includes(w.hipGaitRating) ? w.hipGaitRating : 'fluido',
+        notes: safeString(w.notes || '')
+      }))
+    : [];
+
+  return {
+    profile,
+    daycare,
+    hydrotherapy,
+    routine,
+    medications,
+    preventiveCare,
+    walkLogs,
+    lastDailyResetDate: safeString(data.lastDailyResetDate || getLocalDateString())
+  };
+};
+
 
