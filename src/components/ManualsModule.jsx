@@ -85,6 +85,26 @@ export default function ManualsModule({
   
 • **Eventos de Gala:**
   Sostener copas siempre por el tallo (nunca por el cáliz) para evitar calentar la bebida y dejar huellas dactilares grasosas en el cristal.`
+    },
+    {
+      id: 'm-future-ideas',
+      category: 'Proyectos & Roadmap',
+      title: 'Ideas a Futuro & Backlog de la App',
+      content: `• **Archivo Local IDEAS_A_FUTURO.md:**
+  Tienes disponible en la raíz del proyecto el archivo "IDEAS_A_FUTURO.md" para anotar cualquier idea, inquietud o mejora.
+  
+• **Mascota & Mona (Pastor Alemán Senior):**
+  - Alarma/Notificación de hora de salida para la guardería considerando el tráfico.
+  - Gráfica de control de peso para proteger su displasia de cadera.
+  - Alerta de recompra de Levotiroxina y condroprotectores.
+  
+• **Comparador de Precios & Alacena:**
+  - Lista inteligente con subproductos favoritos marcados.
+  - Alertas automáticas de productos por terminarse.
+  
+• **Nutrición, Aromaterapia & Estilo:**
+  - Sinergias dōTERRA estacionales y seguras para mascotas.
+  - Sugerencia de outfits según el pronóstico del clima local.`
     }
   ];
 

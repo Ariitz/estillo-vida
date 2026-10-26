@@ -564,12 +564,15 @@ export const sanitizeAromatherapyMoodLogList = (list) => {
   return list.map(sanitizeAromatherapyMoodLog).filter(Boolean);
 };
 
-// 16. Pet Care & Senior Canine Routine (Pastor Alemán Senior - Kira)
+// 16. Pet Care & Senior Canine Routine (Pastor Alemán Senior - Mona)
 export const sanitizePetData = (raw) => {
   const data = (raw && typeof raw === 'object') ? raw : {};
 
+  let rawName = safeString(data.profile?.name || 'Mona');
+  if (rawName === 'Kira') rawName = 'Mona';
+
   const profile = {
-    name: safeString(data.profile?.name || 'Kira'),
+    name: rawName,
     breed: safeString(data.profile?.breed || 'Pastor Alemán (Pelo Largo)'),
     ageYears: safeNumber(data.profile?.ageYears, 12),
     gender: safeString(data.profile?.gender || 'Hembra'),

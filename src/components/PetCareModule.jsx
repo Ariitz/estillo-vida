@@ -26,10 +26,13 @@ import {
   Droplets,
   Eye,
   Info,
-  ChevronRight
+  ChevronRight,
+  HelpCircle,
+  ExternalLink
 } from 'lucide-react';
 import {
   getLocalDateString,
+  getYesterdayDateString,
   formatDisplayDate,
   formatFullDisplayDate,
   calculateNextDueDate,
@@ -42,6 +45,11 @@ export default function PetCareModule({
   setPetData,
   showToast
 }) {
+  // Pet name resolution (default to Mona, migrate away from Kira)
+  const petName = (petData?.profile?.name && petData.profile.name !== 'Kira')
+    ? petData.profile.name
+    : 'Mona';
+
   // Navigation tabs: 'routine' | 'daycare_hydro' | 'medications' | 'calendar' | 'profile'
   const [activeTab, setActiveTab] = useState('routine');
 
@@ -51,13 +59,25 @@ export default function PetCareModule({
   // Traffic scenario: 'heavy' (60m) vs 'normal' (30m)
   const [trafficMode, setTrafficMode] = useState('heavy');
 
-  // Modals state
+  // Modals state for adding new items
   const [showAddRoutineModal, setShowAddRoutineModal] = useState(false);
   const [showAddWalkModal, setShowAddWalkModal] = useState(false);
   const [showAddHydroModal, setShowAddHydroModal] = useState(false);
   const [showAddMedModal, setShowAddMedModal] = useState(false);
   const [showAddPreventiveModal, setShowAddPreventiveModal] = useState(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+
+  // Modals state for editing existing items
+  const [editingRoutineItem, setEditingRoutineItem] = useState(null);
+  const [editingPreventiveItem, setEditingPreventiveItem] = useState(null);
+  const [editingMedItem, setEditingMedItem] = useState(null);
+  const [editingHydroItem, setEditingHydroItem] = useState(null);
+
+  // Inline custom date picker state for preventive events: { [itemId]: string (YYYY-MM-DD) }
+  const [customPreventiveDates, setCustomPreventiveDates] = useState({});
+
+  const todayStr = getLocalDateString();
+  const yesterdayStr = getYesterdayDateString();
 
   // Form states for new items
   const [newRoutineItem, setNewRoutineItem] = useState({
@@ -69,6 +89,8 @@ export default function PetCareModule({
   });
 
   const [newWalkLog, setNewWalkLog] = useState({
+    date: todayStr,
+    time: '08:00 AM',
     durationMinutes: 15,
     surface: 'Pasto / Césped suave',
     hipGaitRating: 'fluido',
@@ -76,6 +98,7 @@ export default function PetCareModule({
   });
 
   const [newHydroLog, setNewHydroLog] = useState({
+    date: todayStr,
     durationMinutes: 20,
     postSwimBath: true,
     deepDryingDone: true,
@@ -98,12 +121,12 @@ export default function PetCareModule({
     type: 'care',
     frequencyDesc: 'Cada 30 días',
     intervalDays: 30,
-    lastDate: getLocalDateString(),
+    lastDate: todayStr,
     notes: ''
   });
 
   const [profileForm, setProfileForm] = useState(() => ({
-    name: petData?.profile?.name || 'Kira',
+    name: petName,
     breed: petData?.profile?.breed || 'Pastor Alemán (Pelo Largo)',
     ageYears: petData?.profile?.ageYears || 12,
     gender: petData?.profile?.gender || 'Hembra',
@@ -117,8 +140,6 @@ export default function PetCareModule({
     daycarePhone: petData?.profile?.daycarePhone || '+52 55 1234 5678',
     notes: petData?.profile?.notes || ''
   }));
-
-  const todayStr = getLocalDateString();
 
   // Helper updater
   const updatePetData = (updater) => {
@@ -162,11 +183,33 @@ export default function PetCareModule({
 
   // Delete routine item
   const handleDeleteRoutineItem = (id) => {
+    if (!window.confirm('¿Seguro que deseas eliminar esta actividad de la rutina?')) return;
     updatePetData((prev) => ({
       ...prev,
       routine: prev.routine.filter(r => r.id !== id)
     }));
     if (showToast) showToast('success', 'Eliminado', 'Actividad retirada de la rutina.');
+  };
+
+  // Save edited routine item
+  const handleSaveEditRoutine = (e) => {
+    e.preventDefault();
+    if (!editingRoutineItem) return;
+
+    updatePetData((prev) => ({
+      ...prev,
+      routine: prev.routine.map(r => r.id === editingRoutineItem.id ? {
+        ...r,
+        time: editingRoutineItem.time.trim() || '08:00 AM',
+        category: editingRoutineItem.category,
+        title: editingRoutineItem.title.trim(),
+        desc: editingRoutineItem.desc.trim(),
+        priority: editingRoutineItem.priority
+      } : r)
+    }));
+
+    setEditingRoutineItem(null);
+    if (showToast) showToast('success', 'Actividad Actualizada', 'Los cambios en la rutina han sido guardados.');
   };
 
   // Add routine item
@@ -205,8 +248,8 @@ export default function PetCareModule({
     e.preventDefault();
     const log = {
       id: 'wlk-' + Date.now(),
-      date: todayStr,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      date: newWalkLog.date || todayStr,
+      time: newWalkLog.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       durationMinutes: safeNumber(newWalkLog.durationMinutes, 15),
       surface: newWalkLog.surface,
       hipGaitRating: newWalkLog.hipGaitRating,
@@ -219,6 +262,8 @@ export default function PetCareModule({
     }));
 
     setNewWalkLog({
+      date: todayStr,
+      time: '08:00 AM',
       durationMinutes: 15,
       surface: 'Pasto / Césped suave',
       hipGaitRating: 'fluido',
@@ -228,12 +273,23 @@ export default function PetCareModule({
     if (showToast) showToast('success', 'Paseo Registrado', `Paseo de ${log.durationMinutes} min registrado.`);
   };
 
+  // Delete walk log
+  const handleDeleteWalk = (id) => {
+    if (!window.confirm('¿Deseas eliminar este registro de paseo?')) return;
+    updatePetData((prev) => ({
+      ...prev,
+      walkLogs: (prev.walkLogs || []).filter(w => w.id !== id)
+    }));
+    if (showToast) showToast('success', 'Paseo Eliminado', 'El registro de paseo fue retirado.');
+  };
+
   // Add hydrotherapy log
   const handleAddHydroLog = (e) => {
     e.preventDefault();
+    const sessionDate = newHydroLog.date || todayStr;
     const log = {
       id: 'hydro-' + Date.now(),
-      date: todayStr,
+      date: sessionDate,
       durationMinutes: safeNumber(newHydroLog.durationMinutes, 20),
       postSwimBath: Boolean(newHydroLog.postSwimBath),
       deepDryingDone: Boolean(newHydroLog.deepDryingDone),
@@ -248,10 +304,10 @@ export default function PetCareModule({
       if (log.postSwimBath) {
         updatedPrevCare = updatedPrevCare.map(p => {
           if (p.type === 'bath_grooming') {
-            const nextDue = calculateNextDueDate(todayStr, p.intervalDays);
+            const nextDue = calculateNextDueDate(sessionDate, p.intervalDays);
             return {
               ...p,
-              lastDate: todayStr,
+              lastDate: sessionDate,
               nextDueDate: nextDue ? getLocalDateString(nextDue) : p.nextDueDate,
               status: 'completed'
             };
@@ -271,7 +327,46 @@ export default function PetCareModule({
     });
 
     setShowAddHydroModal(false);
-    if (showToast) showToast('success', 'Sesión de Nado Registrada', 'Hidroterapia y cuidados post-baño guardados.');
+    if (showToast) showToast('success', 'Sesión de Nado Registrada', `Hidroterapia registrada con fecha ${formatDisplayDate(sessionDate)}.`);
+  };
+
+  // Delete hydrotherapy session
+  const handleDeleteHydro = (id) => {
+    if (!window.confirm('¿Deseas eliminar este registro de sesión de nado?')) return;
+    updatePetData((prev) => ({
+      ...prev,
+      hydrotherapy: {
+        ...prev.hydrotherapy,
+        sessions: (prev.hydrotherapy?.sessions || []).filter(s => s.id !== id)
+      }
+    }));
+    if (showToast) showToast('success', 'Sesión Eliminada', 'El registro de nado fue retirado.');
+  };
+
+  // Save edited hydro session
+  const handleSaveEditHydro = (e) => {
+    e.preventDefault();
+    if (!editingHydroItem) return;
+
+    updatePetData((prev) => ({
+      ...prev,
+      hydrotherapy: {
+        ...prev.hydrotherapy,
+        sessions: (prev.hydrotherapy?.sessions || []).map(s => s.id === editingHydroItem.id ? {
+          ...s,
+          date: editingHydroItem.date || todayStr,
+          durationMinutes: safeNumber(editingHydroItem.durationMinutes, 20),
+          postSwimBath: Boolean(editingHydroItem.postSwimBath),
+          deepDryingDone: Boolean(editingHydroItem.deepDryingDone),
+          earCleaningDone: Boolean(editingHydroItem.earCleaningDone),
+          mobilityAfter: editingHydroItem.mobilityAfter,
+          notes: editingHydroItem.notes.trim()
+        } : s)
+      }
+    }));
+
+    setEditingHydroItem(null);
+    if (showToast) showToast('success', 'Sesión Actualizada', 'Los cambios en la sesión de nado han sido guardados.');
   };
 
   // Add medication
@@ -312,11 +407,34 @@ export default function PetCareModule({
 
   // Delete medication
   const handleDeleteMed = (id) => {
+    if (!window.confirm('¿Seguro que deseas eliminar este medicamento del botiquín?')) return;
     updatePetData((prev) => ({
       ...prev,
       medications: prev.medications.filter(m => m.id !== id)
     }));
     if (showToast) showToast('success', 'Eliminado', 'Medicamento retirado del botiquín.');
+  };
+
+  // Save edited medication
+  const handleSaveEditMed = (e) => {
+    e.preventDefault();
+    if (!editingMedItem) return;
+
+    updatePetData((prev) => ({
+      ...prev,
+      medications: prev.medications.map(m => m.id === editingMedItem.id ? {
+        ...m,
+        name: editingMedItem.name.trim(),
+        condition: editingMedItem.condition.trim(),
+        dosage: editingMedItem.dosage.trim(),
+        frequency: editingMedItem.frequency.trim(),
+        timing: editingMedItem.timing,
+        notes: editingMedItem.notes.trim()
+      } : m)
+    }));
+
+    setEditingMedItem(null);
+    if (showToast) showToast('success', 'Medicamento Actualizado', 'Información del medicamento guardada.');
   };
 
   // Administer medication today
@@ -374,26 +492,62 @@ export default function PetCareModule({
     if (showToast) showToast('success', 'Evento Guardado', `${item.title} añadido al calendario.`);
   };
 
-  // Mark preventive completed today
-  const handleCompletePreventive = (id) => {
+  // Update completion date of a preventive care item (allows custom past/today date)
+  const handleUpdatePreventiveDate = (id, targetDate) => {
+    const finalDate = targetDate || todayStr;
     updatePetData((prev) => ({
       ...prev,
       preventiveCare: prev.preventiveCare.map(p => {
         if (p.id !== id) return p;
-        const nextDue = calculateNextDueDate(todayStr, p.intervalDays);
+        const nextDue = calculateNextDueDate(finalDate, p.intervalDays);
         return {
           ...p,
-          lastDate: todayStr,
+          lastDate: finalDate,
           nextDueDate: nextDue ? getLocalDateString(nextDue) : p.nextDueDate,
           status: 'completed'
         };
       })
     }));
-    if (showToast) showToast('success', 'Cuidado Realizado', 'Fecha de última aplicación actualizada a hoy.');
+
+    const updatedItem = (petData?.preventiveCare || []).find(p => p.id === id);
+    const itemTitle = updatedItem?.title || 'Cuidado preventivo';
+    if (showToast) {
+      showToast('success', 'Fecha Actualizada', `"${itemTitle}": Registrado el ${formatDisplayDate(finalDate)}.`);
+    }
+  };
+
+  // Save edited preventive care event
+  const handleSaveEditPreventive = (e) => {
+    e.preventDefault();
+    if (!editingPreventiveItem) return;
+
+    const interval = Math.max(1, safeNumber(editingPreventiveItem.intervalDays, 30));
+    const nextDue = calculateNextDueDate(editingPreventiveItem.lastDate || todayStr, interval);
+
+    updatePetData((prev) => ({
+      ...prev,
+      preventiveCare: prev.preventiveCare.map(p => {
+        if (p.id !== editingPreventiveItem.id) return p;
+        return {
+          ...p,
+          title: editingPreventiveItem.title.trim(),
+          type: editingPreventiveItem.type,
+          intervalDays: interval,
+          frequencyDesc: editingPreventiveItem.frequencyDesc.trim() || `Cada ${interval} días`,
+          lastDate: editingPreventiveItem.lastDate || todayStr,
+          nextDueDate: nextDue ? getLocalDateString(nextDue) : p.nextDueDate,
+          notes: editingPreventiveItem.notes.trim()
+        };
+      })
+    }));
+
+    setEditingPreventiveItem(null);
+    if (showToast) showToast('success', 'Cuidado Actualizado', 'Cambios guardados en el calendario preventivo.');
   };
 
   // Delete preventive
   const handleDeletePreventive = (id) => {
+    if (!window.confirm('¿Seguro que deseas eliminar este evento del calendario preventivo?')) return;
     updatePetData((prev) => ({
       ...prev,
       preventiveCare: prev.preventiveCare.filter(p => p.id !== id)
@@ -445,7 +599,7 @@ export default function PetCareModule({
     }));
 
     if (showToast) {
-      const msg = status === 'attended' ? '¡Kira está en su guardería!' : 'Registro de asistencia guardado.';
+      const msg = status === 'attended' ? `¡${petName} está en su guardería!` : 'Registro de asistencia guardado.';
       showToast('success', 'Guardería Actualizada', msg);
     }
   };
@@ -453,11 +607,12 @@ export default function PetCareModule({
   // Save profile form
   const handleSaveProfile = (e) => {
     e.preventDefault();
+    const cleanName = profileForm.name.trim() || 'Mona';
     updatePetData((prev) => ({
       ...prev,
       profile: {
         ...prev.profile,
-        name: profileForm.name.trim(),
+        name: cleanName,
         breed: profileForm.breed.trim(),
         ageYears: safeNumber(profileForm.ageYears, 12),
         gender: profileForm.gender.trim(),
@@ -473,7 +628,7 @@ export default function PetCareModule({
       }
     }));
     setShowEditProfileModal(false);
-    if (showToast) showToast('success', 'Perfil Actualizado', 'Información de tu mascota guardada correctamente.');
+    if (showToast) showToast('success', 'Perfil Actualizado', `Información de ${cleanName} guardada correctamente.`);
   };
 
   // Filtered routine list
@@ -494,7 +649,7 @@ export default function PetCareModule({
   return (
     <div className="space-y-6">
 
-      {/* TOP HERO BANNER: KIRA'S PROFILE & QUICK VITALS */}
+      {/* TOP HERO BANNER: MONA'S PROFILE & QUICK VITALS */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#171a24] via-[#11131a] to-[#0b0c10] border border-[#e0a96d]/25 p-6 sm:p-8 shadow-2xl">
         <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-[#e0a96d]/10 via-amber-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
 
@@ -505,14 +660,14 @@ export default function PetCareModule({
                 <Dog className="w-10 h-10 sm:w-12 sm:h-12" />
               </div>
               <span className="absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold tracking-wider uppercase">
-                12 Años
+                {petData?.profile?.ageYears || 12} Años
               </span>
             </div>
 
             <div className="space-y-1">
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl sm:text-3xl font-black font-outfit text-slate-100 tracking-tight">
-                  {petData?.profile?.name || 'Kira'}
+                  {petName}
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-md bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/30 text-xs font-bold">
                   {petData?.profile?.gender || 'Hembra'} • {petData?.profile?.breed || 'Pastor Alemán Pelo Largo'}
@@ -537,7 +692,24 @@ export default function PetCareModule({
 
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
             <button
-              onClick={() => setShowEditProfileModal(true)}
+              onClick={() => {
+                setProfileForm({
+                  name: petName,
+                  breed: petData?.profile?.breed || 'Pastor Alemán (Pelo Largo)',
+                  ageYears: petData?.profile?.ageYears || 12,
+                  gender: petData?.profile?.gender || 'Hembra',
+                  weightKg: petData?.profile?.weightKg || 32.5,
+                  microchip: petData?.profile?.microchip || '',
+                  vetContact: petData?.profile?.vetContact || 'Dra. Veterinaria de Cabecera',
+                  vetPhone: petData?.profile?.vetPhone || '+52 55 0000 0000',
+                  emergencyClinic: petData?.profile?.emergencyClinic || 'Hospital Veterinario 24/7',
+                  emergencyPhone: petData?.profile?.emergencyPhone || '+52 55 9999 9999',
+                  daycareName: petData?.profile?.daycareName || 'Guardería Canina Campestre',
+                  daycarePhone: petData?.profile?.daycarePhone || '+52 55 1234 5678',
+                  notes: petData?.profile?.notes || ''
+                });
+                setShowEditProfileModal(true);
+              }}
               className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#171a24] hover:bg-[#1f2330] text-slate-200 border border-slate-700/60 text-xs font-bold transition-all cursor-pointer"
             >
               <Edit3 className="w-4 h-4 text-[#e0a96d]" /> Ficha Médica
@@ -680,7 +852,7 @@ export default function PetCareModule({
                 <Clock className="w-5 h-5 text-[#e0a96d]" /> Cronograma Diario Adaptado
               </h2>
               <p className="text-xs text-slate-400">
-                Horarios organizados para absorción tiroidea en ayunas, protección articular de cadera y balance de estímulo.
+                Horarios organizados para absorción tiroidea en ayunas, protección articular de cadera y balance de descanso.
               </p>
             </div>
 
@@ -773,13 +945,22 @@ export default function PetCareModule({
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleDeleteRoutineItem(item.id)}
-                      className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 p-1.5 rounded-lg transition-all cursor-pointer"
-                      title="Eliminar de rutina"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                      <button
+                        onClick={() => setEditingRoutineItem({ ...item })}
+                        className="text-slate-400 hover:text-[#e0a96d] p-1.5 rounded-lg hover:bg-slate-800/80 transition-all cursor-pointer"
+                        title="Editar actividad"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRoutineItem(item.id)}
+                        className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800/80 transition-all cursor-pointer"
+                        title="Eliminar de rutina"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -805,7 +986,7 @@ export default function PetCareModule({
             {petData?.walkLogs && petData.walkLogs.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {petData.walkLogs.slice(0, 6).map((wlk) => (
-                  <div key={wlk.id} className="p-3 rounded-xl bg-[#11131a] border border-slate-800/80 flex items-center justify-between gap-3 text-xs">
+                  <div key={wlk.id} className="p-3 rounded-xl bg-[#11131a] border border-slate-800/80 flex items-center justify-between gap-3 text-xs group">
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2 font-bold text-slate-200">
                         <span>{formatDisplayDate(wlk.date)} ({wlk.time})</span>
@@ -817,15 +998,24 @@ export default function PetCareModule({
                       {wlk.notes && <p className="text-slate-400 italic text-[10px]">"{wlk.notes}"</p>}
                     </div>
 
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase shrink-0 ${
-                      wlk.hipGaitRating === 'fluido'
-                        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                        : wlk.hipGaitRating === 'ligera_rigidez'
-                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                        : 'bg-red-500/10 text-red-300 border-red-500/30'
-                    }`}>
-                      {wlk.hipGaitRating === 'fluido' ? 'Marcha Fluida' : wlk.hipGaitRating === 'ligera_rigidez' ? 'Rigidez Leve' : 'Cojera / Molestia'}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${
+                        wlk.hipGaitRating === 'fluido'
+                          ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                          : wlk.hipGaitRating === 'ligera_rigidez'
+                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                          : 'bg-red-500/10 text-red-300 border-red-500/30'
+                      }`}>
+                        {wlk.hipGaitRating === 'fluido' ? 'Marcha Fluida' : wlk.hipGaitRating === 'ligera_rigidez' ? 'Rigidez Leve' : 'Cojera / Molestia'}
+                      </span>
+                      <button
+                        onClick={() => handleDeleteWalk(wlk.id)}
+                        className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 p-1 transition-all cursor-pointer"
+                        title="Eliminar registro de paseo"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -976,7 +1166,18 @@ export default function PetCareModule({
               </div>
 
               <button
-                onClick={() => setShowAddHydroModal(true)}
+                onClick={() => {
+                  setNewHydroLog({
+                    date: todayStr,
+                    durationMinutes: 20,
+                    postSwimBath: true,
+                    deepDryingDone: true,
+                    earCleaningDone: true,
+                    mobilityAfter: 'excelente',
+                    notes: 'Sesión de nado de bajo impacto en piscina temperada. Buen soporte en cadera.'
+                  });
+                  setShowAddHydroModal(true);
+                }}
                 className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-cyan-500 text-[#0b0c10] text-xs font-black hover:bg-cyan-400 transition-all cursor-pointer shadow-md"
               >
                 <Plus className="w-4 h-4" /> Registrar Sesión de Nado
@@ -1008,9 +1209,9 @@ export default function PetCareModule({
 
               {petData?.hydrotherapy?.sessions && petData.hydrotherapy.sessions.length > 0 ? (
                 <div className="space-y-2.5">
-                  {petData.hydrotherapy.sessions.slice(0, 5).map((session) => (
-                    <div key={session.id} className="p-4 rounded-2xl bg-[#171a24] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                      <div className="space-y-1">
+                  {petData.hydrotherapy.sessions.map((session) => (
+                    <div key={session.id} className="p-4 rounded-2xl bg-[#171a24] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs group">
+                      <div className="space-y-1 flex-1">
                         <div className="flex items-center gap-2 font-bold text-slate-200">
                           <Calendar className="w-4 h-4 text-cyan-400" />
                           <span>{formatFullDisplayDate(session.date)}</span>
@@ -1036,10 +1237,27 @@ export default function PetCareModule({
                         {session.notes && <p className="text-slate-400 italic text-[11px] pt-1">"{session.notes}"</p>}
                       </div>
 
-                      <div className="text-right shrink-0">
+                      <div className="flex items-center gap-3 shrink-0">
                         <span className="text-[10px] font-bold px-2 py-1 rounded bg-[#11131a] text-cyan-300 border border-cyan-500/30 uppercase">
                           Movilidad: {session.mobilityAfter}
                         </span>
+
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                          <button
+                            onClick={() => setEditingHydroItem({ ...session })}
+                            className="text-slate-400 hover:text-cyan-400 p-1.5 rounded-lg hover:bg-slate-800 transition-all cursor-pointer"
+                            title="Editar sesión"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteHydro(session.id)}
+                            className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800 transition-all cursor-pointer"
+                            title="Eliminar sesión"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1060,7 +1278,7 @@ export default function PetCareModule({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                <Pill className="w-5 h-5 text-[#e0a96d]" /> Botiquín & Medicamentos de Kira
+                <Pill className="w-5 h-5 text-[#e0a96d]" /> Botiquín & Medicamentos de {petName}
               </h2>
               <p className="text-xs text-slate-400">
                 Control estricto de Levotiroxina (en ayunas), gotas oftálmicas y suplementación articular para su displasia.
@@ -1099,13 +1317,22 @@ export default function PetCareModule({
                       </p>
                     </div>
 
-                    <button
-                      onClick={() => handleDeleteMed(med.id)}
-                      className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 p-1.5 rounded-lg transition-all cursor-pointer"
-                      title="Eliminar medicamento"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                      <button
+                        onClick={() => setEditingMedItem({ ...med })}
+                        className="text-slate-400 hover:text-[#e0a96d] p-1.5 rounded-lg hover:bg-slate-800 transition-all cursor-pointer"
+                        title="Editar medicamento"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMed(med.id)}
+                        className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800 transition-all cursor-pointer"
+                        title="Eliminar medicamento"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   {med.notes && (
@@ -1189,6 +1416,7 @@ export default function PetCareModule({
               const daysLeft = item.nextDueDate ? getDaysDifference(todayStr, item.nextDueDate) : 0;
               const isOverdue = daysLeft < 0;
               const isDueSoon = daysLeft >= 0 && daysLeft <= 5;
+              const currentInputDate = customPreventiveDates[item.id] || item.lastDate || todayStr;
 
               return (
                 <div
@@ -1221,18 +1449,27 @@ export default function PetCareModule({
                       </h3>
                     </div>
 
-                    <button
-                      onClick={() => handleDeletePreventive(item.id)}
-                      className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 p-1.5 rounded-lg transition-all cursor-pointer"
-                      title="Eliminar evento"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                      <button
+                        onClick={() => setEditingPreventiveItem({ ...item })}
+                        className="text-slate-400 hover:text-[#e0a96d] p-1.5 rounded-lg hover:bg-slate-800 transition-all cursor-pointer"
+                        title="Editar evento"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeletePreventive(item.id)}
+                        className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800 transition-all cursor-pointer"
+                        title="Eliminar evento"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-[11px] p-2.5 rounded-xl bg-[#171a24] border border-slate-800">
                     <div>
-                      <span className="text-slate-500 block">Última vez:</span>
+                      <span className="text-slate-500 block">Última vez realizada:</span>
                       <span className="font-semibold text-slate-300">{formatDisplayDate(item.lastDate)}</span>
                     </div>
                     <div>
@@ -1247,12 +1484,57 @@ export default function PetCareModule({
                     </p>
                   )}
 
-                  <button
-                    onClick={() => handleCompletePreventive(item.id)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-[#171a24] hover:bg-[#1f2330] text-slate-200 border border-slate-700/80 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 group-hover:border-[#e0a96d]/40"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Marcar como Realizado Hoy
-                  </button>
+                  {/* CUSTOM DATE LOGGING CONTROLS: HOY / AYER / SELECCIONAR FECHA */}
+                  <div className="pt-2 border-t border-slate-800 space-y-2">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                      Registrar última fecha en que se realizó:
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => handleUpdatePreventiveDate(item.id, todayStr)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          item.lastDate === todayStr
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : 'bg-[#171a24] text-slate-300 hover:bg-[#1f2330] border border-slate-700'
+                        }`}
+                        title="Registrar que se realizó hoy"
+                      >
+                        Hoy ({formatDisplayDate(todayStr, { day: 'numeric', month: 'short' })})
+                      </button>
+                      <button
+                        onClick={() => handleUpdatePreventiveDate(item.id, yesterdayStr)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          item.lastDate === yesterdayStr
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            : 'bg-[#171a24] text-slate-300 hover:bg-[#1f2330] border border-slate-700'
+                        }`}
+                        title="Registrar que se realizó ayer"
+                      >
+                        Ayer
+                      </button>
+
+                      {/* Custom Date Input */}
+                      <div className="flex items-center gap-1.5 flex-1 min-w-[170px]">
+                        <input
+                          type="date"
+                          value={currentInputDate}
+                          onChange={(e) => {
+                            setCustomPreventiveDates({
+                              ...customPreventiveDates,
+                              [item.id]: e.target.value
+                            });
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-[#171a24] border border-slate-700 text-slate-200 text-xs outline-none focus:border-[#e0a96d] flex-1"
+                        />
+                        <button
+                          onClick={() => handleUpdatePreventiveDate(item.id, currentInputDate)}
+                          className="px-3 py-1.5 rounded-xl bg-[#e0a96d]/15 hover:bg-[#e0a96d]/25 text-[#e0a96d] border border-[#e0a96d]/30 text-xs font-bold cursor-pointer whitespace-nowrap"
+                        >
+                          Guardar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -1266,15 +1548,32 @@ export default function PetCareModule({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                <Dog className="w-5 h-5 text-[#e0a96d]" /> Ficha Médica Geriátrica de Kira
+                <Dog className="w-5 h-5 text-[#e0a96d]" /> Ficha Médica Geriátrica de {petName}
               </h2>
               <p className="text-xs text-slate-400">
-                Puntos críticos de manejo biomecánico y contactos de emergencia veterinaria.
+                Puntos críticos de manejo biomecánico, recomendaciones ortopédicas y contactos de emergencia veterinaria.
               </p>
             </div>
 
             <button
-              onClick={() => setShowEditProfileModal(true)}
+              onClick={() => {
+                setProfileForm({
+                  name: petName,
+                  breed: petData?.profile?.breed || 'Pastor Alemán (Pelo Largo)',
+                  ageYears: petData?.profile?.ageYears || 12,
+                  gender: petData?.profile?.gender || 'Hembra',
+                  weightKg: petData?.profile?.weightKg || 32.5,
+                  microchip: petData?.profile?.microchip || '',
+                  vetContact: petData?.profile?.vetContact || 'Dra. Veterinaria de Cabecera',
+                  vetPhone: petData?.profile?.vetPhone || '+52 55 0000 0000',
+                  emergencyClinic: petData?.profile?.emergencyClinic || 'Hospital Veterinario 24/7',
+                  emergencyPhone: petData?.profile?.emergencyPhone || '+52 55 9999 9999',
+                  daycareName: petData?.profile?.daycareName || 'Guardería Canina Campestre',
+                  daycarePhone: petData?.profile?.daycarePhone || '+52 55 1234 5678',
+                  notes: petData?.profile?.notes || ''
+                });
+                setShowEditProfileModal(true);
+              }}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#e0a96d] text-[#0b0c10] text-xs font-black hover:bg-[#b37d46] transition-all cursor-pointer shadow-md"
             >
               <Edit3 className="w-4 h-4" /> Editar Datos y Teléfonos
@@ -1329,47 +1628,103 @@ export default function PetCareModule({
             </div>
           </div>
 
-          {/* BIOMECHANICAL & GERIATRIC PROTOCOLS */}
-          <div className="p-6 rounded-3xl bg-[#11131a] border border-slate-800 space-y-5">
+          {/* DETAILED BIOMECHANICAL & ORTHOPEDIC GUIDELINES */}
+          <div className="p-6 rounded-3xl bg-[#11131a] border border-slate-800 space-y-6">
             <h3 className="text-sm font-bold uppercase tracking-wider text-[#e0a96d] flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4" /> Protocolo Biomecánico & Manejo de Displasia en Casa
+              <ShieldCheck className="w-4 h-4" /> Respuestas & Guía de Manejo Biomecánico para Displasia en {petName}
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800/80 space-y-2">
-                <span className="font-bold text-slate-200 flex items-center gap-2">
-                  🚫 Cero Superficies Resbaladizas
-                </span>
-                <p className="text-slate-400 leading-relaxed">
-                  Los resbalones provocan microtraumatismos agudos en la articulación coxofemoral. Usar tapetes o pasillos antiderrapantes en las zonas donde Kira camina y levantarse de su cama.
-                </p>
+              {/* TAPETES */}
+              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🐾</span>
+                  <span className="font-bold text-slate-200 text-sm">
+                    ¿Dónde colocar los tapetes antiderrapantes?
+                  </span>
+                </div>
+                <div className="text-slate-300 leading-relaxed space-y-1.5 text-[11px]">
+                  <p>
+                    Para un perro de 12 años con displasia, el suelo liso (loseta, porcelanato, duela barnizada) es el principal detonante de microtraumas y luxaciones pélvicas dolorosas.
+                  </p>
+                  <p className="font-semibold text-[#e0a96d]">Lugares exactos donde ponerlos:</p>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-400">
+                    <li><strong>Alrededor de su cama:</strong> El momento de levantarse es cuando más tracción necesita. Debe poder apoyar sus 4 patas sobre superficie rugosa sin resbalar.</li>
+                    <li><strong>Zona de agua y comida:</strong> Al agachar el cuello para comer/beber, el centro de gravedad cambia hacia adelante y las patas traseras tienden a abrirse en compás.</li>
+                    <li><strong>Pasillos principales de paso:</strong> Caminos de alfombra donde toma velocidad al moverse de una habitación a otra.</li>
+                    <li><strong>Puerta de entrada y timbres:</strong> La zona donde se apresura cuando llega alguien.</li>
+                    <li><strong>Salida hacia el jardín o coche:</strong> Zonas de transición de niveles.</li>
+                  </ul>
+                  <p className="text-[10px] text-amber-300/90 pt-1">
+                    💡 <strong>Tip práctico:</strong> Puedes usar <em>yoga mats</em> recortados de alta fricción o rollos de camino de pasillo con base de goma estriada/látex gofrado lavable.
+                  </p>
+                </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800/80 space-y-2">
-                <span className="font-bold text-slate-200 flex items-center gap-2">
-                  🛏️ Cama Ortopédica Viscoelástica
-                </span>
-                <p className="text-slate-400 leading-relaxed">
-                  A sus 12 años, una cama con memoria viscoelástica alivia la presión sobre los trocánteres de su cadera y reduce la rigidez al despertar.
-                </p>
+              {/* RAMPAS PARA EL AUTO */}
+              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🚗</span>
+                  <span className="font-bold text-slate-200 text-sm">
+                    ¿Qué rampas para el auto se recomiendan?
+                  </span>
+                </div>
+                <div className="text-slate-300 leading-relaxed space-y-1.5 text-[11px]">
+                  <p>
+                    Para un Pastor Alemán de ~32 kg senior, saltar hacia la cajuela o asientos causa un impacto destructivo en los acetábulos de su cadera.
+                  </p>
+                  <p className="font-semibold text-[#e0a96d]">Modelos recomendados:</p>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-400">
+                    <li><strong>PetSafe Solvit Deluxe Telescoping Ramp:</strong> La más recomendada internacionalmente. Soporta hasta 130 kg, pesa solo ~6 kg (aluminio), rieles laterales de seguridad para que no sienta vértigo y superficie de agarre tipo lija suave.</li>
+                    <li><strong>Trixie Rampa Telescópica de Aluminio:</strong> Muy duradera, con recubrimiento de goma acanalada antideslizante que da mucha seguridad al paso.</li>
+                    <li><strong>Alternativa si tu auto es SUV alta:</strong> Escalera plegable tipo acordeón con peldaños anchos de aluminio y tela Oxford rígida. Si el maletero es muy alto, una rampa puede quedar demasiado empinada; muchos pastores senior suben mejor peldaños horizontales anchos.</li>
+                    <li><strong>Arnés de soporte asistido:</strong> Un arnés con asa trasera pélvica (tipo <em>Help 'Em Up Harness</em>) te permite guiarla suavemente y quitarle hasta el 40% del peso en la subida sin forzar tu espalda.</li>
+                  </ul>
+                </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800/80 space-y-2">
-                <span className="font-bold text-slate-200 flex items-center gap-2">
-                  🦽 Rampas y Subida Asistida al Auto
-                </span>
-                <p className="text-slate-400 leading-relaxed">
-                  Para el trayecto diario a la guardería (30-60 min), evitar que salte hacia la cajuela o asientos. Emplear una rampa plegable o soporte de cadera asistido.
-                </p>
+              {/* CAMA ORTOPÉDICA */}
+              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🛏️</span>
+                  <span className="font-bold text-slate-200 text-sm">
+                    ¿Qué cama ortopédica viscoelástica se recomienda?
+                  </span>
+                </div>
+                <div className="text-slate-300 leading-relaxed space-y-1.5 text-[11px]">
+                  <p>
+                    A los 12 años, las camas convencionales con relleno de poliéster o pedacería se aplastan hasta el piso, haciendo que sus caderas choquen contra el suelo duro.
+                  </p>
+                  <p className="font-semibold text-[#e0a96d]">Modelos recomendados:</p>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-400">
+                    <li><strong>Big Barker 7" Pillow Top (Talla XL):</strong> El estándar de oro clínico veterinario para razas grandes con displasia (probada en la Universidad de Pensilvania). Espuma de grado terapéutico de 18 cm que nunca se hunde y alivia los puntos de presión de cadera y codos.</li>
+                    <li><strong>PetFusion Ultimate Solid Memory Foam (Talla XL):</strong> Bloque macizo de espuma viscoelástica de 10-12 cm con reborde acolchado ergonómico donde puede recargar cuello y columna.</li>
+                    <li><strong>Bedsure Ortopédica con base de soporte firme:</strong> Opción accesible con núcleo firme y funda impermeable interna lavable.</li>
+                  </ul>
+                  <p className="text-[10px] text-emerald-300/90 pt-1">
+                    ✓ <strong>Regla de oro:</strong> Debe ser de <em>Memory Foam</em> macizo (bloque sólido de 10 a 15 cm), tamaño suficiente para estirarse de costado y con entrada al ras de piso sin escalón alto.
+                  </p>
+                </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800/80 space-y-2">
-                <span className="font-bold text-slate-200 flex items-center gap-2">
-                  ✂️ Corte Frecuente de Uñas
-                </span>
-                <p className="text-slate-400 leading-relaxed">
-                  Las uñas largas cambian el centro de gravedad y el ángulo de pisada hacia atrás, aumentando severamente la carga dolorosa sobre su pelvis.
-                </p>
+              {/* CUIDADOS GENERALES */}
+              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">✂️</span>
+                  <span className="font-bold text-slate-200 text-sm">
+                    Uñas, Temperatura & Manto Largo
+                  </span>
+                </div>
+                <div className="text-slate-300 leading-relaxed space-y-1.5 text-[11px]">
+                  <p>
+                    Factores que a menudo se pasan por alto en la displasia geriátrica:
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-400">
+                    <li><strong>Corte de uñas cada 3 semanas:</strong> Si las uñas tocan el piso, obligan a Mona a arquear los dedos y cambiar el centro de carga hacia atrás, transmitiendo tensión directa a la pelvis.</li>
+                    <li><strong>Calor en articulaciones:</strong> El frío aumenta la viscosidad del líquido sinovial. Mantén su zona de descanso abrigada y libre de corrientes de aire frío.</li>
+                    <li><strong>Secado post-natación:</strong> Su denso doble manto no debe quedar húmedo tras nadar para evitar dolores reumáticos y hot-spots.</li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
@@ -1463,6 +1818,90 @@ export default function PetCareModule({
         </div>
       )}
 
+      {/* MODAL: EDITAR ACTIVIDAD DE RUTINA */}
+      {editingRoutineItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0c10]/80 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-[#171a24] border border-[#e0a96d]/30 p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-[#e0a96d]" /> Editar Actividad de Rutina
+              </h3>
+              <button
+                onClick={() => setEditingRoutineItem(null)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditRoutine} className="space-y-4 text-xs">
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Hora:</label>
+                <input
+                  type="text"
+                  value={editingRoutineItem.time}
+                  onChange={(e) => setEditingRoutineItem({ ...editingRoutineItem, time: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Categoría:</label>
+                <select
+                  value={editingRoutineItem.category}
+                  onChange={(e) => setEditingRoutineItem({ ...editingRoutineItem, category: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                >
+                  <option value="medication">💊 Medicación</option>
+                  <option value="walk">🐾 Paseo Suave</option>
+                  <option value="food">🍲 Alimentación / Suplemento</option>
+                  <option value="daycare">🚐 Guardería</option>
+                  <option value="care">🛁 Cuidado / Higiene</option>
+                  <option value="home">🏡 Hogar / Descanso</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Título de la actividad:</label>
+                <input
+                  type="text"
+                  value={editingRoutineItem.title}
+                  onChange={(e) => setEditingRoutineItem({ ...editingRoutineItem, title: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Descripción / Notas:</label>
+                <textarea
+                  value={editingRoutineItem.desc}
+                  onChange={(e) => setEditingRoutineItem({ ...editingRoutineItem, desc: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none h-20 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingRoutineItem(null)}
+                  className="px-4 py-2 rounded-xl bg-[#11131a] text-slate-400 hover:text-slate-200 font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#e0a96d] text-[#0b0c10] font-black hover:bg-[#b37d46] cursor-pointer"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: REGISTRAR PASEO */}
       {showAddWalkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0c10]/80 backdrop-blur-sm">
@@ -1480,6 +1919,28 @@ export default function PetCareModule({
             </div>
 
             <form onSubmit={handleAddWalkLog} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Fecha:</label>
+                  <input
+                    type="date"
+                    value={newWalkLog.date}
+                    onChange={(e) => setNewWalkLog({ ...newWalkLog, date: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-emerald-500 outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Hora aproximada:</label>
+                  <input
+                    type="text"
+                    value={newWalkLog.time}
+                    onChange={(e) => setNewWalkLog({ ...newWalkLog, time: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="text-slate-400 font-semibold block mb-1">Duración (minutos):</label>
                 <div className="flex gap-2">
@@ -1563,7 +2024,7 @@ export default function PetCareModule({
         </div>
       )}
 
-      {/* MODAL: REGISTRAR HIDROTERAPIA & NADO */}
+      {/* MODAL: REGISTRAR HIDROTERAPIA & NADO (CON FECHA PERSONALIZADA) */}
       {showAddHydroModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0c10]/80 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl bg-[#171a24] border border-cyan-500/30 p-6 space-y-5 shadow-2xl">
@@ -1580,23 +2041,35 @@ export default function PetCareModule({
             </div>
 
             <form onSubmit={handleAddHydroLog} className="space-y-4 text-xs">
-              <div>
-                <label className="text-slate-400 font-semibold block mb-1">Duración en el agua (minutos):</label>
-                <input
-                  type="number"
-                  min="5"
-                  max="60"
-                  value={newHydroLog.durationMinutes}
-                  onChange={(e) => setNewHydroLog({ ...newHydroLog, durationMinutes: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-cyan-400 outline-none"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Fecha de la sesión:</label>
+                  <input
+                    type="date"
+                    value={newHydroLog.date}
+                    onChange={(e) => setNewHydroLog({ ...newHydroLog, date: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-cyan-400 outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Duración (minutos):</label>
+                  <input
+                    type="number"
+                    min="5"
+                    max="60"
+                    value={newHydroLog.durationMinutes}
+                    onChange={(e) => setNewHydroLog({ ...newHydroLog, durationMinutes: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-cyan-400 outline-none"
+                    required
+                  />
+                </div>
               </div>
 
               {/* CHECKLIST CRÍTICO POST-NADO */}
               <div className="space-y-2 p-3 rounded-xl bg-[#11131a] border border-slate-800">
                 <span className="font-bold text-slate-300 block">
-                  Cuidados Post-Nado (Pastor Alemán Pelo Largo):
+                  Cuidados Post-Nado ({petData?.profile?.breed || 'Pastor Alemán Pelo Largo'}):
                 </span>
 
                 <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
@@ -1606,7 +2079,7 @@ export default function PetCareModule({
                     onChange={(e) => setNewHydroLog({ ...newHydroLog, postSwimBath: e.target.checked })}
                     className="rounded text-cyan-500"
                   />
-                  <span>Baño con agua dulce & shampoo neutro</span>
+                  <span>Baño con agua dulce & shampoo neutro (Actualiza calendario bimensual)</span>
                 </label>
 
                 <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
@@ -1666,6 +2139,123 @@ export default function PetCareModule({
                   className="px-4 py-2 rounded-xl bg-cyan-500 text-[#0b0c10] font-black hover:bg-cyan-400 cursor-pointer"
                 >
                   Guardar Hidroterapia
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR SESIÓN DE HIDROTERAPIA */}
+      {editingHydroItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0c10]/80 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-[#171a24] border border-cyan-500/30 p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-cyan-400" /> Editar Sesión de Hidroterapia
+              </h3>
+              <button
+                onClick={() => setEditingHydroItem(null)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditHydro} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Fecha:</label>
+                  <input
+                    type="date"
+                    value={editingHydroItem.date}
+                    onChange={(e) => setEditingHydroItem({ ...editingHydroItem, date: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-cyan-400 outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Duración (minutos):</label>
+                  <input
+                    type="number"
+                    min="5"
+                    max="60"
+                    value={editingHydroItem.durationMinutes}
+                    onChange={(e) => setEditingHydroItem({ ...editingHydroItem, durationMinutes: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-cyan-400 outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 p-3 rounded-xl bg-[#11131a] border border-slate-800">
+                <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingHydroItem.postSwimBath}
+                    onChange={(e) => setEditingHydroItem({ ...editingHydroItem, postSwimBath: e.target.checked })}
+                    className="rounded text-cyan-500"
+                  />
+                  <span>Baño con agua dulce & shampoo</span>
+                </label>
+
+                <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingHydroItem.deepDryingDone}
+                    onChange={(e) => setEditingHydroItem({ ...editingHydroItem, deepDryingDone: e.target.checked })}
+                    className="rounded text-cyan-500"
+                  />
+                  <span>Secado profundo de raíz</span>
+                </label>
+
+                <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingHydroItem.earCleaningDone}
+                    onChange={(e) => setEditingHydroItem({ ...editingHydroItem, earCleaningDone: e.target.checked })}
+                    className="rounded text-cyan-500"
+                  />
+                  <span>Secado ótico con toalla</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Movilidad:</label>
+                <select
+                  value={editingHydroItem.mobilityAfter}
+                  onChange={(e) => setEditingHydroItem({ ...editingHydroItem, mobilityAfter: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-cyan-400 outline-none"
+                >
+                  <option value="excelente">Excelente: ágil y relajada</option>
+                  <option value="buena">Buena: movió patitas con ánimo</option>
+                  <option value="cansada_positiva">Cansancio normal positivo</option>
+                  <option value="con_molestia">Mostró molestia o fatiga temprana</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Notas:</label>
+                <textarea
+                  value={editingHydroItem.notes}
+                  onChange={(e) => setEditingHydroItem({ ...editingHydroItem, notes: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-cyan-400 outline-none h-16 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingHydroItem(null)}
+                  className="px-4 py-2 rounded-xl bg-[#11131a] text-slate-400 hover:text-slate-200 font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-cyan-500 text-[#0b0c10] font-black hover:bg-cyan-400 cursor-pointer"
+                >
+                  Guardar Cambios
                 </button>
               </div>
             </form>
@@ -1771,6 +2361,99 @@ export default function PetCareModule({
         </div>
       )}
 
+      {/* MODAL: EDITAR MEDICAMENTO */}
+      {editingMedItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0c10]/80 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-[#171a24] border border-[#e0a96d]/30 p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-[#e0a96d]" /> Editar Medicamento
+              </h3>
+              <button
+                onClick={() => setEditingMedItem(null)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditMed} className="space-y-4 text-xs">
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Nombre:</label>
+                <input
+                  type="text"
+                  value={editingMedItem.name}
+                  onChange={(e) => setEditingMedItem({ ...editingMedItem, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Condición:</label>
+                <input
+                  type="text"
+                  value={editingMedItem.condition}
+                  onChange={(e) => setEditingMedItem({ ...editingMedItem, condition: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Dosis:</label>
+                <input
+                  type="text"
+                  value={editingMedItem.dosage}
+                  onChange={(e) => setEditingMedItem({ ...editingMedItem, dosage: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Horario:</label>
+                <select
+                  value={editingMedItem.timing}
+                  onChange={(e) => setEditingMedItem({ ...editingMedItem, timing: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                >
+                  <option value="morning_fasting">Mañana en ayunas (ej. Tiroides)</option>
+                  <option value="twice_daily">2 veces al día (Mañana y Noche, ej. Gotas ojos)</option>
+                  <option value="with_breakfast">Con desayuno (ej. Condroprotectores)</option>
+                  <option value="with_dinner">Con cena (ej. Omega-3)</option>
+                  <option value="anytime">Cualquier momento del día</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Notas:</label>
+                <textarea
+                  value={editingMedItem.notes}
+                  onChange={(e) => setEditingMedItem({ ...editingMedItem, notes: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none h-16 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingMedItem(null)}
+                  className="px-4 py-2 rounded-xl bg-[#11131a] text-slate-400 hover:text-slate-200 font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#e0a96d] text-[#0b0c10] font-black hover:bg-[#b37d46] cursor-pointer"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: AGREGAR EVENTO PREVENTIVO */}
       {showAddPreventiveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0c10]/80 backdrop-blur-sm">
@@ -1861,13 +2544,117 @@ export default function PetCareModule({
         </div>
       )}
 
-      {/* MODAL: EDITAR PERFIL DE KIRA */}
+      {/* MODAL: EDITAR EVENTO PREVENTIVO */}
+      {editingPreventiveItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0c10]/80 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-[#171a24] border border-[#e0a96d]/30 p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-[#e0a96d]" /> Editar Cuidado Preventivo
+              </h3>
+              <button
+                onClick={() => setEditingPreventiveItem(null)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPreventive} className="space-y-4 text-xs">
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Título:</label>
+                <input
+                  type="text"
+                  value={editingPreventiveItem.title}
+                  onChange={(e) => setEditingPreventiveItem({ ...editingPreventiveItem, title: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Intervalo en días:</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="730"
+                    value={editingPreventiveItem.intervalDays}
+                    onChange={(e) => {
+                      const days = parseInt(e.target.value, 10) || 30;
+                      setEditingPreventiveItem({
+                        ...editingPreventiveItem,
+                        intervalDays: days,
+                        frequencyDesc: `Cada ${days} días`
+                      });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Descripción frecuencia:</label>
+                  <input
+                    type="text"
+                    value={editingPreventiveItem.frequencyDesc}
+                    onChange={(e) => setEditingPreventiveItem({ ...editingPreventiveItem, frequencyDesc: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">
+                  Fecha de la última vez que fue / se realizó:
+                </label>
+                <input
+                  type="date"
+                  value={editingPreventiveItem.lastDate}
+                  onChange={(e) => setEditingPreventiveItem({ ...editingPreventiveItem, lastDate: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                  required
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Al cambiar esta fecha, se recalcula automáticamente la próxima fecha según el intervalo.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Notas:</label>
+                <textarea
+                  value={editingPreventiveItem.notes}
+                  onChange={(e) => setEditingPreventiveItem({ ...editingPreventiveItem, notes: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none h-16 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingPreventiveItem(null)}
+                  className="px-4 py-2 rounded-xl bg-[#11131a] text-slate-400 hover:text-slate-200 font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#e0a96d] text-[#0b0c10] font-black hover:bg-[#b37d46] cursor-pointer"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR PERFIL DE MONA */}
       {showEditProfileModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0c10]/80 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-3xl bg-[#171a24] border border-[#e0a96d]/30 p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <Dog className="w-5 h-5 text-[#e0a96d]" /> Ficha Médica & Contactos
+                <Dog className="w-5 h-5 text-[#e0a96d]" /> Ficha Médica & Contactos de {petName}
               </h3>
               <button
                 onClick={() => setShowEditProfileModal(false)}
