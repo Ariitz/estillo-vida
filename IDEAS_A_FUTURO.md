@@ -10,6 +10,7 @@ Este documento es tu bloc de notas y pizarra de ideas para nuevas funciones, mej
 - [ ] **Gráfica de peso mensual**: Monitoreo visual de los 32.5 kg para evitar subidas de peso que recarguen su displasia.
 - [ ] **Recordatorio de compra de Levotiroxina / Condroprotectores**: Avisar cuando queden 5 días de medicamento en el botiquín.
 - [ ] **Historial de observaciones veterinarias**: Espacio para fotos de recetas médicas o resultados de laboratorio tiroideo T4.
+- [ ] **Soporte Multi-Mascotas**: Permitir registrar varias mascotas con su propio perfil individual y cambiar fácilmente entre ellas en el módulo.
 - [ ] *[Escribe aquí tu nueva idea para Mona...]*
 
 ---
@@ -67,3 +68,11 @@ Este documento es tu bloc de notas y pizarra de ideas para nuevas funciones, mej
 1. Abre este archivo en tu editor en cualquier momento.
 2. Agrega guiones `- [ ]` con tus nuevas ideas o copia de las categorías existentes.
 3. Cuando quieras que las desarrollemos en la app, solo dime: *"Trabajemos en la idea de [X] de mi archivo de ideas"* y la programamos de inmediato.
+
+
+
+
+
+
+## Mis ideas
+que permita agregar mascotas y cambiar entre ellas

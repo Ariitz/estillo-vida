@@ -33,6 +33,7 @@ import {
 import {
   getLocalDateString,
   getYesterdayDateString,
+  parseLocalDate,
   formatDisplayDate,
   formatFullDisplayDate,
   calculateNextDueDate,
@@ -636,6 +637,32 @@ export default function PetCareModule({
     if (routineFilter === 'all') return routineItems;
     return routineItems.filter(r => r.category === routineFilter);
   }, [routineItems, routineFilter]);
+
+  // Sorted preventive care items: from closest (most overdue or imminent next due date) to furthest in the future
+  const sortedPreventiveCare = useMemo(() => {
+    const list = [...(petData?.preventiveCare || [])];
+    return list.sort((a, b) => {
+      let timeA = Infinity;
+      if (a.nextDueDate) {
+        const parsedA = parseLocalDate(a.nextDueDate);
+        if (parsedA) timeA = parsedA.getTime();
+      } else if (a.lastDate) {
+        const calcA = calculateNextDueDate(a.lastDate, a.intervalDays || 30);
+        if (calcA) timeA = calcA.getTime();
+      }
+
+      let timeB = Infinity;
+      if (b.nextDueDate) {
+        const parsedB = parseLocalDate(b.nextDueDate);
+        if (parsedB) timeB = parsedB.getTime();
+      } else if (b.lastDate) {
+        const calcB = calculateNextDueDate(b.lastDate, b.intervalDays || 30);
+        if (calcB) timeB = calcB.getTime();
+      }
+
+      return timeA - timeB;
+    });
+  }, [petData?.preventiveCare]);
 
   // Last hydrotherapy session & days count
   const lastHydroSession = petData?.hydrotherapy?.sessions?.[0];
@@ -1399,7 +1426,7 @@ export default function PetCareModule({
                 <Calendar className="w-5 h-5 text-[#e0a96d]" /> Calendario Preventivo & Cuidados Periódicos
               </h2>
               <p className="text-xs text-slate-400">
-                Baño bimensual coordinado con natación, desparasitaciones, corte de uñas para cuidar la cadera y vacunas de guardería.
+                Ordenado cronológicamente por la actividad más próxima a la más lejana. Baño bimensual con natación, desparasitaciones, corte de uñas y vacunas.
               </p>
             </div>
 
@@ -1412,7 +1439,7 @@ export default function PetCareModule({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {(petData?.preventiveCare || []).map((item) => {
+            {sortedPreventiveCare.map((item) => {
               const daysLeft = item.nextDueDate ? getDaysDifference(todayStr, item.nextDueDate) : 0;
               const isOverdue = daysLeft < 0;
               const isDueSoon = daysLeft >= 0 && daysLeft <= 5;
