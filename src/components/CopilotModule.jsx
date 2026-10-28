@@ -24,7 +24,7 @@ import {
   X
 } from 'lucide-react';
 import { parseRoutineWithCopilot } from '../utils/geminiService';
-import { sanitizeHouseholdItem, sanitizeSelfCareItem } from '../utils/sanitizers';
+import { sanitizeHouseholdItem, sanitizeSelfCareItem, sanitizePetTip, defaultBiomechanicalTips } from '../utils/sanitizers';
 import { getLocalDateString } from '../utils/dateUtils';
 
 export default function CopilotModule({
@@ -37,6 +37,8 @@ export default function CopilotModule({
   setCustomTimers,
   schedule = [],
   setSchedule,
+  petData,
+  setPetData,
   showToast,
   setActiveModule
 }) {
@@ -333,6 +335,39 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
     } : m));
 
     showToast('success', 'Horario Actualizado', `Se procesaron ${finalScheduleToAdd.length + itemsToReplace.length} bloques en el horario.`);
+  };
+
+  const handleAddPetGuide = (msgId, petGuideTips) => {
+    if (!setPetData || !Array.isArray(petGuideTips) || petGuideTips.length === 0) return;
+
+    const newTips = petGuideTips.map(t => sanitizePetTip({
+      id: 'tip-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      title: t.title || 'Recomendación',
+      category: t.category || 'care',
+      icon: t.icon || '🐾',
+      content: t.content || t.desc || '',
+      isDefault: false,
+      createdAt: getLocalDateString()
+    })).filter(Boolean);
+
+    setPetData(prev => {
+      const existing = (prev?.customTips && Array.isArray(prev.customTips) && prev.customTips.length > 0)
+        ? prev.customTips
+        : defaultBiomechanicalTips;
+      return {
+        ...prev,
+        customTips: [...existing, ...newTips]
+      };
+    });
+
+    setMessages(prev => (Array.isArray(prev) ? prev : []).map(m => m.id === msgId ? {
+      ...m,
+      executedActions: { ...(m.executedActions || {}), petGuide: true }
+    } : m));
+
+    if (showToast) {
+      showToast('success', 'Guía de Mona Actualizada', `Se agregaron ${newTips.length} recomendaciones a la sección de Mona.`);
+    }
   };
 
   const handleConfirmConflictResolution = () => {
@@ -1029,6 +1064,68 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
                               </li>
                             ))}
                           </ul>
+                        </div>
+                      )}
+
+                      {/* Pet Guide Actions (Mona & Displasia) */}
+                      {Array.isArray(msg.actions.petGuide) && msg.actions.petGuide.length > 0 && (
+                        <div className="p-3.5 rounded-2xl bg-[#11131a] border border-[#e0a96d]/25 space-y-2.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <span className="font-bold text-slate-200 flex items-center gap-1.5 text-xs">
+                              <span className="text-base">🐕</span> Guía de Mona & Displasia ({msg.actions.petGuide.length} Recomendaciones)
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleAddPetGuide(msg.id, msg.actions.petGuide)}
+                                disabled={msg.executedActions?.petGuide}
+                                className={`px-3 py-1 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs cursor-pointer ${
+                                  msg.executedActions?.petGuide
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
+                                    : 'bg-[#e0a96d] text-[#0b0c10] hover:bg-[#b37d46]'
+                                }`}
+                              >
+                                {msg.executedActions?.petGuide ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                    <span>Agregado a la Guía ✓</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>🐕 Agregar a Guía de Mona</span>
+                                  </>
+                                )}
+                              </button>
+
+                              {msg.executedActions?.petGuide && setActiveModule && (
+                                <button
+                                  onClick={() => setActiveModule('pet')}
+                                  className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                                  title="Ver en sección de Mascota & Cuidados"
+                                >
+                                  <span>Ver Guía</span>
+                                  <ChevronRight className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {msg.actions.petGuide.map((g, idx) => (
+                              <div key={idx} className="p-2.5 rounded-xl bg-[#171a24] border border-slate-800 text-[11px] space-y-1">
+                                <div className="flex items-center gap-1.5 font-bold text-slate-200">
+                                  <span>{g.icon || '🐾'}</span>
+                                  <span>{g.title}</span>
+                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-[#e0a96d] uppercase">
+                                    {g.category || 'care'}
+                                  </span>
+                                </div>
+                                <p className="text-slate-400 text-[10px] leading-relaxed line-clamp-2">
+                                  {g.content}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>

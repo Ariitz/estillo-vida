@@ -564,6 +564,79 @@ export const sanitizeAromatherapyMoodLogList = (list) => {
   return list.map(sanitizeAromatherapyMoodLog).filter(Boolean);
 };
 
+export const defaultBiomechanicalTips = [
+  {
+    id: 'tip-1',
+    title: '🚫 Cero Superficies Resbaladizas: Tapetes Antiderrapantes',
+    category: 'biomechanics',
+    icon: '🐾',
+    content: `Para un perro de 12 años con displasia, el suelo liso (loseta, porcelanato, duela barnizada) es el principal detonante de microtraumas y luxaciones pélvicas dolorosas.
+
+Lugares exactos donde ponerlos:
+• Alrededor de su cama: El momento de levantarse es cuando más tracción necesita. Debe apoyar sus 4 patas sobre superficie rugosa sin resbalar.
+• Zona de agua y comida: Al agachar el cuello para comer/beber, el centro de gravedad cambia hacia adelante y las patas traseras tienden a abrirse en compás.
+• Pasillos principales de paso: Caminos donde toma velocidad al moverse de una habitación a otra.
+• Puerta de entrada y timbres: La zona donde se apresura cuando llega alguien.
+• Salida hacia el jardín o coche: Zonas de transición de niveles.
+
+💡 Tip práctico: Puedes usar yoga mats recortados de alta fricción o rollos de camino de pasillo con base de goma estriada/látex gofrado lavable.`,
+    isDefault: true
+  },
+  {
+    id: 'tip-2',
+    title: '🚗 Rampas y Subida Asistida al Auto',
+    category: 'gear',
+    icon: '🚗',
+    content: `Para un Pastor Alemán de ~32 kg senior, saltar hacia la cajuela o asientos causa un impacto destructivo en los acetábulos de su cadera.
+
+Modelos recomendados:
+• PetSafe Solvit Deluxe Telescoping Ramp: La más recomendada internacionalmente. Soporta hasta 130 kg, pesa ~6 kg (aluminio), rieles laterales de seguridad y superficie de agarre tipo lija suave.
+• Trixie Rampa Telescópica de Aluminio: Muy duradera, con recubrimiento de goma acanalada antideslizante que da mucha seguridad al paso.
+• Alternativa si tu auto es SUV alta: Escalera plegable tipo acordeón con peldaños anchos de aluminio y tela Oxford rígida. Muchos pastores senior suben mejor peldaños horizontales anchos.
+• Arnés de soporte asistido: Un arnés con asa trasera pélvica (tipo Help 'Em Up Harness) te permite guiarla suavemente y quitarle hasta el 40% del peso en la subida sin forzar tu espalda.`,
+    isDefault: true
+  },
+  {
+    id: 'tip-3',
+    title: '🛏️ Cama Ortopédica Viscoelástica (Memory Foam Macizo)',
+    category: 'biomechanics',
+    icon: '🛏️',
+    content: `A los 12 años, las camas convencionales con relleno de poliéster o pedacería se aplastan hasta el piso, haciendo que sus caderas choquen contra el suelo duro.
+
+Modelos recomendados:
+• Big Barker 7" Pillow Top (Talla XL): El estándar de oro clínico veterinario para razas grandes con displasia (probada en la Universidad de Pensilvania). Espuma de grado terapéutico de 18 cm que nunca se hunde y alivia los puntos de presión de cadera y codos.
+• PetFusion Ultimate Solid Memory Foam (Talla XL): Bloque macizo de espuma viscoelástica de 10-12 cm con reborde acolchado ergonómico donde puede recargar cuello y columna.
+• Bedsure Ortopédica con base de soporte firme: Opción accesible con núcleo firme y funda impermeable interna lavable.
+
+✓ Regla de oro: Debe ser de Memory Foam macizo (bloque sólido de 10 a 18 cm), tamaño suficiente para estirarse de costado y con entrada al ras de piso sin escalón alto.`,
+    isDefault: true
+  },
+  {
+    id: 'tip-4',
+    title: '✂️ Uñas, Temperatura & Manto Largo',
+    category: 'care',
+    icon: '✂️',
+    content: `Factores clave en la displasia geriátrica:
+• Corte de uñas cada 3 semanas: Si las uñas tocan el piso, obligan a Mona a arquear los dedos y cambiar el centro de carga hacia atrás, transmitiendo tensión directa a la pelvis.
+• Calor en articulaciones: El frío aumenta la viscosidad del líquido sinovial. Mantén su zona de descanso abrigada y libre de corrientes de aire frío.
+• Secado post-natación: Su denso doble manto no debe quedar húmedo tras nadar para evitar dolores reumáticos y hot-spots.`,
+    isDefault: true
+  }
+];
+
+export const sanitizePetTip = (t) => {
+  if (!t || typeof t !== 'object') return null;
+  return {
+    id: safeString(t.id || 'tip-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
+    title: safeString(t.title || 'Recomendación'),
+    category: safeString(t.category || 'care'),
+    icon: safeString(t.icon || '🐾'),
+    content: safeString(t.content || t.desc || ''),
+    isDefault: Boolean(t.isDefault),
+    createdAt: safeString(t.createdAt || getLocalDateString())
+  };
+};
+
 // 16. Pet Care & Senior Canine Routine (Pastor Alemán Senior - Mona)
 export const sanitizePetData = (raw) => {
   const data = (raw && typeof raw === 'object') ? raw : {};
@@ -916,6 +989,10 @@ export const sanitizePetData = (raw) => {
       }))
     : [];
 
+  const customTips = Array.isArray(data.customTips) && data.customTips.length > 0
+    ? data.customTips.map(sanitizePetTip).filter(Boolean)
+    : defaultBiomechanicalTips;
+
   return {
     profile,
     daycare,
@@ -924,8 +1001,49 @@ export const sanitizePetData = (raw) => {
     medications,
     preventiveCare,
     walkLogs,
+    customTips,
     lastDailyResetDate: safeString(data.lastDailyResetDate || getLocalDateString())
   };
 };
+
+// 17. Bag & Exit Essentials (Checklist de Cosas para Salir / EDC)
+export const defaultBagEssentials = [
+  { id: 'bag-1', name: 'Pañuelo (lentes o general)', category: 'hygiene', categoryLabel: 'Higiene', packed: false },
+  { id: 'bag-2', name: 'Papel', category: 'hygiene', categoryLabel: 'Higiene', packed: false },
+  { id: 'bag-3', name: 'Perfume', category: 'hygiene', categoryLabel: 'Cuidado', packed: false },
+  { id: 'bag-4', name: 'Chicles', category: 'wellness', categoryLabel: 'Extras', packed: false },
+  { id: 'bag-5', name: 'Desodorante', category: 'hygiene', categoryLabel: 'Cuidado', packed: false },
+  { id: 'bag-6', name: 'Crema', category: 'hygiene', categoryLabel: 'Cuidado', packed: false },
+  { id: 'bag-7', name: 'Bloqueador', category: 'hygiene', categoryLabel: 'Cuidado', packed: false },
+  { id: 'bag-8', name: 'Reloj', category: 'tech', categoryLabel: 'Accesorio', packed: false },
+  { id: 'bag-9', name: 'Sombrilla', category: 'tech', categoryLabel: 'Práctico', packed: false },
+  { id: 'bag-10', name: 'Audífonos', category: 'tech', categoryLabel: 'Tecnología', packed: false },
+  { id: 'bag-11', name: 'Pila (Batería portátil)', category: 'tech', categoryLabel: 'Tecnología', packed: false },
+  { id: 'bag-12', name: 'Cepillo (cabello)', category: 'hygiene', categoryLabel: 'Cuidado', packed: false },
+  { id: 'bag-13', name: 'Cepillo de dientes', category: 'hygiene', categoryLabel: 'Dental', packed: false },
+  { id: 'bag-14', name: 'Pasta (dental)', category: 'hygiene', categoryLabel: 'Dental', packed: false },
+  { id: 'bag-15', name: 'Llaves', category: 'essentials', categoryLabel: 'Básicos', packed: false },
+  { id: 'bag-16', name: 'Alcohol (gel / spray)', category: 'hygiene', categoryLabel: 'Higiene', packed: false },
+  { id: 'bag-17', name: 'Tarjetas', category: 'essentials', categoryLabel: 'Finanzas', packed: false },
+  { id: 'bag-18', name: 'Dinero (efectivo)', category: 'essentials', categoryLabel: 'Finanzas', packed: false }
+];
+
+export const sanitizeBagEssential = (item) => {
+  if (!item || typeof item !== 'object') return null;
+  return {
+    id: safeString(item.id || 'bag-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
+    name: safeString(item.name || 'Artículo'),
+    category: ['hygiene', 'tech', 'essentials', 'wellness'].includes(item.category) ? item.category : 'essentials',
+    categoryLabel: safeString(item.categoryLabel || 'Esencial'),
+    packed: Boolean(item.packed),
+    notes: safeString(item.notes || '')
+  };
+};
+
+export const sanitizeBagEssentialsList = (list) => {
+  if (!Array.isArray(list) || list.length === 0) return defaultBagEssentials;
+  return list.map(sanitizeBagEssential).filter(Boolean);
+};
+
 
 

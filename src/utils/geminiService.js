@@ -1070,6 +1070,114 @@ A continuación tienes las **tarjetas de acciones automáticas** para integrar t
     };
   }
 
+  // Pet Care & Biomechanical Guidelines (Mona - Pastor Alemán 12 años, Displasia de Cadera)
+  if (/mona|perr|mascota|displasia|cadera|articulac|vitamin|suplement|condroprotector|omega|correa|arn[eé]s|alimento|croqueta|comida para|rampa|cama ortop|viscoel[aá]stica/.test(lower)) {
+    const isVitamins = /vitamin|suplement|condroprotector|omega|glucosamina|condroitina|msm/.test(lower);
+    const isGear = /correa|arn[eé]s|rampa|cama|tapete|botas|soporte/.test(lower);
+    const isFood = /alimento|croqueta|comida|pienso|dieta|nutrici[oó]n/.test(lower);
+
+    let reply = `### 🐕 Guía Especializada de Manejo & Cuidados para Mona (12 años, Displasia Bilateral)
+
+He analizado tu consulta sobre **${userText}** adaptada estrictamente a la biomecánica de una hembra senior Pastor Alemán de ~32 kg con displasia de cadera:
+
+`;
+
+    const petGuide = [];
+    const products = [];
+
+    if (isVitamins || (!isGear && !isFood)) {
+      reply += `1. **💊 Suplementación Articular & Condroprotectores de Grado Clínico:**
+   - **Glucosamina HCl + Condroitina Sulfato + MSM:** Dosis de soporte para 32 kg (~1000 mg Glucosamina / 800 mg Condroitina). Estimula la regeneración del líquido sinovial y ralentiza el desgaste óseo articular.
+   - **Ácidos Grasos Omega-3 (EPA/DHA):** Potente antiinflamatorio natural sin daño hepático ni gástrico (1200 mg EPA/DHA diarios).
+   - *Marcas recomendadas:* **Cosequin DS Plus MSM** (tabletas masticables) o **YuMOVE Senior Dog**.
+
+`;
+      petGuide.push({
+        title: '💊 Condroprotectores Clínicos: Glucosamina, Condroitina & MSM',
+        category: 'vitamins',
+        icon: '💊',
+        content: `Dosis recomendada para Mona (~32 kg): 1000 mg Glucosamina HCl + 800 mg Condroitina Sulfato + 600 mg MSM al día.
+Marcas de alta biodisponibilidad: Cosequin DS Plus MSM o YuMOVE Senior Dog.
+Administrar por la mañana con su desayuno (las grasas de la comida potencian la absorción intestinal).`
+      });
+
+      petGuide.push({
+        title: '🐟 Ácidos Grasos Omega-3 Puros (EPA / DHA)',
+        category: 'vitamins',
+        icon: '🐟',
+        content: `Antiinflamatorio biológico articular. Disminuye la degradación enzimática del cartílago y alivia la rigidez matutina.
+Dosis: 1000 a 1500 mg combinados de EPA + DHA diarios (aceite de salmón salvaje o krill prensado en frío).`
+      });
+
+      products.push(
+        { name: 'Cosequin DS Plus MSM (Tabletas Masticables)', category: 'Otros', notes: 'Condroprotector articular diario para Mona' },
+        { name: 'Aceite de Salmón Salvaje Omega-3 con dosificador', category: 'Otros', notes: 'Antiinflamatorio articular con EPA/DHA' }
+      );
+    }
+
+    if (isGear || (!isVitamins && !isFood)) {
+      reply += `2. **🦽 Equipo & Ergonomía para Movilidad Asistida:**
+   - **Arnés de Asistencia Pélvica con Asa Trasera:** Indispensable para ayudarla a incorporarse sin traccionar su cuello ni presionar sus genitales (*Help 'Em Up Harness* talla L/XL).
+   - **Correa Bungee con Absorción de Impacto:** Reduce hasta el 60% del tirón súbito protegiendo su columna lumbar y caderas.
+   - **Rampa Telescópica para Auto:** Cero saltos hacia asientos o cajuela para evitar microfracturas acetabulares.
+
+`;
+      petGuide.push({
+        title: '🦽 Arnés con Asa Trasera de Soporte Pélvico (Help \'Em Up Harness)',
+        category: 'gear',
+        icon: '🦽',
+        content: `Arnés ortopédico integral de doble sección (pectoral y pélvica). Permite levantar sus cuartos traseros con ergonomía total, sin estrangular abdomen ni genitales.
+Indispensable para subirla al auto para ir a la guardería y asistirla al pararse los días fríos.`
+      });
+
+      petGuide.push({
+        title: '🦮 Correa Anti-Tirones con Tramo Elástico Bungee',
+        category: 'gear',
+        icon: '🦮',
+        content: `Longitud de 1.5 a 1.8 m con elástico amortiguador interno y asa de control corto.
+Evita latigazos de carga axial hacia la columna lumbar si intenta acelerar repentinamente hacia otro perro.`
+      });
+
+      products.push(
+        { name: 'Arnés Ortopédico Help Em Up con Asa Pélvica (Talla XL)', category: 'Otros', notes: 'Soporte asistido para levantar caderas' },
+        { name: 'Correa Amortiguadora Bungee con Doble Asa', category: 'Otros', notes: 'Absorción de tirones para paseos suaves' }
+      );
+    }
+
+    if (isFood || (!isVitamins && !isGear)) {
+      reply += `3. **🥩 Nutrición Especializada & Control de Carga Ponderal:**
+   - **Croquetas Senior Articulares:** Fórmulas con EPA adicionado, L-Carnitina y niveles controlados de fósforo (ej. *Hill's Prescription Diet j/d Joint Care* o *Royal Canin Mobility Large Dog*).
+   - **Control de Peso Estricto:** Mantenerla en ~32 kg exactos. Cada 500 g de sobrepeso multiplica la carga destructiva por 4 en cada paso.
+
+`;
+      petGuide.push({
+        title: '🥩 Alimento Articular Senior Mobility con L-Carnitina & EPA',
+        category: 'nutrition',
+        icon: '🥩',
+        content: `Pienso veterinario especializado: Hill's Prescription Diet j/d Joint Care o Royal Canin Veterinary Diet Mobility Support.
+Control calórico estricto para mantener ~32 kg exactos. Complementar con caldo de huesos natural sin sal ni cebolla para hidratación articular.`
+      });
+
+      products.push(
+        { name: 'Alimento Hill\'s Prescription Diet j/d Joint Care Canino', category: 'Despensa', notes: 'Croqueta articular senior para Mona' }
+      );
+    }
+
+    reply += `---
+Haz clic en el botón **"🐕 Agregar a Guía de Mona"** a continuación para integrar estas recomendaciones directamente en su sección de *Respuestas & Guía de Manejo Biomecánico*.`;
+
+    return {
+      replyText: reply,
+      actions: {
+        products: products,
+        selfCare: [],
+        timers: [],
+        schedule: [],
+        petGuide: petGuide
+      }
+    };
+  }
+
   // General lifestyle parser fallback
   return {
     replyText: `### 🤖 Asistente AURA Copilot
@@ -1099,7 +1207,8 @@ Haz clic en los botones de abajo para agregar cada elemento a su módulo corresp
       timers: [
         { name: 'Temporizador AURA (' + userText.slice(0, 20) + ')', durationSeconds: 600, category: 'custom', description: '10 minutos de enfoque o tratamiento.' }
       ],
-      schedule: []
+      schedule: [],
+      petGuide: []
     }
   };
 };
@@ -1107,12 +1216,12 @@ Haz clic en los botones de abajo para agregar cada elemento a su módulo corresp
 /**
  * Intelligent Routine & Lifestyle Parser using Google Gemini
  * Analyzes complex routines, advice or text and returns a conversational explanation
- * alongside structured actionable items (products, self care cadences, timers, schedule blocks).
+ * alongside structured actionable items (products, self care cadences, timers, schedule blocks, petGuide recommendations).
  * 
  * @param {string} userMessage - Text or routine pasted by user
  * @param {Array} history - Previous chat messages
  * @param {string} apiKey - Gemini API key
- * @returns {Promise<{ replyText: string, actions: { products: Array, selfCare: Array, timers: Array, schedule: Array } }>}
+ * @returns {Promise<{ replyText: string, actions: { products: Array, selfCare: Array, timers: Array, schedule: Array, petGuide: Array } }>}
  */
 export const parseRoutineWithCopilot = async (userMessage, history = [], apiKey = '') => {
   if (!apiKey || !apiKey.trim()) {
@@ -1120,14 +1229,16 @@ export const parseRoutineWithCopilot = async (userMessage, history = [], apiKey 
   }
 
   const prompt = `
-Eres AURA Copilot, el asistente de inteligencia artificial élite de AURA Nexus para Estilo de Vida, Belleza, Skincare, Ergonomía, Productividad y Organización Personal.
+Eres AURA Copilot, el asistente de inteligencia artificial élite de AURA Nexus para Estilo de Vida, Belleza, Skincare, Ergonomía, Productividad, Organización Personal y Cuidado de Mascotas (especialmente Mona, una perrita Pastor Alemán senior de 12 años con displasia de cadera bilateral).
 
 La usuaria te ha enviado el siguiente mensaje o rutina para analizar y estructurar:
 "${userMessage}"
 
 Tu tarea es doble:
-1. "replyText": Escribe una respuesta conversacional, empática, elegante y profesional en Markdown (en español). Explica claramente la estrategia, cómo combinar los activos/hábitos de forma segura (ej. qué días usar retinol vs concha nácar para evitar irritación, cuánto tiempo usar la máscara LED, etc.), y qué beneficios obtendrá.
+1. "replyText": Escribe una respuesta conversacional, empática, elegante y profesional en Markdown (en español). Si habla de Mona o mascotas, ofrece pautas clínicas fundamentadas, dosis seguras, nombres comerciales de primera línea (ej. Cosequin DS, YuMOVE, Help Em Up Harness, Hill's j/d) y empatía con su condición geriátrica.
 2. "actions": Extrae de forma estructurada y precisa todos los elementos accionables que la usuaria necesitará para que la aplicación los agregue a sus respectivos módulos con un solo clic.
+
+Si el tema involucra a Mona o mascotas (vitaminas, suplementos, arnés, correa, alimentación, cama ortopédica, tapetes, paseos, displasia), DEBES incluir las recomendaciones correspondientes en el arreglo "petGuide".
 
 Para los bloques de "schedule", utiliza SIEMPRE el formato de hora de 12 horas con AM/PM (ej. "10:00 PM", "07:30 AM", "02:00 PM") e incluye SIEMPRE una descripción detallada en el campo "desc" con los pasos, precauciones o alternancias del hábito.
 
@@ -1138,24 +1249,24 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
   "actions": {
     "products": [
       {
-        "name": "Nombre completo del producto (ej. 'Serum de Retinol Facial 0.3%', 'Crema Concha Nácar Teatrical', 'Máscara LED Roja')",
+        "name": "Nombre completo del producto",
         "category": "Skincare" | "Dental" | "Higiene" | "Despensa" | "Limpieza" | "Otros",
         "notes": "Para qué sirve o en qué momento de la rutina se usa"
       }
     ],
     "selfCare": [
       {
-        "title": "Nombre de la actividad de autocuidado periódico (ej. 'Máscara LED Roja (12 min)', 'Mascarilla Coreana de Arroz (Día sí / Día no)')",
+        "title": "Nombre de la actividad de autocuidado periódico",
         "frequency": "daily" | "weekly" | "biweekly" | "monthly" | "bimonthly" | "custom",
         "daysInterval": 2,
         "category": "skincare" | "health" | "body" | "hair" | "general",
         "notes": "Instrucciones de uso o precauciones",
-        "protocol": "Especificación de cadencia (ej. 'Usar 3 a 4 veces por semana' o 'Un día sí y un día no')"
+        "protocol": "Especificación de cadencia"
       }
     ],
     "timers": [
       {
-        "name": "Nombre del temporizador (ej. 'Máscara LED Facial', 'Mascarilla de Arroz')",
+        "name": "Nombre del temporizador",
         "durationSeconds": 720,
         "category": "skincare" | "health" | "custom",
         "description": "Tiempo exacto recomendado"
@@ -1164,10 +1275,18 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
     "schedule": [
       {
         "time": "10:00 PM",
-        "title": "Rutina de Skincare Nocturna & Activos",
-        "desc": "Alternancia de activos y aplicación paso a paso.",
-        "tag": "beauty",
+        "title": "Título del bloque",
+        "desc": "Descripción detallada",
+        "tag": "beauty" | "routine" | "wellness" | "work",
         "isRoutine": true
+      }
+    ],
+    "petGuide": [
+      {
+        "title": "Nombre de la recomendación (ej. 'Condroprotectores Glucosamina & MSM', 'Arnés de Soporte Pélvico', 'Alimento Articular Senior')",
+        "category": "vitamins" | "gear" | "nutrition" | "biomechanics" | "care",
+        "icon": "💊" | "🦽" | "🥩" | "🦴" | "🐾",
+        "content": "Detalles completos, marcas recomendadas, dosis o instrucciones de uso para Mona"
       }
     ]
   }
@@ -1215,7 +1334,8 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
             products: Array.isArray(parsed.actions?.products) ? parsed.actions.products : [],
             selfCare: Array.isArray(parsed.actions?.selfCare) ? parsed.actions.selfCare : [],
             timers: Array.isArray(parsed.actions?.timers) ? parsed.actions.timers : [],
-            schedule: Array.isArray(parsed.actions?.schedule) ? parsed.actions.schedule : []
+            schedule: Array.isArray(parsed.actions?.schedule) ? parsed.actions.schedule : [],
+            petGuide: Array.isArray(parsed.actions?.petGuide) ? parsed.actions.petGuide : []
           }
         };
       }

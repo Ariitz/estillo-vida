@@ -25,7 +25,8 @@ import {
   Flame,
   Scale,
   Droplets,
-  PawPrint
+  PawPrint,
+  ShoppingBag
 } from 'lucide-react';
 
 // Firebase Client SDK
@@ -45,6 +46,7 @@ import TimersModule from './components/TimersModule';
 import HealthTrackerModule from './components/HealthTrackerModule';
 import CopilotModule from './components/CopilotModule';
 import SyncModule from './components/SyncModule';
+import BagEssentialsChecklist from './components/BagEssentialsChecklist';
 import Toast from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
 import { 
@@ -63,7 +65,9 @@ import {
   sanitizeDailyNutritionLogList,
   sanitizeAromatherapyInventory,
   sanitizeAromatherapyBlendList,
-  sanitizePetData
+  sanitizePetData,
+  defaultBagEssentials,
+  sanitizeBagEssentialsList
 } from './utils/sanitizers';
 
 // ==========================================
@@ -552,6 +556,17 @@ export default function App() {
     localStorage.setItem('aura-pet-data', JSON.stringify(petData));
   }, [petData]);
 
+  // Bag & Exit Essentials state (Cosas para salir de casa)
+  const [bagEssentials, setBagEssentials] = useState(() =>
+    sanitizeBagEssentialsList(getSavedArray('aura-bag-essentials', defaultBagEssentials))
+  );
+
+  useEffect(() => {
+    localStorage.setItem('aura-bag-essentials', JSON.stringify(bagEssentials));
+  }, [bagEssentials]);
+
+  const [showBagModal, setShowBagModal] = useState(false);
+
   // Sync aromatherapy to localStorage
   useEffect(() => {
     localStorage.setItem('aura-user-oils', JSON.stringify(userOils));
@@ -691,6 +706,7 @@ export default function App() {
       userOils: userOils || [],
       customBlends: customBlends || [],
       petData: petData || {},
+      bagEssentials: bagEssentials || defaultBagEssentials,
       geminiApiKey: (geminiApiKey || localStorage.getItem('aura-gemini-key') || '').trim(),
       lastUpdated: Date.now()
     };
@@ -787,6 +803,11 @@ export default function App() {
       const sanitized = sanitizePetData(data.petData);
       setPetData(sanitized);
       localStorage.setItem('aura-pet-data', JSON.stringify(sanitized));
+    }
+    if (Array.isArray(data.bagEssentials)) {
+      const sanitized = sanitizeBagEssentialsList(data.bagEssentials);
+      setBagEssentials(sanitized);
+      localStorage.setItem('aura-bag-essentials', JSON.stringify(sanitized));
     }
     if (typeof data.geminiApiKey === 'string' && data.geminiApiKey.trim()) {
       setGeminiApiKey(data.geminiApiKey.trim());
@@ -1210,6 +1231,23 @@ export default function App() {
               <span className="text-slate-300 font-medium">Home Office</span>
             </div>
 
+            {/* Quick Exit / Bag Checklist Widget */}
+            <button
+              onClick={() => setShowBagModal(true)}
+              className="flex items-center gap-2 bg-[#171a24] hover:bg-[#e0a96d]/10 border border-[#e0a96d]/25 px-3 py-1.5 rounded-xl text-xs text-slate-200 transition-all cursor-pointer font-semibold shadow-sm group"
+              title="Checklist de Cosas para Salir de Casa"
+            >
+              <ShoppingBag className="w-4 h-4 text-[#e0a96d] group-hover:scale-110 transition-transform" />
+              <span className="hidden sm:inline">Cosas para Salir</span>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
+                bagEssentials.filter(i => i.packed).length === bagEssentials.length && bagEssentials.length > 0
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                  : 'bg-[#e0a96d]/20 text-[#e0a96d] border-[#e0a96d]/30'
+              }`}>
+                {bagEssentials.filter(i => i.packed).length}/{bagEssentials.length}
+              </span>
+            </button>
+
             {/* User Profile Avatar */}
             <div className="flex items-center gap-2.5 pl-3 border-l border-slate-800">
               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#e0a96d] to-[#f5d4af] text-[#0b0c10] font-bold text-xs flex items-center justify-center select-none shadow">
@@ -1239,6 +1277,8 @@ export default function App() {
                 setSchedule={setSchedule}
                 selfCareActivities={selfCareActivities}
                 setSelfCareActivities={setSelfCareActivities}
+                bagEssentials={bagEssentials}
+                setBagEssentials={setBagEssentials}
                 showToast={showToast}
               />
             </ErrorBoundary>
@@ -1300,6 +1340,8 @@ export default function App() {
                 setCustomTimers={setCustomTimers}
                 schedule={schedule}
                 setSchedule={setSchedule}
+                petData={petData}
+                setPetData={setPetData}
                 showToast={showToast}
                 setActiveModule={setActiveModule}
               />
@@ -1393,6 +1435,43 @@ export default function App() {
             </ErrorBoundary>
           )}
         </div>
+
+        {/* MODAL: QUICK BAG CHECKLIST */}
+        {showBagModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0c10]/85 backdrop-blur-md">
+            <div className="w-full max-w-3xl rounded-3xl bg-[#171a24] border border-[#e0a96d]/30 p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-[#e0a96d]/15 border border-[#e0a96d]/30 flex items-center justify-center text-[#e0a96d]">
+                    <ShoppingBag className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-100 font-outfit">
+                      Cosas para Salir de Casa
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Checklist rápido antes de salir por la puerta.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowBagModal(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg cursor-pointer transition-colors"
+                  aria-label="Cerrar checklist"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <BagEssentialsChecklist
+                bagEssentials={bagEssentials}
+                setBagEssentials={setBagEssentials}
+                showToast={showToast}
+              />
+            </div>
+          </div>
+        )}
 
         {/* TOAST SYSTEM */}
         <Toast toasts={toasts} onClose={handleCloseToast} />

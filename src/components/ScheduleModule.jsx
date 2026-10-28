@@ -27,7 +27,8 @@ import {
   Bell,
   Layers,
   CalendarCheck,
-  ArrowRight
+  ArrowRight,
+  ShoppingBag
 } from 'lucide-react';
 import { sanitizeScheduleList, sanitizeSelfCareList } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
@@ -40,6 +41,7 @@ import {
   parseLocalDate, 
   getDaysDifference 
 } from '../utils/dateUtils';
+import BagEssentialsChecklist from './BagEssentialsChecklist';
 
 export default function ScheduleModule({
   weight,
@@ -52,6 +54,8 @@ export default function ScheduleModule({
   setSchedule,
   selfCareActivities = [],
   setSelfCareActivities,
+  bagEssentials = [],
+  setBagEssentials,
   showToast
 }) {
   // Navigation Tabs: 'daily' | 'selfcare'
@@ -592,6 +596,25 @@ export default function ScheduleModule({
             </span>
           )}
         </button>
+
+        <button
+          onClick={() => setActiveTab('bag')}
+          className={`py-2.5 px-5 font-outfit text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer flex items-center gap-2 relative ${
+            activeTab === 'bag' 
+              ? 'border-[#e0a96d] text-[#e0a96d]' 
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <ShoppingBag className="w-4 h-4 text-[#e0a96d]" />
+          <span>🎒 Bolso & Cosas para Salir</span>
+          <span className={`text-[10px] px-2 py-0.2 rounded-full font-mono font-bold border ${
+            bagEssentials.filter(i => i.packed).length === bagEssentials.length && bagEssentials.length > 0
+              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+              : 'bg-[#11131a] text-slate-300 border-slate-700'
+          }`}>
+            {bagEssentials.filter(i => i.packed).length}/{bagEssentials.length}
+          </span>
+        </button>
       </div>
 
       {/* ========================================== */}
@@ -647,6 +670,39 @@ export default function ScheduleModule({
               </div>
             </div>
           )}
+
+          {/* Quick Exit Checklist Reminder in Daily View */}
+          <div className="bg-[#171a24] border border-[#e0a96d]/20 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-[#e0a96d]/10 border border-[#e0a96d]/25 text-[#e0a96d] shrink-0">
+                <ShoppingBag className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-100 flex items-center gap-2">
+                  <span>Cosas para Salir (Bolso & EDC)</span>
+                  <span className={`text-[10px] font-mono px-2 py-0.2 rounded font-bold border ${
+                    bagEssentials.filter(i => i.packed).length === bagEssentials.length && bagEssentials.length > 0
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                      : 'bg-[#e0a96d]/20 text-[#e0a96d] border-[#e0a96d]/30'
+                  }`}>
+                    {bagEssentials.filter(i => i.packed).length} de {bagEssentials.length} listas
+                  </span>
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Asegúrate de llevar tus 18 cosas esenciales antes de salir (llaves, tarjetas, dinero, cargador, lentes, etc.).
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('bag')}
+              className="btn-rose-gold text-xs font-bold py-2 px-3.5 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all shrink-0 self-start sm:self-auto"
+            >
+              <span>Revisar Bolso</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
           {/* Profiler and Water Intake Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1371,6 +1427,19 @@ export default function ScheduleModule({
               })
             )}
           </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* VIEW: BAG & EXIT ESSENTIALS CHECKLIST */}
+      {/* ========================================== */}
+      {activeTab === 'bag' && (
+        <div className="space-y-6 animate-fade-in">
+          <BagEssentialsChecklist
+            bagEssentials={bagEssentials}
+            setBagEssentials={setBagEssentials}
+            showToast={showToast}
+          />
         </div>
       )}
 

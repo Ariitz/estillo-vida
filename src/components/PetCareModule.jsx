@@ -39,7 +39,7 @@ import {
   calculateNextDueDate,
   getDaysDifference
 } from '../utils/dateUtils';
-import { safeNumber, safeString, sanitizePetData } from '../utils/sanitizers';
+import { safeNumber, safeString, sanitizePetData, defaultBiomechanicalTips, sanitizePetTip } from '../utils/sanitizers';
 
 export default function PetCareModule({
   petData,
@@ -67,18 +67,28 @@ export default function PetCareModule({
   const [showAddMedModal, setShowAddMedModal] = useState(false);
   const [showAddPreventiveModal, setShowAddPreventiveModal] = useState(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [showAddTipModal, setShowAddTipModal] = useState(false);
 
   // Modals state for editing existing items
   const [editingRoutineItem, setEditingRoutineItem] = useState(null);
   const [editingPreventiveItem, setEditingPreventiveItem] = useState(null);
   const [editingMedItem, setEditingMedItem] = useState(null);
   const [editingHydroItem, setEditingHydroItem] = useState(null);
+  const [editingTipItem, setEditingTipItem] = useState(null);
 
   // Inline custom date picker state for preventive events: { [itemId]: string (YYYY-MM-DD) }
   const [customPreventiveDates, setCustomPreventiveDates] = useState({});
 
   const todayStr = getLocalDateString();
   const yesterdayStr = getYesterdayDateString();
+
+  // Form state for new custom biomechanical / care tip
+  const [newTipItem, setNewTipItem] = useState({
+    title: '',
+    category: 'vitamins',
+    icon: '💊',
+    content: ''
+  });
 
   // Form states for new items
   const [newRoutineItem, setNewRoutineItem] = useState({
@@ -630,6 +640,91 @@ export default function PetCareModule({
     }));
     setShowEditProfileModal(false);
     if (showToast) showToast('success', 'Perfil Actualizado', `Información de ${cleanName} guardada correctamente.`);
+  };
+
+  // Dynamic list of Biomechanical & Care tips (custom or default)
+  const tipsList = useMemo(() => {
+    return (petData?.customTips && Array.isArray(petData.customTips) && petData.customTips.length > 0)
+      ? petData.customTips
+      : defaultBiomechanicalTips;
+  }, [petData?.customTips]);
+
+  // Add new guide / biomechanical tip
+  const handleAddTip = (e) => {
+    e.preventDefault();
+    const title = newTipItem.title.trim();
+    if (!title) return;
+
+    const tip = sanitizePetTip({
+      id: 'tip-' + Date.now(),
+      title: title,
+      category: newTipItem.category,
+      icon: newTipItem.icon || '🐾',
+      content: newTipItem.content.trim(),
+      isDefault: false,
+      createdAt: todayStr
+    });
+
+    updatePetData((prev) => {
+      const existing = (prev?.customTips && Array.isArray(prev.customTips) && prev.customTips.length > 0)
+        ? prev.customTips
+        : defaultBiomechanicalTips;
+      return {
+        ...prev,
+        customTips: [...existing, tip]
+      };
+    });
+
+    setNewTipItem({
+      title: '',
+      category: 'vitamins',
+      icon: '💊',
+      content: ''
+    });
+    setShowAddTipModal(false);
+    if (showToast) showToast('success', 'Guía Actualizada', `"${title}" agregada a la guía de Mona.`);
+  };
+
+  // Save edited guide tip
+  const handleSaveEditTip = (e) => {
+    e.preventDefault();
+    if (!editingTipItem) return;
+    const title = editingTipItem.title.trim();
+    if (!title) return;
+
+    updatePetData((prev) => {
+      const existing = (prev?.customTips && Array.isArray(prev.customTips) && prev.customTips.length > 0)
+        ? prev.customTips
+        : defaultBiomechanicalTips;
+      return {
+        ...prev,
+        customTips: existing.map(t => t.id === editingTipItem.id ? {
+          ...t,
+          title: title,
+          category: editingTipItem.category,
+          icon: editingTipItem.icon || t.icon || '🐾',
+          content: (editingTipItem.content || '').trim()
+        } : t)
+      };
+    });
+
+    setEditingTipItem(null);
+    if (showToast) showToast('success', 'Guía Actualizada', `"${title}" actualizada exitosamente.`);
+  };
+
+  // Delete guide tip
+  const handleDeleteTip = (tipId, tipTitle) => {
+    if (!window.confirm(`¿Deseas eliminar "${tipTitle}" de la guía de manejo de ${petName}?`)) return;
+    updatePetData((prev) => {
+      const existing = (prev?.customTips && Array.isArray(prev.customTips) && prev.customTips.length > 0)
+        ? prev.customTips
+        : defaultBiomechanicalTips;
+      return {
+        ...prev,
+        customTips: existing.filter(t => t.id !== tipId)
+      };
+    });
+    if (showToast) showToast('success', 'Eliminado', `"${tipTitle}" retirado de la guía.`);
   };
 
   // Filtered routine list
@@ -1655,104 +1750,104 @@ export default function PetCareModule({
             </div>
           </div>
 
-          {/* DETAILED BIOMECHANICAL & ORTHOPEDIC GUIDELINES */}
+          {/* DETAILED BIOMECHANICAL & ORTHOPEDIC GUIDELINES (DYNAMIC) */}
           <div className="p-6 rounded-3xl bg-[#11131a] border border-slate-800 space-y-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-[#e0a96d] flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4" /> Respuestas & Guía de Manejo Biomecánico para Displasia en {petName}
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-[#e0a96d] flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4" /> Respuestas & Guía de Manejo Biomecánico para Displasia en {petName}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Recomendaciones clave de ortopedia, arneses, suplementación, alimentación y biomecánica geriátrica.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowAddTipModal(true)}
+                className="px-3.5 py-2 rounded-xl bg-[#e0a96d] hover:bg-[#b37d46] text-[#0b0c10] font-black text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md self-start sm:self-auto shrink-0"
+              >
+                <Plus className="w-4 h-4" /> Agregar Recomendación / Guía
+              </button>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              {/* TAPETES */}
-              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800 space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🐾</span>
-                  <span className="font-bold text-slate-200 text-sm">
-                    ¿Dónde colocar los tapetes antiderrapantes?
-                  </span>
-                </div>
-                <div className="text-slate-300 leading-relaxed space-y-1.5 text-[11px]">
-                  <p>
-                    Para un perro de 12 años con displasia, el suelo liso (loseta, porcelanato, duela barnizada) es el principal detonante de microtraumas y luxaciones pélvicas dolorosas.
-                  </p>
-                  <p className="font-semibold text-[#e0a96d]">Lugares exactos donde ponerlos:</p>
-                  <ul className="list-disc pl-4 space-y-1 text-slate-400">
-                    <li><strong>Alrededor de su cama:</strong> El momento de levantarse es cuando más tracción necesita. Debe poder apoyar sus 4 patas sobre superficie rugosa sin resbalar.</li>
-                    <li><strong>Zona de agua y comida:</strong> Al agachar el cuello para comer/beber, el centro de gravedad cambia hacia adelante y las patas traseras tienden a abrirse en compás.</li>
-                    <li><strong>Pasillos principales de paso:</strong> Caminos de alfombra donde toma velocidad al moverse de una habitación a otra.</li>
-                    <li><strong>Puerta de entrada y timbres:</strong> La zona donde se apresura cuando llega alguien.</li>
-                    <li><strong>Salida hacia el jardín o coche:</strong> Zonas de transición de niveles.</li>
-                  </ul>
-                  <p className="text-[10px] text-amber-300/90 pt-1">
-                    💡 <strong>Tip práctico:</strong> Puedes usar <em>yoga mats</em> recortados de alta fricción o rollos de camino de pasillo con base de goma estriada/látex gofrado lavable.
-                  </p>
-                </div>
-              </div>
+              {tipsList.map((tip) => {
+                const isVitamins = tip.category === 'vitamins';
+                const isGear = tip.category === 'gear';
+                const isNutrition = tip.category === 'nutrition';
+                const isBiomechanics = tip.category === 'biomechanics';
 
-              {/* RAMPAS PARA EL AUTO */}
-              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800 space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🚗</span>
-                  <span className="font-bold text-slate-200 text-sm">
-                    ¿Qué rampas para el auto se recomiendan?
-                  </span>
-                </div>
-                <div className="text-slate-300 leading-relaxed space-y-1.5 text-[11px]">
-                  <p>
-                    Para un Pastor Alemán de ~32 kg senior, saltar hacia la cajuela o asientos causa un impacto destructivo en los acetábulos de su cadera.
-                  </p>
-                  <p className="font-semibold text-[#e0a96d]">Modelos recomendados:</p>
-                  <ul className="list-disc pl-4 space-y-1 text-slate-400">
-                    <li><strong>PetSafe Solvit Deluxe Telescoping Ramp:</strong> La más recomendada internacionalmente. Soporta hasta 130 kg, pesa solo ~6 kg (aluminio), rieles laterales de seguridad para que no sienta vértigo y superficie de agarre tipo lija suave.</li>
-                    <li><strong>Trixie Rampa Telescópica de Aluminio:</strong> Muy duradera, con recubrimiento de goma acanalada antideslizante que da mucha seguridad al paso.</li>
-                    <li><strong>Alternativa si tu auto es SUV alta:</strong> Escalera plegable tipo acordeón con peldaños anchos de aluminio y tela Oxford rígida. Si el maletero es muy alto, una rampa puede quedar demasiado empinada; muchos pastores senior suben mejor peldaños horizontales anchos.</li>
-                    <li><strong>Arnés de soporte asistido:</strong> Un arnés con asa trasera pélvica (tipo <em>Help 'Em Up Harness</em>) te permite guiarla suavemente y quitarle hasta el 40% del peso en la subida sin forzar tu espalda.</li>
-                  </ul>
-                </div>
-              </div>
+                const badgeClass = isVitamins
+                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                  : isGear
+                  ? 'bg-sky-500/10 text-sky-300 border-sky-500/20'
+                  : isNutrition
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                  : isBiomechanics
+                  ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
+                  : 'bg-teal-500/10 text-teal-300 border-teal-500/20';
 
-              {/* CAMA ORTOPÉDICA */}
-              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800 space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🛏️</span>
-                  <span className="font-bold text-slate-200 text-sm">
-                    ¿Qué cama ortopédica viscoelástica se recomienda?
-                  </span>
-                </div>
-                <div className="text-slate-300 leading-relaxed space-y-1.5 text-[11px]">
-                  <p>
-                    A los 12 años, las camas convencionales con relleno de poliéster o pedacería se aplastan hasta el piso, haciendo que sus caderas choquen contra el suelo duro.
-                  </p>
-                  <p className="font-semibold text-[#e0a96d]">Modelos recomendados:</p>
-                  <ul className="list-disc pl-4 space-y-1 text-slate-400">
-                    <li><strong>Big Barker 7" Pillow Top (Talla XL):</strong> El estándar de oro clínico veterinario para razas grandes con displasia (probada en la Universidad de Pensilvania). Espuma de grado terapéutico de 18 cm que nunca se hunde y alivia los puntos de presión de cadera y codos.</li>
-                    <li><strong>PetFusion Ultimate Solid Memory Foam (Talla XL):</strong> Bloque macizo de espuma viscoelástica de 10-12 cm con reborde acolchado ergonómico donde puede recargar cuello y columna.</li>
-                    <li><strong>Bedsure Ortopédica con base de soporte firme:</strong> Opción accesible con núcleo firme y funda impermeable interna lavable.</li>
-                  </ul>
-                  <p className="text-[10px] text-emerald-300/90 pt-1">
-                    ✓ <strong>Regla de oro:</strong> Debe ser de <em>Memory Foam</em> macizo (bloque sólido de 10 a 15 cm), tamaño suficiente para estirarse de costado y con entrada al ras de piso sin escalón alto.
-                  </p>
-                </div>
-              </div>
+                const categoryLabel = isVitamins
+                  ? '💊 Vitaminas & Suplementos'
+                  : isGear
+                  ? '🦽 Equipo & Accesorios'
+                  : isNutrition
+                  ? '🥩 Alimentación & Nutrición'
+                  : isBiomechanics
+                  ? '🦴 Biomecánica & Ortopedia'
+                  : '🐾 Cuidados & Manejo';
 
-              {/* CUIDADOS GENERALES */}
-              <div className="p-4 rounded-2xl bg-[#171a24] border border-slate-800 space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">✂️</span>
-                  <span className="font-bold text-slate-200 text-sm">
-                    Uñas, Temperatura & Manto Largo
-                  </span>
-                </div>
-                <div className="text-slate-300 leading-relaxed space-y-1.5 text-[11px]">
-                  <p>
-                    Factores que a menudo se pasan por alto en la displasia geriátrica:
-                  </p>
-                  <ul className="list-disc pl-4 space-y-1 text-slate-400">
-                    <li><strong>Corte de uñas cada 3 semanas:</strong> Si las uñas tocan el piso, obligan a Mona a arquear los dedos y cambiar el centro de carga hacia atrás, transmitiendo tensión directa a la pelvis.</li>
-                    <li><strong>Calor en articulaciones:</strong> El frío aumenta la viscosidad del líquido sinovial. Mantén su zona de descanso abrigada y libre de corrientes de aire frío.</li>
-                    <li><strong>Secado post-natación:</strong> Su denso doble manto no debe quedar húmedo tras nadar para evitar dolores reumáticos y hot-spots.</li>
-                  </ul>
-                </div>
-              </div>
+                return (
+                  <div
+                    key={tip.id}
+                    className="p-5 rounded-2xl bg-[#171a24] border border-slate-800 hover:border-[#e0a96d]/30 transition-all space-y-3 relative group flex flex-col justify-between"
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <span className="text-xl shrink-0 mt-0.5">{tip.icon || '🐾'}</span>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-100 text-sm leading-snug break-words">
+                              {tip.title}
+                            </h4>
+                            <span className={`inline-block mt-1 text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${badgeClass}`}>
+                              {categoryLabel}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Controls: Edit & Delete */}
+                        <div className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => setEditingTipItem({ ...tip })}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-[#e0a96d] hover:bg-slate-800 transition-all cursor-pointer"
+                            title="Editar recomendación"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTip(tip.id, tip.title)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-all cursor-pointer"
+                            title="Eliminar recomendación"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="text-slate-300 leading-relaxed text-[11px] whitespace-pre-line pt-1 border-t border-slate-800/60">
+                        {tip.content}
+                      </div>
+                    </div>
+
+                    {tip.createdAt && (
+                      <div className="pt-2 text-[9px] text-slate-500 font-mono">
+                        Agregado: {formatDisplayDate(tip.createdAt)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -2834,6 +2929,193 @@ export default function PetCareModule({
                   className="px-4 py-2 rounded-xl bg-[#e0a96d] text-[#0b0c10] font-black hover:bg-[#b37d46] cursor-pointer"
                 >
                   Guardar Perfil
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: AGREGAR RECOMENDACIÓN / GUÍA */}
+      {showAddTipModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0c10]/80 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl bg-[#171a24] border border-[#e0a96d]/30 p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2 font-outfit">
+                <ShieldCheck className="w-5 h-5 text-[#e0a96d]" /> Nueva Recomendación para {petName}
+              </h3>
+              <button
+                onClick={() => setShowAddTipModal(false)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddTip} className="space-y-4 text-xs">
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Título de la recomendación:</label>
+                <input
+                  type="text"
+                  placeholder="ej. Condroprotectores Glucosamina & MSM, Arnés Pélvico, Alimento Articular"
+                  value={newTipItem.title}
+                  onChange={(e) => setNewTipItem({ ...newTipItem, title: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Categoría:</label>
+                  <select
+                    value={newTipItem.category}
+                    onChange={(e) => {
+                      const cat = e.target.value;
+                      let defaultIcon = '🐾';
+                      if (cat === 'vitamins') defaultIcon = '💊';
+                      else if (cat === 'gear') defaultIcon = '🦽';
+                      else if (cat === 'nutrition') defaultIcon = '🥩';
+                      else if (cat === 'biomechanics') defaultIcon = '🦴';
+                      setNewTipItem({ ...newTipItem, category: cat, icon: defaultIcon });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                  >
+                    <option value="vitamins">💊 Vitaminas & Suplementos</option>
+                    <option value="gear">🦽 Equipo & Accesorios (Rampas / Arneses)</option>
+                    <option value="nutrition">🥩 Alimentación & Nutrición</option>
+                    <option value="biomechanics">🦴 Biomecánica & Ortopedia</option>
+                    <option value="care">🐾 Cuidados & Manejo General</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Ícono (Emoji):</label>
+                  <input
+                    type="text"
+                    value={newTipItem.icon}
+                    onChange={(e) => setNewTipItem({ ...newTipItem, icon: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none text-center"
+                    maxLength={3}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">
+                  Detalles, marcas recomendadas y pautas biomecánicas:
+                </label>
+                <textarea
+                  rows={5}
+                  placeholder={`Escribe aquí la recomendación detallada...\nPuedes incluir viñetas como:\n• Dosis o momento de administración\n• Marcas sugeridas (ej. Cosequin DS, YuMOVE)\n• Precauciones biomecánicas`}
+                  value={newTipItem.content}
+                  onChange={(e) => setNewTipItem({ ...newTipItem, content: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none resize-none leading-relaxed"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddTipModal(false)}
+                  className="px-4 py-2 rounded-xl bg-[#11131a] text-slate-400 hover:text-slate-200 font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#e0a96d] text-[#0b0c10] font-black hover:bg-[#b37d46] cursor-pointer"
+                >
+                  Guardar en la Guía
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR RECOMENDACIÓN / GUÍA */}
+      {editingTipItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0c10]/80 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl bg-[#171a24] border border-[#e0a96d]/30 p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2 font-outfit">
+                <Edit3 className="w-5 h-5 text-[#e0a96d]" /> Editar Recomendación
+              </h3>
+              <button
+                onClick={() => setEditingTipItem(null)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditTip} className="space-y-4 text-xs">
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Título:</label>
+                <input
+                  type="text"
+                  value={editingTipItem.title}
+                  onChange={(e) => setEditingTipItem({ ...editingTipItem, title: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Categoría:</label>
+                  <select
+                    value={editingTipItem.category}
+                    onChange={(e) => setEditingTipItem({ ...editingTipItem, category: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none"
+                  >
+                    <option value="vitamins">💊 Vitaminas & Suplementos</option>
+                    <option value="gear">🦽 Equipo & Accesorios (Rampas / Arneses)</option>
+                    <option value="nutrition">🥩 Alimentación & Nutrición</option>
+                    <option value="biomechanics">🦴 Biomecánica & Ortopedia</option>
+                    <option value="care">🐾 Cuidados & Manejo General</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 font-semibold block mb-1">Ícono:</label>
+                  <input
+                    type="text"
+                    value={editingTipItem.icon || '🐾'}
+                    onChange={(e) => setEditingTipItem({ ...editingTipItem, icon: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none text-center"
+                    maxLength={3}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">Contenido:</label>
+                <textarea
+                  rows={6}
+                  value={editingTipItem.content || ''}
+                  onChange={(e) => setEditingTipItem({ ...editingTipItem, content: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-[#11131a] border border-slate-700 text-slate-100 focus:border-[#e0a96d] outline-none resize-none leading-relaxed"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingTipItem(null)}
+                  className="px-4 py-2 rounded-xl bg-[#11131a] text-slate-400 hover:text-slate-200 font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#e0a96d] text-[#0b0c10] font-black hover:bg-[#b37d46] cursor-pointer"
+                >
+                  Guardar Cambios
                 </button>
               </div>
             </form>
