@@ -38,8 +38,8 @@ import {
   ClipboardList,
   Scale
 } from 'lucide-react';
-import { compressImage, analyzeProductImage, suggestStoresAndEquivalents } from '../utils/geminiService';
-import { findSimilarity, findSimilarHouseholdItems, findHouseholdSimilarity, normalizeString } from '../utils/similarity';
+import { compressImage, analyzeProductImage, suggestStoresAndEquivalents, suggestPossibleProducts, generateFallbackStoreSuggestions } from '../utils/geminiService';
+import { findSimilarity, findSimilarHouseholdItems, findHouseholdSimilarity, normalizeString, matchesFlexibleSearch, scoreHouseholdItemSearch } from '../utils/similarity';
 import { safeNumber, sanitizeHouseholdItem, sanitizeHouseholdList } from '../utils/sanitizers';
 import { getLocalDateString, formatDisplayDate } from '../utils/dateUtils';
 
@@ -287,15 +287,19 @@ export default function PriceComparatorModule({
   // 1. Store & Equivalent Suggestions Explorer State ("Buscar sugerencias o tiendas donde puedan vender un producto o equivalente para ir a verificar")
   const [isExploringStores, setIsExploringStores] = useState(false);
   const [explorerQuery, setExplorerQuery] = useState('');
-  const [explorerCategory, setExplorerCategory] = useState('Despensa');
+  const [explorerCategory, setExplorerCategory] = useState('All');
   const [explorerTargetItem, setExplorerTargetItem] = useState(null);
   const [storeSuggestionsResult, setStoreSuggestionsResult] = useState(null);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [isExplorerProductPickerOpen, setIsExplorerProductPickerOpen] = useState(false);
+  const explorerDropdownRef = useRef(null);
 
   // 2. Store Visit Mode State ("Elegir una tienda y tener la lista de productos que debo buscar para agregar en el comparador")
   const [isStoreVisitOpen, setIsStoreVisitOpen] = useState(false);
   const [selectedVisitStore, setSelectedVisitStore] = useState('Costco');
   const [storeVisitFilter, setStoreVisitFilter] = useState('to_verify'); // 'to_verify' | 'to_buy' | 'missing_here' | 'all'
+  const [storeVisitSearch, setStoreVisitSearch] = useState('');
+  const [storeVisitCategory, setStoreVisitCategory] = useState('All');
   const [quickPendingProductName, setQuickPendingProductName] = useState('');
   const [quickPendingVarietyName, setQuickPendingVarietyName] = useState('');
 
@@ -349,6 +353,18 @@ export default function PriceComparatorModule({
     }
   }, [addingStoreToItem, editingItem, similarProductPrompt, inStoreChecker]);
 
+  // Close Store Explorer product dropdown when clicking outside
+  useEffect(() => {
+    if (!isExplorerProductPickerOpen) return;
+    const handleClickOutside = (e) => {
+      if (explorerDropdownRef.current && !explorerDropdownRef.current.contains(e.target)) {
+        setIsExplorerProductPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isExplorerProductPickerOpen]);
+
   const categories = ['All', 'Skincare', 'Dental', 'Higiene', 'Despensa', 'Limpieza', 'Otros'];
   const storesPreset = [
     "Costco",
@@ -372,11 +388,12 @@ export default function PriceComparatorModule({
     setIsExploringStores(true);
     setIsStoreVisitOpen(false);
     setIsAddingItem(false);
+    setIsExplorerProductPickerOpen(false);
 
     if (item) {
       setExplorerTargetItem(item);
       setExplorerQuery(item.name || '');
-      setExplorerCategory(item.category || 'Despensa');
+      setExplorerCategory(item.category || 'All');
       try {
         setIsLoadingSuggestions(true);
         const existingStores = (item.stores || []).map(s => s.storeName).filter(Boolean);
@@ -395,27 +412,105 @@ export default function PriceComparatorModule({
     }
   };
 
+  // Handle Category Change inside Store Explorer so it filters registered products AND updates suggestions
+  const handleExplorerCategoryChange = async (newCategory) => {
+    setExplorerCategory(newCategory);
+
+    // If a registered product from another category was previously selected, clear it and show the picker for the new category
+    if (
+      newCategory !== 'All' &&
+      explorerTargetItem &&
+      explorerTargetItem.category &&
+      explorerTargetItem.category !== newCategory
+    ) {
+      setExplorerTargetItem(null);
+      setExplorerQuery('');
+      setStoreSuggestionsResult(null);
+      setIsExplorerProductPickerOpen(true);
+      return;
+    }
+
+    // If there is a custom query and results are already open, refresh suggestions for the new category immediately
+    const q = explorerQuery.trim();
+    if (q && storeSuggestionsResult) {
+      try {
+        setIsLoadingSuggestions(true);
+        const existingStores = explorerTargetItem
+          ? (explorerTargetItem.stores || []).map(s => s.storeName).filter(Boolean)
+          : [];
+        const effectiveCat = newCategory === 'All' ? (explorerTargetItem?.category || '') : newCategory;
+        const res = await suggestStoresAndEquivalents(q, effectiveCat, existingStores, geminiApiKey);
+        setStoreSuggestionsResult(res);
+      } catch (err) {
+        console.warn('Category refresh error:', err);
+      } finally {
+        setIsLoadingSuggestions(false);
+      }
+    } else {
+      // Otherwise open the product picker filtered to this category so the user sees the change right away
+      setIsExplorerProductPickerOpen(true);
+    }
+  };
+
   const handleSearchStoreSuggestions = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     const q = explorerQuery.trim();
     if (!q) {
-      showToast('warning', 'Escribe un producto', 'Ingresa el nombre del producto o insumo que deseas buscar.');
+      showToast('warning', 'Escribe un producto', 'Ingresa el nombre del producto o elígelo del buscador de tus productos registrados.');
+      setIsExplorerProductPickerOpen(true);
       return;
     }
 
+    setIsExplorerProductPickerOpen(false);
     try {
       setIsLoadingSuggestions(true);
       const simMatches = findSimilarHouseholdItems(q, householdItems, 1);
-      const matchedItem = simMatches.length > 0 ? simMatches[0].item : null;
+      const matchedItem = simMatches.length > 0 && simMatches[0].score >= 120 ? simMatches[0].item : null;
       setExplorerTargetItem(matchedItem);
 
       const existingStores = matchedItem
         ? (matchedItem.stores || []).map(s => s.storeName).filter(Boolean)
         : [];
-      const res = await suggestStoresAndEquivalents(q, explorerCategory, existingStores, geminiApiKey);
+      const effectiveCat = explorerCategory === 'All'
+        ? (matchedItem?.category || '')
+        : explorerCategory;
+      const res = await suggestStoresAndEquivalents(q, effectiveCat, existingStores, geminiApiKey);
       setStoreSuggestionsResult(res);
     } catch (err) {
       showToast('warning', 'Aviso de Búsqueda', err.message || 'No se pudieron obtener sugerencias.');
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  // Select a suggested possible product (e.g. "Papel Higiénico (Paquete 32 - 40 rollos)" when typing "papel")
+  const handleSelectPossibleProduct = async (prodSuggestion) => {
+    if (!prodSuggestion || !prodSuggestion.name) return;
+    const prodName = prodSuggestion.name;
+    const prodCat = prodSuggestion.category || 'Despensa';
+
+    setIsExploringStores(true);
+    setIsStoreVisitOpen(false);
+    setIsAddingItem(false);
+    setIsExplorerProductPickerOpen(false);
+    setExplorerQuery(prodName);
+    setExplorerCategory(prodCat);
+
+    const simMatches = findSimilarHouseholdItems(prodName, householdItems, 1);
+    const matchedItem = simMatches.length > 0 && simMatches[0].score >= 120 ? simMatches[0].item : null;
+    setExplorerTargetItem(matchedItem);
+
+    // Immediately show instant suggestions and refine with AI if key is present
+    setStoreSuggestionsResult(generateFallbackStoreSuggestions(prodName, prodCat));
+    try {
+      setIsLoadingSuggestions(true);
+      const existingStores = matchedItem
+        ? (matchedItem.stores || []).map(s => s.storeName).filter(Boolean)
+        : [];
+      const res = await suggestStoresAndEquivalents(prodName, prodCat, existingStores, geminiApiKey);
+      setStoreSuggestionsResult(res);
+    } catch (err) {
+      console.warn('Suggestion error:', err);
     } finally {
       setIsLoadingSuggestions(false);
     }
@@ -1207,31 +1302,31 @@ export default function PriceComparatorModule({
   const needToBuyCount = safeItemsList.filter(i => i && i.repurchaseVerdict === 'need_to_buy').length;
   const runningLowCount = safeItemsList.filter(i => i && i.repurchaseVerdict === 'running_low').length;
 
-  const filteredItems = safeItemsList.filter(item => {
-    if (!item) return false;
-    const name = String(item.name || '');
-    const notes = String(item.notes || '');
-    const search = String(searchTerm || '').toLowerCase().trim();
-    const matchesSearch = !search || 
-      name.toLowerCase().includes(search) || 
-      notes.toLowerCase().includes(search);
-    
-    let matchesCategory = true;
-    if (categoryFilter === 'need_to_buy') {
-      matchesCategory = item.repurchaseVerdict === 'need_to_buy';
-    } else if (categoryFilter === 'running_low') {
-      matchesCategory = item.repurchaseVerdict === 'running_low';
-    } else if (categoryFilter === 'to_buy_all') {
-      matchesCategory = item.repurchaseVerdict === 'need_to_buy' || item.repurchaseVerdict === 'running_low';
-    } else if (categoryFilter === 'in_stock') {
-      matchesCategory = item.repurchaseVerdict === 'yes';
-    } else if (categoryFilter === 'wishlist') {
-      matchesCategory = item.repurchaseVerdict === 'maybe';
-    } else if (categoryFilter !== 'All') {
-      matchesCategory = item.category === categoryFilter;
-    }
-    return matchesSearch && matchesCategory;
-  });
+  const filteredItems = safeItemsList
+    .filter(item => {
+      if (!item) return false;
+      const matchesSearch = !searchTerm.trim() || scoreHouseholdItemSearch(searchTerm, item) > 0;
+      
+      let matchesCategory = true;
+      if (categoryFilter === 'need_to_buy') {
+        matchesCategory = item.repurchaseVerdict === 'need_to_buy';
+      } else if (categoryFilter === 'running_low') {
+        matchesCategory = item.repurchaseVerdict === 'running_low';
+      } else if (categoryFilter === 'to_buy_all') {
+        matchesCategory = item.repurchaseVerdict === 'need_to_buy' || item.repurchaseVerdict === 'running_low';
+      } else if (categoryFilter === 'in_stock') {
+        matchesCategory = item.repurchaseVerdict === 'yes';
+      } else if (categoryFilter === 'wishlist') {
+        matchesCategory = item.repurchaseVerdict === 'maybe';
+      } else if (categoryFilter !== 'All') {
+        matchesCategory = item.category === categoryFilter;
+      }
+      return matchesSearch && matchesCategory;
+    })
+    .sort((a, b) => {
+      if (!searchTerm.trim()) return 0;
+      return scoreHouseholdItemSearch(searchTerm, b) - scoreHouseholdItemSearch(searchTerm, a);
+    });
 
   // Calculate cheapest store helper
   const getCheapestStore = (stores) => {
@@ -1426,6 +1521,69 @@ export default function PriceComparatorModule({
             </div>
           );
         })()}
+
+        {/* Main Search Bar Product Suggestions when typing (e.g. "mas", "más", "papel", "jamon") */}
+        {searchTerm.trim().length >= 2 && (() => {
+          const matchingRegistered = safeItemsList
+            .map(it => ({ item: it, score: scoreHouseholdItemSearch(searchTerm.trim(), it) }))
+            .filter(entry => entry.score >= 280)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5)
+            .map(entry => entry.item);
+
+          const registeredNormNames = new Set(matchingRegistered.map(it => normalizeString(it.name)));
+          const mainPossible = (suggestPossibleProducts(
+            searchTerm.trim(),
+            categories.includes(categoryFilter) ? categoryFilter : 'All'
+          ) || []).filter(p => !registeredNormNames.has(normalizeString(p.name)));
+
+          if (matchingRegistered.length === 0 && mainPossible.length === 0) return null;
+
+          return (
+            <div className="pt-2.5 border-t border-slate-800/80 space-y-2">
+              {matchingRegistered.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>✓ En tus productos registrados:</span>
+                  </span>
+                  {matchingRegistered.map(regItem => (
+                    <button
+                      key={regItem.id}
+                      type="button"
+                      onClick={() => handleOpenStoreExplorer(regItem)}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500 text-emerald-200 hover:text-[#0b0c10] border border-emerald-500/40 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                      title="Ver tiendas sugeridas y tus precios para este producto"
+                    >
+                      <span>{regItem.name}</span>
+                      <span className="text-[9.5px] opacity-80">({regItem.category})</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {mainPossible.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-bold text-[#e0a96d] flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>💡 ¿Buscas "{searchTerm.trim()}"? Otros productos posibles para verificar tiendas:</span>
+                  </span>
+                  {mainPossible.map((prod, idx) => (
+                    <button
+                      key={`${prod.name}-${idx}`}
+                      type="button"
+                      onClick={() => handleSelectPossibleProduct(prod)}
+                      className="px-2.5 py-1 rounded-lg bg-[#0b0c10] hover:bg-[#e0a96d] text-slate-200 hover:text-[#0b0c10] border border-[#e0a96d]/35 text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>{prod.name}</span>
+                      <span className="text-[9.5px] opacity-75">({prod.category})</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* ===================================================================== */}
@@ -1460,75 +1618,389 @@ export default function PriceComparatorModule({
             </button>
           </div>
 
-          {/* Search bar for store suggestions */}
-          <form onSubmit={handleSearchStoreSuggestions} className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-            <div className="sm:col-span-6">
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                Producto o insumo que deseas buscar o comparar
-              </label>
-              <input
-                type="text"
-                placeholder="Ej. Jamón de pavo, Queso Oaxaca, Crema CeraVe, Detergente líquido..."
-                value={explorerQuery}
-                onChange={(e) => setExplorerQuery(e.target.value)}
-                className="w-full bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl py-2.5 px-3.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
-              />
-            </div>
-            <div className="sm:col-span-3">
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                Categoría
-              </label>
-              <select
-                value={explorerCategory}
-                onChange={(e) => setExplorerCategory(e.target.value)}
-                className="w-full bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl py-2.5 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
-              >
-                {categories.filter(c => c !== 'All').map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-            <div className="sm:col-span-3 flex items-end">
-              <button
-                type="submit"
-                disabled={isLoadingSuggestions}
-                className="w-full btn-rose-gold py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
-              >
-                {isLoadingSuggestions ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Buscando tiendas...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Sugerir Tiendas y Equivalentes</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+          {/* Search bar & Compact Searchable Product Selector for store suggestions */}
+          {(() => {
+            const categoryFilteredExplorerItems = safeItemsList.filter(it =>
+              explorerCategory === 'All' || it.category === explorerCategory
+            );
 
-          {/* Quick product chips from your existing comparator */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">
-              Tus productos registrados:
-            </span>
-            {safeItemsList.map(it => (
-              <button
-                key={it.id}
-                type="button"
-                onClick={() => handleOpenStoreExplorer(it)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer border ${
-                  explorerTargetItem?.id === it.id
-                    ? 'bg-[#e0a96d] text-[#0b0c10] border-[#e0a96d] font-bold'
-                    : 'bg-[#0b0c10] text-slate-300 hover:text-white border-slate-800 hover:border-[#e0a96d]/40'
-                }`}
-              >
-                {it.name}
-              </button>
-            ))}
-          </div>
+            // Filter by search query unless the query exactly matches the currently selected item's name
+            const isExactSelectedName = explorerTargetItem &&
+              normalizeString(explorerQuery.trim()) === normalizeString(explorerTargetItem.name || '');
+            const activeQueryText = isExactSelectedName ? '' : explorerQuery.trim();
+
+            // Primary matches within the selected category, sorted by relevance ("mas" === "más" -> "Máscara Facial LED..." #1)
+            let searchableRegisteredItems = categoryFilteredExplorerItems
+              .filter(it => !activeQueryText || scoreHouseholdItemSearch(activeQueryText, it) > 0)
+              .sort((a, b) => {
+                if (!activeQueryText) return 0;
+                return scoreHouseholdItemSearch(activeQueryText, b) - scoreHouseholdItemSearch(activeQueryText, a);
+              });
+
+            // If typing a query while a specific category is selected, also include matches from other categories so nothing is hidden
+            if (activeQueryText && explorerCategory !== 'All') {
+              const otherCatMatches = safeItemsList
+                .filter(it => it.category !== explorerCategory && scoreHouseholdItemSearch(activeQueryText, it) > 0)
+                .sort((a, b) => scoreHouseholdItemSearch(activeQueryText, b) - scoreHouseholdItemSearch(activeQueryText, a));
+              if (otherCatMatches.length > 0) {
+                searchableRegisteredItems = [...searchableRegisteredItems, ...otherCatMatches];
+              }
+            }
+
+            // Suggested possible products for any query (excluding ones that identically match an already registered product name)
+            const registeredNormSet = new Set(searchableRegisteredItems.map(it => normalizeString(it.name)));
+            const suggestedProductsForQuery = explorerQuery.trim().length >= 2
+              ? (suggestPossibleProducts(explorerQuery.trim(), explorerCategory) || []).filter(
+                  p => !registeredNormSet.has(normalizeString(p.name))
+                )
+              : [];
+
+            return (
+              <div ref={explorerDropdownRef} className="space-y-2.5">
+                <form onSubmit={handleSearchStoreSuggestions} className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                  <div className="sm:col-span-6 relative">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <label className="block text-[11px] font-semibold text-slate-400">
+                        Producto o insumo que deseas buscar o comparar
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsExplorerProductPickerOpen(prev => !prev)}
+                        className="text-[11px] font-bold text-[#e0a96d] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>
+                          📂 Mis productos {explorerCategory !== 'All' ? `en ${explorerCategory}` : 'registrados'} ({categoryFilteredExplorerItems.length})
+                        </span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExplorerProductPickerOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder={
+                          explorerCategory === 'All'
+                            ? 'Busca con o sin acentos (ej. mas, más, papel, jabon, jamon)...'
+                            : `Busca en ${explorerCategory} (${categoryFilteredExplorerItems.length}) o escribe ej. mas, papel...`
+                        }
+                        value={explorerQuery}
+                        onFocus={() => setIsExplorerProductPickerOpen(true)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setExplorerQuery(val);
+                          setIsExplorerProductPickerOpen(true);
+                          if (explorerTargetItem && normalizeString(val) !== normalizeString(explorerTargetItem.name || '')) {
+                            setExplorerTargetItem(null);
+                          }
+                          if (val.trim().length >= 2) {
+                            const effCat = explorerCategory === 'All' ? '' : explorerCategory;
+                            setStoreSuggestionsResult(generateFallbackStoreSuggestions(val.trim(), effCat));
+                          } else if (!val.trim()) {
+                            setStoreSuggestionsResult(null);
+                          }
+                        }}
+                        className="w-full bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl py-2.5 pl-9 pr-16 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                      />
+
+                      <div className="absolute right-2 top-1.5 flex items-center gap-1">
+                        {explorerQuery && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExplorerQuery('');
+                              setExplorerTargetItem(null);
+                              setStoreSuggestionsResult(null);
+                              setIsExplorerProductPickerOpen(true);
+                            }}
+                            className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 cursor-pointer"
+                            title="Limpiar búsqueda"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setIsExplorerProductPickerOpen(prev => !prev)}
+                          className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                            isExplorerProductPickerOpen
+                              ? 'bg-[#e0a96d]/20 text-[#e0a96d]'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                          }`}
+                          title="Ver lista desplegable de tus productos registrados y sugerencias"
+                        >
+                          <ChevronDown className={`w-4 h-4 transition-transform ${isExplorerProductPickerOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Compact Searchable Dropdown: 1st Registered Products (so "Máscara Facial LED..." is always at the top!), 2nd Suggested Possible Products */}
+                    {isExplorerProductPickerOpen && (
+                      <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#0b0c10] border border-[#e0a96d]/40 rounded-xl shadow-2xl overflow-hidden animate-fade-in">
+                        <div className="px-3 py-2 bg-[#171a24] border-b border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-300">
+                            {explorerCategory === 'All'
+                              ? `Tus productos registrados (${searchableRegisteredItems.length})`
+                              : `Categoría: ${explorerCategory} (${searchableRegisteredItems.length})`}
+                          </span>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {categories.map(cat => {
+                              const countInCat = cat === 'All'
+                                ? safeItemsList.length
+                                : safeItemsList.filter(i => i.category === cat).length;
+                              if (cat !== 'All' && countInCat === 0 && explorerCategory !== cat) return null;
+                              return (
+                                <button
+                                  key={cat}
+                                  type="button"
+                                  onClick={() => handleExplorerCategoryChange(cat)}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all ${
+                                    explorerCategory === cat
+                                      ? 'bg-[#e0a96d] text-[#0b0c10]'
+                                      : 'bg-[#0b0c10] text-slate-400 hover:text-slate-200 border border-slate-800'
+                                  }`}
+                                >
+                                  {cat === 'All' ? 'Todas' : cat} ({countInCat})
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="max-h-80 overflow-y-auto divide-y divide-slate-800/70 custom-scrollbar">
+                          {/* Section 1: User's already registered products FIRST so "Máscara Facial LED de Luz Roja" appears at the very top */}
+                          {searchableRegisteredItems.length === 0 ? (
+                            <div className="p-3 text-center space-y-1.5">
+                              <p className="text-[11px] text-slate-400">
+                                {explorerQuery.trim()
+                                  ? `Aún no tienes "${explorerQuery.trim()}" en tus productos registrados. Elige una sugerencia abajo.`
+                                  : `No tienes productos registrados en la categoría ${explorerCategory}.`}
+                              </p>
+                              {explorerCategory !== 'All' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleExplorerCategoryChange('All')}
+                                  className="text-[11px] font-bold text-[#e0a96d] hover:underline cursor-pointer"
+                                >
+                                  Ver todas las categorías ({safeItemsList.length} productos)
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="px-3 py-1.5 bg-emerald-500/10 text-[10px] font-bold uppercase tracking-wider text-emerald-300 flex items-center justify-between">
+                                <span>✓ En tus productos ya registrados ({searchableRegisteredItems.length}):</span>
+                                {activeQueryText && (
+                                  <span className="text-[9.5px] font-normal text-emerald-200/80">
+                                    Coincidencias con y sin acentos
+                                  </span>
+                                )}
+                              </div>
+                              {searchableRegisteredItems.map(it => {
+                                const isSelected = explorerTargetItem?.id === it.id;
+                                const storesCount = (it.stores || []).length;
+                                const pendingCount = (it.pendingStores || []).length;
+                                return (
+                                  <button
+                                    key={it.id}
+                                    type="button"
+                                    onClick={() => handleOpenStoreExplorer(it)}
+                                    className={`w-full px-3.5 py-2.5 text-left flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-[#e0a96d]/15 text-[#e0a96d]'
+                                        : 'hover:bg-[#171a24] text-slate-200'
+                                    }`}
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs font-bold truncate">{it.name}</span>
+                                        <span className="text-[9.5px] uppercase font-bold px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                          {it.category}
+                                        </span>
+                                        {it.favoriteVariety && (
+                                          <span className="text-[10px] text-amber-300 flex items-center gap-0.5">
+                                            <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+                                            <span>{it.favoriteVariety}</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0 text-[10px]">
+                                      <span className="px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">
+                                        {storesCount} {storesCount === 1 ? 'tienda' : 'tiendas'}
+                                      </span>
+                                      {pendingCount > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">
+                                          {pendingCount} 📌
+                                        </span>
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Section 2: Suggestions of other possible products when typing (e.g. "papel" -> Papel Higiénico, Servitoallas...) */}
+                          {suggestedProductsForQuery.length > 0 && (
+                            <div className="p-2.5 bg-amber-500/5 space-y-1.5">
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1 px-1">
+                                <Sparkles className="w-3 h-3 text-amber-400" />
+                                <span>💡 Otras sugerencias de productos posibles para "{explorerQuery.trim()}":</span>
+                              </div>
+                              <div className="space-y-1">
+                                {suggestedProductsForQuery.map((prod, pIdx) => (
+                                  <button
+                                    key={`${prod.name}-${pIdx}`}
+                                    type="button"
+                                    onClick={() => handleSelectPossibleProduct(prod)}
+                                    className="w-full px-2.5 py-2 rounded-lg bg-[#171a24] hover:bg-[#e0a96d]/20 border border-slate-800 hover:border-[#e0a96d]/40 text-left flex items-center justify-between gap-2 transition-all cursor-pointer"
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs font-bold text-amber-200">{prod.name}</span>
+                                        <span className="text-[9.5px] uppercase font-bold px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                          {prod.category}
+                                        </span>
+                                      </div>
+                                      {prod.brandsHint && (
+                                        <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                                          Marcas a verificar: {prod.brandsHint}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] font-bold text-[#e0a96d] shrink-0">
+                                      Ver tiendas →
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {explorerQuery.trim() && (
+                          <div className="p-2 bg-[#171a24] border-t border-slate-800">
+                            <button
+                              type="button"
+                              onClick={handleSearchStoreSuggestions}
+                              className="w-full py-1.5 px-3 rounded-lg bg-[#e0a96d]/15 hover:bg-[#e0a96d]/25 text-[#e0a96d] border border-[#e0a96d]/35 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>
+                                Buscar dónde venden "{explorerQuery.trim()}"
+                                {explorerCategory !== 'All' ? ` (${explorerCategory})` : ''}
+                              </span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Categoría (filtra tus productos y sugerencias)
+                    </label>
+                    <select
+                      value={explorerCategory}
+                      onChange={(e) => handleExplorerCategoryChange(e.target.value)}
+                      className="w-full bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl py-2.5 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
+                    >
+                      <option value="All">Todas las categorías ({safeItemsList.length})</option>
+                      {categories.filter(c => c !== 'All').map(cat => {
+                        const count = safeItemsList.filter(i => i.category === cat).length;
+                        return (
+                          <option key={cat} value={cat}>
+                            {cat} ({count})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-3 flex items-end">
+                    <button
+                      type="submit"
+                      disabled={isLoadingSuggestions}
+                      className="w-full btn-rose-gold py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
+                    >
+                      {isLoadingSuggestions ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Buscando tiendas...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4" />
+                          <span>Sugerir Tiendas y Equivalentes</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+
+                {/* Inline Quick Suggestions when typing (shows BOTH matching registered products like "Máscara Facial LED..." AND other possible products) */}
+                {explorerQuery.trim().length >= 2 && (searchableRegisteredItems.length > 0 || suggestedProductsForQuery.length > 0) && (
+                  <div className="p-3 rounded-xl bg-[#0b0c10] border border-[#e0a96d]/25 space-y-2">
+                    {activeQueryText && searchableRegisteredItems.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>✓ Tus productos registrados que coinciden:</span>
+                        </span>
+                        {searchableRegisteredItems.slice(0, 6).map(regIt => {
+                          const isCurrent = explorerTargetItem?.id === regIt.id;
+                          return (
+                            <button
+                              key={regIt.id}
+                              type="button"
+                              onClick={() => handleOpenStoreExplorer(regIt)}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                                isCurrent
+                                  ? 'bg-emerald-500 text-[#0b0c10] border-emerald-400'
+                                  : 'bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-200 border-emerald-500/40'
+                              }`}
+                            >
+                              <span>{regIt.name}</span>
+                              <span className="text-[9.5px] opacity-80">({regIt.category})</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {suggestedProductsForQuery.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold text-[#e0a96d] flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>💡 Otros productos sugeridos que podrían ser:</span>
+                        </span>
+                        {suggestedProductsForQuery.map((prod, idx) => {
+                          const isCurrent = normalizeString(explorerQuery.trim()) === normalizeString(prod.name);
+                          return (
+                            <button
+                              key={`${prod.name}-${idx}`}
+                              type="button"
+                              onClick={() => handleSelectPossibleProduct(prod)}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                                isCurrent
+                                  ? 'bg-[#e0a96d] text-[#0b0c10] border-[#e0a96d] font-bold'
+                                  : 'bg-[#171a24] hover:bg-slate-800 text-slate-200 border-slate-700 hover:border-[#e0a96d]/50'
+                              }`}
+                            >
+                              <span>{prod.name}</span>
+                              <span className="text-[9.5px] opacity-75">({prod.category})</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Results of Store & Equivalent Suggestions */}
           {storeSuggestionsResult && (
@@ -1770,8 +2242,24 @@ export default function PriceComparatorModule({
           return { pendingCount, missingOrNeedCount };
         };
 
-        // Filter products for the chosen store according to storeVisitFilter
+        // Filter products for the chosen store according to storeVisitFilter, category, and search query
         const storeChecklistItems = safeItemsList.filter(it => {
+          if (storeVisitCategory !== 'All' && it.category !== storeVisitCategory) {
+            return false;
+          }
+          if (storeVisitSearch.trim()) {
+            const matches = matchesFlexibleSearch(storeVisitSearch, [
+              it.name,
+              it.notes,
+              it.category,
+              it.favoriteVariety,
+              ...(it.subproducts || []),
+              ...(it.stores || []).map(s => s.variety),
+              ...(it.pendingStores || []).map(ps => ps.suggestedVariety)
+            ]);
+            if (!matches) return false;
+          }
+
           const isExplicitPending = (it.pendingStores || []).some(
             ps => ps.storeName?.toLowerCase().trim() === normSelectedStore
           );
@@ -1961,6 +2449,40 @@ export default function PriceComparatorModule({
                     + Agregar a lista
                   </button>
                 </form>
+              </div>
+
+              {/* Search & Category Filter within Store Checklist */}
+              <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder={`Filtrar productos dentro de la lista de ${cleanSelectedStore}...`}
+                    value={storeVisitSearch}
+                    onChange={(e) => setStoreVisitSearch(e.target.value)}
+                    className="w-full bg-[#171a24] border border-slate-800 rounded-lg py-1.5 pl-8 pr-7 text-slate-100 text-xs focus:outline-none focus:border-emerald-400"
+                  />
+                  {storeVisitSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setStoreVisitSearch('')}
+                      className="absolute right-2 top-1.5 text-slate-400 hover:text-slate-200 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <select
+                  value={storeVisitCategory}
+                  onChange={(e) => setStoreVisitCategory(e.target.value)}
+                  className="bg-[#171a24] border border-slate-800 rounded-lg py-1.5 px-2.5 text-slate-200 text-xs focus:outline-none focus:border-emerald-400 cursor-pointer"
+                >
+                  <option value="All">Todas las categorías</option>
+                  {categories.filter(c => c !== 'All').map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -2266,7 +2788,7 @@ export default function PriceComparatorModule({
                 className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                 required
               />
-              {itemName.trim().length >= 3 && (() => {
+              {itemName.trim().length >= 2 && (() => {
                 const matches = findSimilarHouseholdItems(itemName.trim(), householdItems, 3);
                 if (!matches || matches.length === 0) return null;
 
@@ -3811,12 +4333,11 @@ export default function PriceComparatorModule({
                         </label>
                         <input
                           type="text"
-                          list="existing-products-datalist"
                           value={inStoreChecker.productName}
                           onChange={(e) => {
                             const val = e.target.value;
                             const exactMatch = safeItemsList.find(
-                              i => i.name.toLowerCase().trim() === val.toLowerCase().trim()
+                              i => normalizeString(i.name) === normalizeString(val)
                             );
                             setInStoreChecker({
                               ...inStoreChecker,
@@ -3825,14 +4346,52 @@ export default function PriceComparatorModule({
                               category: exactMatch ? exactMatch.category : inStoreChecker.category
                             });
                           }}
-                          placeholder="Ej. Jamón, Papel Higiénico, Jabón..."
+                          placeholder="Busca con o sin acento (ej. mas, más, jamon, papel)..."
                           className="w-full bg-[#171a24] border border-[#e0a96d]/25 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                         />
-                        <datalist id="existing-products-datalist">
-                          {safeItemsList.map(it => (
-                            <option key={it.id} value={it.name} />
-                          ))}
-                        </datalist>
+                        {/* Accent-insensitive quick product selector (replaces accent-strict browser datalist) */}
+                        {(() => {
+                          const qText = (inStoreChecker.productName || '').trim();
+                          if (qText.length < 2) return null;
+                          const isExactCurrent = inStoreChecker.targetItem &&
+                            normalizeString(qText) === normalizeString(inStoreChecker.targetItem.name);
+                          if (isExactCurrent) return null;
+
+                          const matchingItems = safeItemsList
+                            .map(it => ({ item: it, score: scoreHouseholdItemSearch(qText, it) }))
+                            .filter(entry => entry.score > 0)
+                            .sort((a, b) => b.score - a.score)
+                            .slice(0, 5)
+                            .map(entry => entry.item);
+
+                          if (matchingItems.length === 0) return null;
+
+                          return (
+                            <div className="mt-1.5 p-2 rounded-lg bg-[#171a24] border border-[#e0a96d]/35 space-y-1">
+                              <span className="block text-[10px] font-bold text-emerald-300">
+                                ✓ Selecciona de tus productos registrados:
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {matchingItems.map(mIt => (
+                                  <button
+                                    key={mIt.id}
+                                    type="button"
+                                    onClick={() => setInStoreChecker({
+                                      ...inStoreChecker,
+                                      productName: mIt.name,
+                                      targetItem: mIt,
+                                      category: mIt.category || inStoreChecker.category,
+                                      variety: inStoreChecker.variety || mIt.favoriteVariety || ''
+                                    })}
+                                    className="px-2 py-1 rounded bg-[#0b0c10] hover:bg-[#e0a96d] text-slate-100 hover:text-[#0b0c10] border border-[#e0a96d]/30 text-[11px] font-semibold transition-all cursor-pointer"
+                                  >
+                                    {mIt.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <div className="sm:col-span-3">

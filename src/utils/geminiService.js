@@ -2348,26 +2348,348 @@ export const generateAromatherapyAlchemy = async (requestText, userOils = [], ap
 };
 
 /**
+ * Suggests concrete product possibilities / variants when a user types a generic or partial term
+ * (e.g. "papel" -> Papel Higiénico, Servitoallas de Cocina, Pañuelos Faciales, Papel Aluminio;
+ *  "ma" -> Mascarilla Facial, Máscara de Pestañas, Mantequilla, etc.).
+ */
+export const suggestPossibleProducts = (query = '', category = 'All') => {
+  const raw = String(query || '').trim();
+  const norm = raw
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!norm || norm.length < 2) return [];
+
+  const catalog = [
+    // Papel & Desechables
+    {
+      keywords: ['papel', 'rollo', 'higienico', 'bano', 'cottonelle', 'regio', 'petalo', 'suavel'],
+      name: 'Papel Higiénico (Paquete 32 - 40 rollos)',
+      category: 'Higiene',
+      brandsHint: 'Kirkland Signature, Regio Just-1, Pétalo, Kleenex Cottonelle, Member\'s Mark, Suavel (3B)'
+    },
+    {
+      keywords: ['papel', 'servitoalla', 'toalla cocina', 'absorbente', 'bounty', 'rollo cocina'],
+      name: 'Servitoallas / Papel Absorbente de Cocina',
+      category: 'Limpieza',
+      brandsHint: 'Bounty, Kirkland Signature, Regio, Pétalo, Member\'s Mark, Great Value'
+    },
+    {
+      keywords: ['papel', 'panuelo', 'kleenex', 'facial', 'desechable'],
+      name: 'Pañuelos Faciales Desechables (Kleenex)',
+      category: 'Higiene',
+      brandsHint: 'Kleenex, Regio, Great Value, Member\'s Mark'
+    },
+    {
+      keywords: ['papel', 'servilleta', 'mesa', 'cocina'],
+      name: 'Servilletas de Papel para Mesa',
+      category: 'Despensa',
+      brandsHint: 'Pétalo, Regio, Kirkland, Great Value, Suavel'
+    },
+    {
+      keywords: ['papel', 'aluminio', 'encerado', 'reynolds', 'hornear'],
+      name: 'Papel Aluminio / Papel Encerado de Cocina',
+      category: 'Despensa',
+      brandsHint: 'Reynolds, Kirkland Signature, Member\'s Mark, Great Value'
+    },
+    // Toallas
+    {
+      keywords: ['toalla', 'toallita', 'humeda', 'desmaquillante', 'bebe'],
+      name: 'Toallitas Húmedas Desechables / Desmaquillantes',
+      category: 'Higiene',
+      brandsHint: 'Kirkland, Kleenex, Neutrogena, Huggies, Regio'
+    },
+    {
+      keywords: ['toalla', 'femenina', 'sanitaria', 'nocturna', 'kotex', 'saba', 'always'],
+      name: 'Toallas Femeninas (Nocturnas / Uso Diario)',
+      category: 'Higiene',
+      brandsHint: 'Saba, Kotex, Always, Fiore (Tiendas 3B)'
+    },
+    // Jabones & Limpiadores
+    {
+      keywords: ['jabon', 'barra', 'corporal', 'bano', 'dove', 'palmolive', 'zest'],
+      name: 'Jabón Corporal en Barra (Multipack)',
+      category: 'Higiene',
+      brandsHint: 'Dove, Palmolive, Zest, Neutrogena, Escudo'
+    },
+    {
+      keywords: ['jabon', 'liquido', 'manos', 'cuerpo', 'body wash'],
+      name: 'Jabón Líquido para Manos o Cuerpo',
+      category: 'Higiene',
+      brandsHint: 'Dove, Blumen, Softsoap, Neutrogena, Method'
+    },
+    {
+      keywords: ['jabon', 'limpiador', 'facial', 'rostro', 'cerave', 'cetaphil', 'arroz'],
+      name: 'Limpiador / Jabón Facial Dermatológico',
+      category: 'Skincare',
+      brandsHint: 'CeraVe, Cetaphil, La Roche-Posay, Jabón de Arroz, Sebamed'
+    },
+    {
+      keywords: ['jabon', 'intimo', 'ph', 'acido', 'lactacyd', 'sebamed', 'benzal'],
+      name: 'Jabón Íntimo con pH Ácido',
+      category: 'Higiene',
+      brandsHint: 'Lactacyd, Sebamed, Benzal, Saba'
+    },
+    {
+      keywords: ['jabon', 'trastes', 'lavatrastes', 'salvo', 'axion', 'dawn'],
+      name: 'Jabón Líquido para Trastes (Lavatrastes)',
+      category: 'Limpieza',
+      brandsHint: 'Dawn, Salvo, Axion, Kirkland Signature'
+    },
+    // Limpieza Hogar
+    {
+      keywords: ['detergente', 'jabon ropa', 'lavar ropa', 'ariel', 'persil', 'kirkland ultra'],
+      name: 'Detergente Líquido / en Polvo para Ropa',
+      category: 'Limpieza',
+      brandsHint: 'Kirkland Ultra Clean, Ariel, Persil, Roma, Ace'
+    },
+    {
+      keywords: ['suavizante', 'ropa', 'telas', 'downy', 'suavitel', 'ensueno'],
+      name: 'Suavizante de Telas',
+      category: 'Limpieza',
+      brandsHint: 'Downy, Suavitel, Ensueño, Member\'s Mark'
+    },
+    {
+      keywords: ['cloro', 'desinfectante', 'limpiador', 'pisos', 'pinol', 'fabuloso', 'lysol'],
+      name: 'Limpiador Multiusos / Desinfectante de Pisos',
+      category: 'Limpieza',
+      brandsHint: 'Pinol, Fabuloso, Cloralex, Lysol, Maestro Limpio'
+    },
+    {
+      keywords: ['bolsa', 'basura', 'residuos', 'costalito'],
+      name: 'Bolsas para Basura (Rollo Grande / Mediano)',
+      category: 'Limpieza',
+      brandsHint: 'Kirkland Signature, Member\'s Mark, Costalito, Great Value'
+    },
+    // Skincare, Cremas, Máscaras y Mascarillas
+    {
+      keywords: ['mascara', 'mascarilla', 'facial', 'led', 'luz roja', 'fototerapia', 'colageno'],
+      name: 'Máscara Facial LED de Luz Roja',
+      category: 'Skincare',
+      brandsHint: 'Amazon México, Mercado Libre, Costco, Sephora (Fototerapia 7 colores / Roja)'
+    },
+    {
+      keywords: ['mascara', 'mascarilla', 'facial', 'sheet', 'coreana', 'arroz', 'arcilla'],
+      name: 'Mascarilla Coreana de Extracto de Arroz / Hidratante',
+      category: 'Skincare',
+      brandsHint: 'Beauty of Joseon, Garnier, TonyMoly, Extracto de Arroz'
+    },
+    {
+      keywords: ['mascara', 'pestanas', 'rimel', 'maquillaje', 'ojos'],
+      name: 'Máscara de Pestañas (Rímel Waterproof)',
+      category: 'Skincare',
+      brandsHint: 'Maybelline Sky High, L\'Oréal, Prosa, Bissú'
+    },
+    {
+      keywords: ['mascara', 'mascarilla', 'capilar', 'cabello', 'tratamiento', 'pelo'],
+      name: 'Mascarilla Capilar Reparadora',
+      category: 'Higiene',
+      brandsHint: 'Garnier Hair Food, Elvive, Pantene, Skala'
+    },
+    {
+      keywords: ['crema', 'hidratante', 'facial', 'rostro', 'noche', 'dia'],
+      name: 'Crema Hidratante Facial',
+      category: 'Skincare',
+      brandsHint: 'CeraVe, Cetaphil, Pond\'s, Teatrical, Neutrogena Hydro Boost'
+    },
+    {
+      keywords: ['crema', 'corporal', 'cuerpo', 'urea', 'lubriderm', 'nivea', 'eucerin'],
+      name: 'Crema Corporal Hidratante (Con Urea o FPS)',
+      category: 'Higiene',
+      brandsHint: 'Lubriderm, Nivea, Eucerin, CeraVe, Cetaphil'
+    },
+    {
+      keywords: ['bloqueador', 'protector', 'solar', 'fps', 'spf', 'sol'],
+      name: 'Bloqueador Solar Facial FPS 50+',
+      category: 'Skincare',
+      brandsHint: 'La Roche-Posay Anthelios, Eucerin Oil Control, Isdin, Nivea Sun'
+    },
+    {
+      keywords: ['serum', 'suero', 'retinol', 'vitamina c', 'hialuronico', 'niacinamida'],
+      name: 'Sérum Facial (Retinol / Vitamina C / Ácido Hialurónico)',
+      category: 'Skincare',
+      brandsHint: 'CeraVe, The Ordinary, La Roche-Posay, L\'Oréal Revitalift'
+    },
+    // Higiene & Capilar & Dental
+    {
+      keywords: ['shampoo', 'champu', 'cabello', 'romero', 'chile', 'anticaida'],
+      name: 'Shampoo Capilar (Uso Diario o Anticaída)',
+      category: 'Higiene',
+      brandsHint: 'Pantene, Head & Shoulders, Elvive, Tío Nacho, Kirkland'
+    },
+    {
+      keywords: ['desodorante', 'antitranspirante', 'axilas', 'perspirex', 'drysol', 'clinical'],
+      name: 'Desodorante / Antitranspirante Clínico o Diario',
+      category: 'Higiene',
+      brandsHint: 'Perspirex, Rexona Clinical, Dove, Nivea, Secret'
+    },
+    {
+      keywords: ['pasta', 'dental', 'dientes', 'colgate', 'sensodyne', 'crest', 'oral b'],
+      name: 'Pasta Dental (Multipack o Sensibilidad)',
+      category: 'Dental',
+      brandsHint: 'Colgate Total 12, Sensodyne, Oral-B, Crest'
+    },
+    {
+      keywords: ['enjuague', 'bucal', 'dental', 'listerine', 'aliento'],
+      name: 'Enjuague Bucal Sin Alcohol',
+      category: 'Dental',
+      brandsHint: 'Listerine, Colgate Plax, Oral-B, Crest'
+    },
+    {
+      keywords: ['cepillo', 'dental', 'dientes', 'electrico'],
+      name: 'Cepillos Dentales (Paquete Familiar)',
+      category: 'Dental',
+      brandsHint: 'Oral-B, Colgate, Curaprox, Sensodyne'
+    },
+    // Despensa & Carnes Frías & Lácteos
+    {
+      keywords: ['jamon', 'pavo', 'pechuga', 'virginia', 'pierna', 'carnes frias', 'fud', 'san rafael'],
+      name: 'Jamón de Pechuga de Pavo / Virginia',
+      category: 'Despensa',
+      brandsHint: 'Kirkland Signature, San Rafael, FUD, Peñaranda, Nuestro Campo (3B)'
+    },
+    {
+      keywords: ['queso', 'oaxaca', 'manchego', 'panela', 'hebra', 'mozzarella'],
+      name: 'Queso Oaxaca / Manchego / Panela',
+      category: 'Despensa',
+      brandsHint: 'Lala, NocheBuena, Los Volcanes, Kirkland, Esmeralda'
+    },
+    {
+      keywords: ['leche', 'deslactosada', 'entera', 'light', 'almendra', 'avena', 'lala', 'alpura'],
+      name: 'Leche Deslactosada / Entera o Vegetal (Caja)',
+      category: 'Despensa',
+      brandsHint: 'Lala, Alpura, Santa Clara, Kirkland, Silk, Vaca Blanca (3B)'
+    },
+    {
+      keywords: ['mantequilla', 'margarina', 'lurpak', 'gloria'],
+      name: 'Mantequilla sin Sal / con Sal',
+      category: 'Despensa',
+      brandsHint: 'Kirkland, Lurpak, Gloria, Lala, Aguascalientes'
+    },
+    {
+      keywords: ['cafe', 'soluble', 'grano', 'molido', 'nescafe', 'tasters'],
+      name: 'Café Soluble o en Grano / Molido',
+      category: 'Despensa',
+      brandsHint: 'Nescafé Taster\'s Choice, Clásico, Kirkland, Garat, Member\'s Mark'
+    },
+    {
+      keywords: ['aceite', 'cocina', 'oliva', 'aguacate', 'vegetal', 'canola'],
+      name: 'Aceite de Cocina (Oliva / Aguacate / Vegetal)',
+      category: 'Despensa',
+      brandsHint: 'Kirkland, Chosen Foods, Carbonell, Nutrioli, Capullo'
+    },
+    {
+      keywords: ['atun', 'lata', 'agua', 'aceite', 'dolores', 'tuny', 'herdez'],
+      name: 'Atún en Agua o Aceite (Multipack)',
+      category: 'Despensa',
+      brandsHint: 'Dolores, Tuny, Herdez, Mazatún, Member\'s Mark'
+    },
+    {
+      keywords: ['arroz', 'avena', 'frijol', 'lenteja', 'grano'],
+      name: 'Arroz / Avena / Granos de Despensa',
+      category: 'Despensa',
+      brandsHint: 'Verde Valle, Quaker, Schettino, Kirkland, Great Value'
+    }
+  ];
+
+  const qTokens = norm.split(/\s+/).filter(Boolean);
+
+  const scored = catalog
+    .map(entry => {
+      const nameNorm = entry.name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      const entryText = [entry.name, entry.brandsHint, ...entry.keywords]
+        .join(' ')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+      let score = 0;
+      if (nameNorm.startsWith(norm)) score += 160;
+      else if (nameNorm.split(/\s+/).some(w => w.startsWith(norm))) score += 120;
+
+      for (const kw of entry.keywords) {
+        if (kw === norm) score += 100;
+        else if (kw.startsWith(norm) || norm.startsWith(kw)) score += 60;
+        else if (qTokens.some(t => t.length >= 2 && (kw.startsWith(t) || t.startsWith(kw)))) score += 35;
+      }
+      if (entryText.includes(norm)) score += 50;
+      else if (qTokens.every(t => entryText.includes(t))) score += 40;
+
+      if (category && category !== 'All' && entry.category === category) {
+        score += 15;
+      }
+
+      return { ...entry, score };
+    })
+    .filter(e => e.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+
+  if (scored.length > 0) {
+    return scored;
+  }
+
+  // Dynamic fallback suggestions for any custom term not in the curated dictionary
+  const cleanTitle = raw.charAt(0).toUpperCase() + raw.slice(1);
+  const defaultCat = category && category !== 'All' ? category : 'Despensa';
+  return [
+    {
+      name: `${cleanTitle} (Presentación Familiar / Multipack Club)`,
+      category: defaultCat,
+      brandsHint: 'Kirkland Signature (Costco), Member\'s Mark (Sam\'s Club)'
+    },
+    {
+      name: `${cleanTitle} (Presentación Estándar de Supermercado)`,
+      category: defaultCat,
+      brandsHint: 'Marca líder comercial, Great Value (Walmart / Bodega Aurrera)'
+    },
+    {
+      name: `${cleanTitle} (Equivalente Económico / Marca Propia)`,
+      category: defaultCat,
+      brandsHint: 'Tiendas 3B, Bodega Aurrera, Farmacias Guadalajara'
+    }
+  ];
+};
+
+/**
  * Algorithmic fallback that suggests stores and equivalent brands/presentations in Mexico
  * to go verify prices in person or online, without inventing fake prices.
  */
 export const generateFallbackStoreSuggestions = (productQuery = '', category = '') => {
   const q = String(productQuery || '').trim();
-  const qLower = q.toLowerCase();
+  const qLower = q.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const catLower = String(category || '').toLowerCase();
+  const hasExplicitCategory = catLower && catLower !== 'all' && catLower !== 'todas';
 
-  // Detect product type
-  const isColdCutsOrDairy = /jamon|jamón|pavo|salchicha|queso|pechuga|lácteo|lacteo|yogurt|leche|mantequilla|crema comestible|tocino/.test(qLower);
-  const isSkincareOrPharma = /cerave|crema|bloqueador|solar|fps|serum|suero|retinol|urea|teatrical|dermat|facial|hidratante|locion|loción|aclarador|agua micelar|limpiador/.test(qLower) || catLower === 'skincare';
-  const isDental = /pasta|dental|cepillo|enjuague|colgate|oral|hilo|sensodyne|crest/.test(qLower) || catLower === 'dental';
-  const isHygieneOrPaper = /papel|higienico|higiénico|jabon|jabón|shampoo|champu|champú|acondicionador|desodorante|toalla|servilleta|dove|sedal|corporal/.test(qLower) || catLower === 'higiene';
-  const isCleaning = /detergente|cloro|suavizante|limpia|trastes|jabon liquido|ariel|fabuloso|pinol|bolsa|basura|lavatrastes/.test(qLower) || catLower === 'limpieza';
-  const isPantry = /cafe|café|arroz|avena|atun|atún|aceite|frijol|azucar|azúcar|harina|cereal|galleta|pasta|sopa|agua|té|te/.test(qLower) || catLower === 'despensa';
+  // Detect product type: prioritize explicit category when selected by the user,
+  // while still detecting specific food sub-types (cold cuts / dairy) when in Despensa or All.
+  const isColdCutsOrDairy = (!hasExplicitCategory || catLower === 'despensa') &&
+    /jamon|pavo|salchicha|queso|pechuga|lacteo|yogurt|leche|mantequilla|crema comestible|tocino/.test(qLower);
+  const isSkincareOrPharma = catLower === 'skincare' ||
+    (!hasExplicitCategory && /cerave|crema|bloqueador|solar|fps|serum|suero|retinol|urea|teatrical|dermat|facial|hidratante|locion|aclarador|agua micelar|limpiador|mascara|mascarilla|led/.test(qLower));
+  const isDental = catLower === 'dental' ||
+    (!hasExplicitCategory && /pasta|dental|cepillo|enjuague|colgate|oral|hilo|sensodyne|crest/.test(qLower));
+  const isCleaning = catLower === 'limpieza' ||
+    (!hasExplicitCategory && /detergente|cloro|suavizante|limpia|trastes|jabon liquido|ariel|fabuloso|pinol|bolsa|basura|lavatrastes/.test(qLower));
+  const isHygieneOrPaper = catLower === 'higiene' ||
+    (!hasExplicitCategory && /papel|higienico|higiénico|jabon|jabón|shampoo|champu|champú|acondicionador|desodorante|antitranspirante|toalla|servilleta|dove|sedal|corporal/.test(qLower));
+  const isPantry = catLower === 'despensa' ||
+    (!hasExplicitCategory && /cafe|café|arroz|avena|atun|atún|aceite|frijol|azucar|azúcar|harina|cereal|galleta|pasta|sopa|agua|té|te|ramen|buldak/.test(qLower));
+
+  const possibleProducts = suggestPossibleProducts(q, hasExplicitCategory ? category : 'All');
 
   if (isColdCutsOrDairy) {
     return {
       productTitle: q || 'Carnes Frías / Lácteos',
       detectedCategory: 'Despensa',
+      possibleProducts,
       summaryTip: 'En clubes de precios (Costco y Sam\'s) conviene verificar los paquetes de 1 kg resellables; en Bodega Aurrera y Tiendas 3B conviene revisar paquetes de 250g a 500g para comparar el precio real por gramo.',
       suggestions: [
         {
@@ -2420,6 +2742,7 @@ export const generateFallbackStoreSuggestions = (productQuery = '', category = '
     return {
       productTitle: q || 'Skincare & Cuidado Dermatológico',
       detectedCategory: 'Skincare',
+      possibleProducts,
       summaryTip: 'En dermocosmética y cremas, verifica siempre el precio por mililitro (ml): los paquetes dobles de Costco o las ofertas de Amazon y Farmacias Guadalajara suelen tener grandes diferencias.',
       suggestions: [
         {
@@ -2472,6 +2795,7 @@ export const generateFallbackStoreSuggestions = (productQuery = '', category = '
     return {
       productTitle: q || 'Cuidado Dental',
       detectedCategory: 'Dental',
+      possibleProducts,
       summaryTip: 'Compara siempre el costo por tubo o por cada 100 ml: los multipacks en clubes o Tiendas 3B reducen drásticamente el gasto anual.',
       suggestions: [
         {
@@ -2518,6 +2842,7 @@ export const generateFallbackStoreSuggestions = (productQuery = '', category = '
     return {
       productTitle: q || 'Insumo de Higiene y Hogar',
       detectedCategory: detectedCat,
+      possibleProducts,
       summaryTip: 'En papel, jabones y detergentes, fíjate en la cantidad total (rollos, barras, litros o cargas) para que el comparador calcule el costo real por unidad.',
       suggestions: [
         {
@@ -2563,6 +2888,7 @@ export const generateFallbackStoreSuggestions = (productQuery = '', category = '
   return {
     productTitle: q || 'Producto de Despensa y Hogar',
     detectedCategory: isPantry ? 'Despensa' : (category && category !== 'All' ? category : 'Despensa'),
+    possibleProducts,
     summaryTip: 'Anota las tiendas que planeas visitar para verificar el precio real en anaquel y compararlo por unidad/gramo contra tus registros.',
     suggestions: [
       {
@@ -2688,6 +3014,7 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido con esta estructura exacta:
         return {
           productTitle: parsed.productTitle || cleanQuery,
           detectedCategory: parsed.detectedCategory || category || 'Despensa',
+          possibleProducts: suggestPossibleProducts(cleanQuery, parsed.detectedCategory || category || 'All'),
           summaryTip: parsed.summaryTip || 'Verifica el precio por unidad o gramo al visitar cada tienda.',
           suggestions: parsed.suggestions.map(s => ({
             storeName: s.storeName || 'Tienda',
