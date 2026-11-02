@@ -1172,6 +1172,7 @@ export default function PriceComparatorModule({
     let label = 'Marcado como: Ya tengo (En uso) 🏠';
     if (newVerdict === 'running_low') label = 'Marcado como: Ya casi se necesita ⚠️';
     else if (newVerdict === 'need_to_buy') label = 'Marcado como: Necesito Comprar 🛒';
+    else if (newVerdict === 'buy_later') label = 'Marcado como: Sí volvería a comprar (Más adelante / Temporada) 🔄';
     else if (newVerdict === 'maybe') label = 'Marcado como: Por Probar / En la mira ✨';
     else if (newVerdict === 'no') label = 'Marcado como: No volver a comprar ✕';
     showToast('info', 'Estado Actualizado', label);
@@ -1301,6 +1302,7 @@ export default function PriceComparatorModule({
   const safeItemsList = sanitizeHouseholdList(householdItems);
   const needToBuyCount = safeItemsList.filter(i => i && i.repurchaseVerdict === 'need_to_buy').length;
   const runningLowCount = safeItemsList.filter(i => i && i.repurchaseVerdict === 'running_low').length;
+  const buyLaterCount = safeItemsList.filter(i => i && i.repurchaseVerdict === 'buy_later').length;
 
   const filteredItems = safeItemsList
     .filter(item => {
@@ -1316,8 +1318,12 @@ export default function PriceComparatorModule({
         matchesCategory = item.repurchaseVerdict === 'need_to_buy' || item.repurchaseVerdict === 'running_low';
       } else if (categoryFilter === 'in_stock') {
         matchesCategory = item.repurchaseVerdict === 'yes';
+      } else if (categoryFilter === 'buy_later') {
+        matchesCategory = item.repurchaseVerdict === 'buy_later';
       } else if (categoryFilter === 'wishlist') {
         matchesCategory = item.repurchaseVerdict === 'maybe';
+      } else if (categoryFilter === 'no_buy') {
+        matchesCategory = item.repurchaseVerdict === 'no';
       } else if (categoryFilter !== 'All') {
         matchesCategory = item.category === categoryFilter;
       }
@@ -1390,7 +1396,9 @@ export default function PriceComparatorModule({
                 <option value="running_low" className="text-orange-400 font-bold">⚠️ Ya casi se necesita ({runningLowCount})</option>
                 <option value="to_buy_all" className="text-amber-300 font-bold">🛍️ Por Comprar + Ya casi ({needToBuyCount + runningLowCount})</option>
                 <option value="in_stock" className="text-emerald-400 font-bold">🏠 Ya tengo / En uso</option>
+                <option value="buy_later" className="text-cyan-300 font-bold">🔄 Sí volvería a comprar / Más adelante ({buyLaterCount})</option>
                 <option value="wishlist" className="text-purple-300 font-bold">✨ Por probar / En la mira</option>
+                <option value="no_buy" className="text-rose-400 font-bold">✕ No volver a comprar</option>
               </optgroup>
               <optgroup label="Categorías de Insumos">
                 {categories.filter(c => c !== 'All').map(cat => (
@@ -2234,8 +2242,9 @@ export default function PriceComparatorModule({
           safeItemsList.forEach(it => {
             const isExplicitPending = (it.pendingStores || []).some(ps => ps.storeName?.toLowerCase().trim() === norm);
             const hasPriceHere = (it.stores || []).some(s => s.storeName?.toLowerCase().trim() === norm);
+            const isDeferredOrRejected = it.repurchaseVerdict === 'buy_later' || it.repurchaseVerdict === 'no';
             if (isExplicitPending) pendingCount++;
-            else if (!hasPriceHere || it.repurchaseVerdict === 'need_to_buy' || it.repurchaseVerdict === 'running_low') {
+            else if ((!isDeferredOrRejected && !hasPriceHere) || it.repurchaseVerdict === 'need_to_buy' || it.repurchaseVerdict === 'running_low') {
               missingOrNeedCount++;
             }
           });
@@ -2267,10 +2276,11 @@ export default function PriceComparatorModule({
             s => s.storeName?.toLowerCase().trim() === normSelectedStore
           );
           const isUrgentToBuy = it.repurchaseVerdict === 'need_to_buy' || it.repurchaseVerdict === 'running_low';
+          const isDeferredOrRejected = it.repurchaseVerdict === 'buy_later' || it.repurchaseVerdict === 'no';
 
           if (storeVisitFilter === 'to_verify') {
-            // Products explicitly marked to verify in this store + products missing price in this store + urgent to buy
-            return isExplicitPending || !hasPriceHere || isUrgentToBuy;
+            // Products explicitly marked to verify in this store + products missing price in this store (unless deferred/seasonal or rejected) + urgent to buy
+            return isExplicitPending || (!isDeferredOrRejected && !hasPriceHere) || isUrgentToBuy;
           }
           if (storeVisitFilter === 'explicit_pending') {
             return isExplicitPending;
@@ -2545,6 +2555,11 @@ export default function PriceComparatorModule({
                               {item.repurchaseVerdict === 'running_low' && (
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/40">
                                   ⚠️ Ya casi se acaba
+                                </span>
+                              )}
+                              {item.repurchaseVerdict === 'buy_later' && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                                  🔄 Sí volvería a comprar (Más adelante / Temporada)
                                 </span>
                               )}
                             </div>
@@ -2957,6 +2972,7 @@ export default function PriceComparatorModule({
                 <option value="yes">🏠 Ya tengo / En uso</option>
                 <option value="running_low">⚠️ Ya casi se necesita</option>
                 <option value="need_to_buy">🛒 Necesito Comprar</option>
+                <option value="buy_later">🔄 Sí volvería a comprar (No tengo, pero aún no necesito / Temporada)</option>
                 <option value="maybe">✨ Por probar / En la mira</option>
                 <option value="no">✕ No volver a comprar</option>
               </select>
@@ -3141,6 +3157,8 @@ export default function PriceComparatorModule({
                               ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-500/30' 
                               : item.repurchaseVerdict === 'running_low'
                               ? 'bg-orange-500/20 text-orange-300 border-orange-500/50 hover:bg-orange-500/30'
+                              : item.repurchaseVerdict === 'buy_later'
+                              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 hover:bg-cyan-500/30'
                               : item.repurchaseVerdict === 'maybe'
                               ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 hover:bg-purple-500/30'
                               : item.repurchaseVerdict === 'no'
@@ -3152,6 +3170,7 @@ export default function PriceComparatorModule({
                           <option value="yes" className="bg-[#171a24] text-emerald-400">🏠 Ya tengo</option>
                           <option value="running_low" className="bg-[#171a24] text-orange-400">⚠️ Ya casi</option>
                           <option value="need_to_buy" className="bg-[#171a24] text-amber-300">🛒 Necesito Comprar</option>
+                          <option value="buy_later" className="bg-[#171a24] text-cyan-300">🔄 Volvería a comprar (después)</option>
                           <option value="maybe" className="bg-[#171a24] text-purple-300">✨ Por probar</option>
                           <option value="no" className="bg-[#171a24] text-rose-400">✕ No Comprar</option>
                         </select>
@@ -3663,6 +3682,7 @@ export default function PriceComparatorModule({
                   <option value="yes">🏠 Ya tengo / En uso</option>
                   <option value="running_low">⚠️ Ya casi se necesita</option>
                   <option value="need_to_buy">🛒 Necesito Comprar</option>
+                  <option value="buy_later">🔄 Sí volvería a comprar (No tengo, pero aún no necesito / Temporada)</option>
                   <option value="maybe">✨ Por probar / En la mira</option>
                   <option value="no">✕ No volver a comprar</option>
                 </select>
