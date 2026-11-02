@@ -2346,3 +2346,362 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicion
 export const generateAromatherapyAlchemy = async (requestText, userOils = [], apiKey = '') => {
   return analyzeAromatherapyMood(requestText, userOils, apiKey);
 };
+
+/**
+ * Algorithmic fallback that suggests stores and equivalent brands/presentations in Mexico
+ * to go verify prices in person or online, without inventing fake prices.
+ */
+export const generateFallbackStoreSuggestions = (productQuery = '', category = '') => {
+  const q = String(productQuery || '').trim();
+  const qLower = q.toLowerCase();
+  const catLower = String(category || '').toLowerCase();
+
+  // Detect product type
+  const isColdCutsOrDairy = /jamon|jamón|pavo|salchicha|queso|pechuga|lácteo|lacteo|yogurt|leche|mantequilla|crema comestible|tocino/.test(qLower);
+  const isSkincareOrPharma = /cerave|crema|bloqueador|solar|fps|serum|suero|retinol|urea|teatrical|dermat|facial|hidratante|locion|loción|aclarador|agua micelar|limpiador/.test(qLower) || catLower === 'skincare';
+  const isDental = /pasta|dental|cepillo|enjuague|colgate|oral|hilo|sensodyne|crest/.test(qLower) || catLower === 'dental';
+  const isHygieneOrPaper = /papel|higienico|higiénico|jabon|jabón|shampoo|champu|champú|acondicionador|desodorante|toalla|servilleta|dove|sedal|corporal/.test(qLower) || catLower === 'higiene';
+  const isCleaning = /detergente|cloro|suavizante|limpia|trastes|jabon liquido|ariel|fabuloso|pinol|bolsa|basura|lavatrastes/.test(qLower) || catLower === 'limpieza';
+  const isPantry = /cafe|café|arroz|avena|atun|atún|aceite|frijol|azucar|azúcar|harina|cereal|galleta|pasta|sopa|agua|té|te/.test(qLower) || catLower === 'despensa';
+
+  if (isColdCutsOrDairy) {
+    return {
+      productTitle: q || 'Carnes Frías / Lácteos',
+      detectedCategory: 'Despensa',
+      summaryTip: 'En clubes de precios (Costco y Sam\'s) conviene verificar los paquetes de 1 kg resellables; en Bodega Aurrera y Tiendas 3B conviene revisar paquetes de 250g a 500g para comparar el precio real por gramo.',
+      suggestions: [
+        {
+          storeName: 'Costco',
+          suggestedVariety: `Kirkland Signature / San Rafael / Peñaranda (Paquete ~1 kg)`,
+          presentationTip: 'Empaque familiar doble o de 1,000 g en refrigeradores',
+          reason: 'Suele ofrecer el costo por gramo más bajo en pechuga de pavo y líneas selectas.',
+          storeType: 'Club de Precios'
+        },
+        {
+          storeName: "Sam's Club",
+          suggestedVariety: `Member's Mark / FUD Virginia / Zwan (Paquete 1 kg)`,
+          presentationTip: 'Paquete club de 800 g a 1,000 g',
+          reason: 'Excelente alternativa equivalente en marca propia Member\'s Mark y paquetes FUD.',
+          storeType: 'Club de Precios'
+        },
+        {
+          storeName: 'Bodega Aurrera',
+          suggestedVariety: `FUD / San Rafael / Great Value (250 g - 450 g)`,
+          presentationTip: 'Paquete sellado o salchichonería a granel',
+          reason: 'Muy competitivo en presentaciones medianas y marcas comerciales como FUD.',
+          storeType: 'Supermercado Ahorro'
+        },
+        {
+          storeName: 'Tiendas 3B',
+          suggestedVariety: `Nuestro Campo / Vaca Blanca / FUD (200 g - 400 g)`,
+          presentationTip: 'Presentación compacta de refrigerador',
+          reason: 'Ideal para verificar equivalentes económicos de marca propia con alta rotación.',
+          storeType: 'Hard Discount'
+        },
+        {
+          storeName: 'Walmart',
+          suggestedVariety: `San Rafael / Peñaranda / Great Value`,
+          presentationTip: 'Salchichonería por cuarto/medio kilo o empaque original',
+          reason: 'Gran variedad de marcas para comparar en salchichonería vs. paquete cerrado.',
+          storeType: 'Supermercado'
+        },
+        {
+          storeName: 'Chedraui',
+          suggestedVariety: `Peñaranda Selecto / Línea Gourmet / FUD`,
+          presentationTip: 'Área de carnes frías y quesos selectos',
+          reason: 'Suecia tener promociones semanales en líneas gourmet y deslactosadas.',
+          storeType: 'Supermercado'
+        }
+      ]
+    };
+  }
+
+  if (isSkincareOrPharma) {
+    return {
+      productTitle: q || 'Skincare & Cuidado Dermatológico',
+      detectedCategory: 'Skincare',
+      summaryTip: 'En dermocosmética y cremas, verifica siempre el precio por mililitro (ml): los paquetes dobles de Costco o las ofertas de Amazon y Farmacias Guadalajara suelen tener grandes diferencias.',
+      suggestions: [
+        {
+          storeName: 'Farmacias Guadalajara',
+          suggestedVariety: `${q || 'Presentación Farmacia'} / Dermo / Teatrical / CeraVe`,
+          presentationTip: 'Pasillo de dermocosmética y cuidado facial',
+          reason: 'Suele tener descuentos frecuentes de fin de semana en líneas faciales y corporales.',
+          storeType: 'Farmacia'
+        },
+        {
+          storeName: 'Amazon',
+          suggestedVariety: `${q || ' Oficial'} (Vendido y enviado por Amazon México)`,
+          presentationTip: 'Presentación grande o con ahorro recurrente',
+          reason: 'Ideal para verificar el precio base de referencia antes de comprarlo en tienda física.',
+          storeType: 'Online'
+        },
+        {
+          storeName: 'Costco',
+          suggestedVariety: `Dúo Pack / Tarro Familiar (CeraVe / Cetaphil / Lubriderm)`,
+          presentationTip: 'Paquete doble o tamaño jumbo en área de farmacia',
+          reason: 'Si tienen el pack doble, el precio por envase suele bajar entre 25% y 35%.',
+          storeType: 'Club de Precios'
+        },
+        {
+          storeName: 'Farmacia del Ahorro',
+          suggestedVariety: `${q || 'Línea Derma'} / Equivalente Dermatológico`,
+          presentationTip: 'Mostrador Derma (verificar monedero del ahorro)',
+          reason: 'Cuenta con promociones de piezas acumulables y marcas dermatológicas especializadas.',
+          storeType: 'Farmacia'
+        },
+        {
+          storeName: 'Walmart',
+          suggestedVariety: `${q || 'Cuidado Facial'} / Equate Equivalente`,
+          presentationTip: 'Pasillo de higiene y belleza',
+          reason: 'Maneja tanto la marca original como versiones equivalentes Equate con mismos activos.',
+          storeType: 'Supermercado'
+        },
+        {
+          storeName: 'Mercado Libre',
+          suggestedVariety: `${q || 'Producto'} (Tienda Oficial de la Marca)`,
+          presentationTip: 'Catálogo Full de cuidado personal',
+          reason: 'Útil para comparar combos o presentaciones importadas difíciles de hallar en súper.',
+          storeType: 'Online'
+        }
+      ]
+    };
+  }
+
+  if (isDental) {
+    return {
+      productTitle: q || 'Cuidado Dental',
+      detectedCategory: 'Dental',
+      summaryTip: 'Compara siempre el costo por tubo o por cada 100 ml: los multipacks en clubes o Tiendas 3B reducen drásticamente el gasto anual.',
+      suggestions: [
+        {
+          storeName: 'Tiendas 3B',
+          suggestedVariety: `Colgate Triple Acción / Total 12 / Equivalente Dental`,
+          presentationTip: 'Tubo individual o paquete doble económico',
+          reason: 'Uno de los precios más bajos por pieza suelta sin necesidad de comprar caja grande.',
+          storeType: 'Hard Discount'
+        },
+        {
+          storeName: 'Costco',
+          suggestedVariety: `Multipack 5-6 tubos (Colgate Total / Sensodyne / Oral-B)`,
+          presentationTip: 'Caja cerrada de múltiples unidades',
+          reason: 'Excelente para verificar el precio unitario en pastas especializadas o de sensibilidad.',
+          storeType: 'Club de Precios'
+        },
+        {
+          storeName: 'Bodega Aurrera',
+          suggestedVariety: `Pack Ahorro 2 o 3 piezas (Colgate / Crest)`,
+          presentationTip: 'Empaque promocional en pasillo de farmacia',
+          reason: 'Buenos precios en paquetes de 2 o 3 tubos familiares.',
+          storeType: 'Supermercado Ahorro'
+        },
+        {
+          storeName: "Sam's Club",
+          suggestedVariety: `Multipack Familiar Colgate / Oral-B / Listerine`,
+          presentationTip: 'Paquete club de 4 a 6 unidades',
+          reason: 'Vale la pena verificar en época de socio fest o promociones de higiene.',
+          storeType: 'Club de Precios'
+        },
+        {
+          storeName: 'Farmacias Guadalajara',
+          suggestedVariety: `${q || 'Línea Dental Preventiva'}`,
+          presentationTip: 'Pasillo de higiene bucal',
+          reason: 'Alternativa rápida con ofertas frecuentes en enjuagues, cepillos e hilo dental.',
+          storeType: 'Farmacia'
+        }
+      ]
+    };
+  }
+
+  if (isHygieneOrPaper || isCleaning) {
+    const detectedCat = isCleaning ? 'Limpieza' : 'Higiene';
+    return {
+      productTitle: q || 'Insumo de Higiene y Hogar',
+      detectedCategory: detectedCat,
+      summaryTip: 'En papel, jabones y detergentes, fíjate en la cantidad total (rollos, barras, litros o cargas) para que el comparador calcule el costo real por unidad.',
+      suggestions: [
+        {
+          storeName: 'Costco',
+          suggestedVariety: `Kirkland Signature / Multipack Original (${q || 'Formato Club'})`,
+          presentationTip: 'Fardo de 32-40 rollos, caja de 12 barras o garrafa de 5L+',
+          reason: 'Kirkland suele ser referente en calidad-precio por rollo, barra o litro.',
+          storeType: 'Club de Precios'
+        },
+        {
+          storeName: "Sam's Club",
+          suggestedVariety: `Member's Mark / Paquete Mayorista (${q || 'Hogar'})`,
+          presentationTip: 'Presentación institucional o familiar de alto rendimiento',
+          reason: 'Ideal para comparar suavidad y rendimiento frente a la versión de Costco.',
+          storeType: 'Club de Precios'
+        },
+        {
+          storeName: 'Tiendas 3B',
+          suggestedVariety: `Marca Propia 3B / Suavel / Savilé / Dove / Pinol`,
+          presentationTip: 'Presentación mediana o paquete ahorro',
+          reason: 'Sorprende con equivalentes muy económicos para uso diario del hogar.',
+          storeType: 'Hard Discount'
+        },
+        {
+          storeName: 'Bodega Aurrera',
+          suggestedVariety: `Great Value / Presentación Familiar (${q || 'Ahorro'})`,
+          presentationTip: 'Pasillo de blancos, higiene o jarcería',
+          reason: 'Precios bajos constantes en paquetes de 4 a 16 unidades.',
+          storeType: 'Supermercado Ahorro'
+        },
+        {
+          storeName: 'Walmart',
+          suggestedVariety: `${q || 'Marca Líder'} / Great Value`,
+          presentationTip: 'Multipack o repuesto económico (doypack)',
+          reason: 'Amplio surtido de aromas y variedades para elegir tu favorito.',
+          storeType: 'Supermercado'
+        }
+      ]
+    };
+  }
+
+  // Default / Despensa / General
+  return {
+    productTitle: q || 'Producto de Despensa y Hogar',
+    detectedCategory: isPantry ? 'Despensa' : (category && category !== 'All' ? category : 'Despensa'),
+    summaryTip: 'Anota las tiendas que planeas visitar para verificar el precio real en anaquel y compararlo por unidad/gramo contra tus registros.',
+    suggestions: [
+      {
+        storeName: 'Costco',
+        suggestedVariety: `Kirkland Signature / Presentación Club de ${q || 'este producto'}`,
+        presentationTip: 'Presentación familiar o paquete múltiple',
+        reason: 'Excelente para verificar si el volumen grande reduce el costo unitario.',
+        storeType: 'Club de Precios'
+      },
+      {
+        storeName: "Sam's Club",
+        suggestedVariety: `Member's Mark / Presentación Club de ${q || 'este producto'}`,
+        presentationTip: 'Empaque mayorista o institucional',
+        reason: 'Alternativa directa a Costco con marcas propias muy competitivas.',
+        storeType: 'Club de Precios'
+      },
+      {
+        storeName: 'Bodega Aurrera',
+        suggestedVariety: `Great Value / Marca Comercial de ${q || 'este producto'}`,
+        presentationTip: 'Presentación estándar o familiar',
+        reason: 'Muy buen punto de referencia para precios bajos de supermercado.',
+        storeType: 'Supermercado Ahorro'
+      },
+      {
+        storeName: 'Tiendas 3B',
+        suggestedVariety: `Marca Propia 3B / Equivalente de ${q || 'este producto'}`,
+        presentationTip: 'Presentación individual económica',
+        reason: 'Ideal para revisar si tienen un equivalente directo a fracción del precio.',
+        storeType: 'Hard Discount'
+      },
+      {
+        storeName: 'Walmart',
+        suggestedVariety: `${q || 'Variedad Principal'} / Selección Completa`,
+        presentationTip: 'Pasillo principal de categoría',
+        reason: 'Suele tener la mayor variedad de marcas y subproductos para comparar.',
+        storeType: 'Supermercado'
+      },
+      {
+        storeName: 'Amazon',
+        suggestedVariety: `${q || 'Producto'} (Envío Full / Suscríbete y Ahorra)`,
+        presentationTip: 'Compra en línea individual o por caja',
+        reason: 'Útil para checar precio rápido desde el celular antes o durante tu visita.',
+        storeType: 'Online'
+      }
+    ]
+  };
+};
+
+/**
+ * Uses Gemini AI (with instant algorithmic fallback) to suggest stores where a product
+ * or its equivalents can be found in Mexico so the user can add them to their "To Verify in Store" list.
+ */
+export const suggestStoresAndEquivalents = async (productQuery, category = 'Despensa', existingStores = [], apiKey = '') => {
+  const cleanQuery = String(productQuery || '').trim();
+  if (!cleanQuery) {
+    throw new Error('Escribe el nombre de un producto para buscar sugerencias de tiendas y equivalentes.');
+  }
+
+  if (!apiKey || !apiKey.trim()) {
+    return generateFallbackStoreSuggestions(cleanQuery, category);
+  }
+
+  const existingStr = Array.isArray(existingStores) && existingStores.length > 0
+    ? existingStores.join(', ')
+    : 'Ninguna registrada aún';
+
+  const prompt = `
+Eres un asesor experto en compras inteligentes, supermercados, clubes de precios y farmacias en México para la app AURA Nexus.
+La usuaria quiere saber en qué tiendas puede buscar y verificar el precio del siguiente producto o sus mejores equivalentes:
+- Producto buscado: "${cleanQuery}"
+- Categoría: "${category || 'General'}"
+- Tiendas donde ya tiene precios registrados: [${existingStr}]
+
+IMPORTANTE:
+- NO inventes precios falsos porque la usuaria quiere ir a VERIFICAR el precio real en la tienda.
+- Sugiere entre 5 y 6 establecimientos reales en México (ej. Costco, Sam's Club, Tiendas 3B, Bodega Aurrera, Walmart, Soriana, Chedraui, HEB, Farmacias Guadalajara, Farmacia del Ahorro, Amazon, Mercado Libre).
+- Para cada tienda, indica qué marca, subproducto o equivalente específico conviene buscar ahí (ej. Kirkland Signature en Costco, Member's Mark en Sam's, Nuestro Campo/Vaca Blanca en Tiendas 3B, Great Value en Walmart/Aurrera, o marcas comerciales como San Rafael, FUD, Peñaranda, CeraVe, Dove, etc.) y en qué presentación conviene verificar el precio.
+
+Responde EXCLUSIVAMENTE con un objeto JSON válido con esta estructura exacta:
+{
+  "productTitle": "Nombre limpio del producto",
+  "detectedCategory": "Skincare" | "Dental" | "Higiene" | "Despensa" | "Limpieza" | "Otros",
+  "summaryTip": "Consejo breve de 1-2 oraciones sobre cómo comparar este producto entre tiendas (ej. fijarse en precio por gramo/ml o paquete familiar).",
+  "suggestions": [
+    {
+      "storeName": "Nombre de la tienda (ej. Costco, Sam's Club, Tiendas 3B, Bodega Aurrera, Walmart, Farmacias Guadalajara, Amazon)",
+      "suggestedVariety": "Marca o equivalente específico a buscar en esa tienda (ej. 'Pechuga de Pavo Kirkland / San Rafael 1kg')",
+      "presentationTip": "Formato o tamaño sugerido a revisar (ej. 'Paquete de 1,000 g en refrigeradores')",
+      "reason": "Por qué vale la pena ir a verificar el precio de esta opción en esta tienda",
+      "storeType": "Club de Precios" | "Hard Discount" | "Supermercado" | "Supermercado Ahorro" | "Farmacia" | "Online"
+    }
+  ]
+}
+`;
+
+  const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { response_mime_type: 'application/json', temperature: 0.25 }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) continue;
+
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
+        return {
+          productTitle: parsed.productTitle || cleanQuery,
+          detectedCategory: parsed.detectedCategory || category || 'Despensa',
+          summaryTip: parsed.summaryTip || 'Verifica el precio por unidad o gramo al visitar cada tienda.',
+          suggestions: parsed.suggestions.map(s => ({
+            storeName: s.storeName || 'Tienda',
+            suggestedVariety: s.suggestedVariety || cleanQuery,
+            presentationTip: s.presentationTip || 'Presentación estándar',
+            reason: s.reason || 'Verificar precio en anaquel',
+            storeType: s.storeType || 'Supermercado'
+          }))
+        };
+      }
+    } catch (err) {
+      console.warn(`Store suggestion with ${model} failed:`, err.message);
+    }
+  }
+
+  return generateFallbackStoreSuggestions(cleanQuery, category);
+};

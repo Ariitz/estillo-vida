@@ -8,7 +8,8 @@ Este documento es tu bloc de notas y pizarra de ideas para nuevas funciones, mej
 *Ideas para cuidados, paseos, salud articular y guardería:*
 - [ ] **Alarma/Notificación de hora de salida para la guardería**: Alerta dinámica a las 07:55 AM si hay tráfico pesado para no llegar tarde a las 9:00 AM.
 - [ ] **Gráfica de peso mensual**: Monitoreo visual de los 32.5 kg para evitar subidas de peso que recarguen su displasia.
-- [ ] **Recordatorio de compra de Levotiroxina / Condroprotectores**: Avisar cuando queden 5 días de medicamento en el botiquín.
+- [ ] **Recordatorio de compra de Levotiroxina / Condroprotector
+es**: Avisar cuando queden 5 días de medicamento en el botiquín.
 - [ ] **Historial de observaciones veterinarias**: Espacio para fotos de recetas médicas o resultados de laboratorio tiroideo T4.
 - [ ] **Soporte Multi-Mascotas**: Permitir registrar varias mascotas con su propio perfil individual y cambiar fácilmente entre ellas en el módulo.
 - [ ] *[Escribe aquí tu nueva idea para Mona...]*
@@ -17,6 +18,9 @@ Este documento es tu bloc de notas y pizarra de ideas para nuevas funciones, mej
 
 ## 🛒 Comparador de Precios & Alacena
 *Ideas para compras, productos, variantes y ahorro:*
+- [x] **Buscador de sugerencias de tiendas y equivalentes para ir a verificar**: Explorar dónde venden un producto o marca equivalente sin inventar precios y anotarlos como pendientes por verificar.
+- [x] **Selector de Tienda / Modo Visita a Tienda**: Elegir una tienda y ver la lista de productos y equivalentes que debes buscar en ella para agregar al comparador.
+- [x] **Cotizador en Tienda y Comparativa contra tus Registros (con Fecha)**: Ingresar un precio visto en tienda y compararlo exclusivamente contra los productos/subproductos, precios y últimas fechas que ya registraste para decidir si comprarlo o solo guardar el precio.
 - [ ] **Lista de compras inteligente con subproductos favoritos**: Marcar automáticamente la marca o variedad favorita al crear una lista de compras para el súper.
 - [ ] **Aviso de "Casi se termina / Recompra urgente"**: Notificaciones cuando un producto esencial esté marcado en estado "running_low".
 - [ ] **Cálculo de ahorro total acumulado**: Mostrar cuánto se ha ahorrado eligiendo la tienda más económica.
@@ -76,3 +80,4 @@ Este documento es tu bloc de notas y pizarra de ideas para nuevas funciones, mej
 
 ## Mis ideas
 que permita agregar mascotas y cambiar entre ellas
+del checkup de las cosas por salir, permitir agregar nuevas rutinas segun la salida, por ejemplo si es para escuela, trabajo, saldia con amigos, salida con familia, viaje de vacaciones, etc. 

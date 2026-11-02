@@ -41,10 +41,31 @@ export const sanitizeHouseholdItem = (item) => {
         variety: safeString(s.variety || s.subproduct || s.brand || s.presentation || ''),
         price: price,
         quantity: quantity,
-        unitPrice: unitPrice
+        unitPrice: unitPrice,
+        updatedAt: safeString(s.updatedAt || s.date || s.lastCheckedDate || getLocalDateString())
       };
     })
     .filter(s => s.price > 0 && s.quantity > 0);
+
+  const pendingStores = (Array.isArray(item.pendingStores) ? item.pendingStores : [])
+    .filter(ps => ps && (typeof ps === 'object' || typeof ps === 'string'))
+    .map(ps => {
+      if (typeof ps === 'string') {
+        return {
+          storeName: safeString(ps).trim(),
+          suggestedVariety: '',
+          reason: '',
+          addedAt: getLocalDateString()
+        };
+      }
+      return {
+        storeName: safeString(ps.storeName || ps.name || ps.store || '').trim(),
+        suggestedVariety: safeString(ps.suggestedVariety || ps.variety || ps.equivalent || '').trim(),
+        reason: safeString(ps.reason || ps.notes || '').trim(),
+        addedAt: safeString(ps.addedAt || ps.date || getLocalDateString())
+      };
+    })
+    .filter(ps => Boolean(ps.storeName));
 
   let preferredStore = safeString(item.preferredStore);
   if (!preferredStore && stores.length > 0) {
@@ -98,6 +119,7 @@ export const sanitizeHouseholdItem = (item) => {
     name: name,
     category: category,
     stores: stores,
+    pendingStores: pendingStores,
     subproducts: subproducts,
     favoriteVariety: favoriteVariety,
     varietyOpinions: varietyOpinions,

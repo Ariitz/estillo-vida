@@ -95,9 +95,12 @@ const initialHousehold = [
     name: 'Papel Higiénico Premium',
     category: 'Higiene',
     stores: [
-      { storeName: 'Costco', price: 450, quantity: 40, unitPrice: 450 / 40 },
-      { storeName: "Sam's Club", price: 420, quantity: 32, unitPrice: 420 / 32 },
-      { storeName: 'Tiendas 3B', price: 95, quantity: 8, unitPrice: 95 / 8 }
+      { storeName: 'Costco', variety: 'Kirkland Signature', price: 450, quantity: 40, unitPrice: 450 / 40, updatedAt: '2026-10-18' },
+      { storeName: "Sam's Club", variety: "Member's Mark", price: 420, quantity: 32, unitPrice: 420 / 32, updatedAt: '2026-10-22' },
+      { storeName: 'Tiendas 3B', variety: 'Suavel / Nuestro Campo', price: 95, quantity: 8, unitPrice: 95 / 8, updatedAt: '2026-10-25' }
+    ],
+    pendingStores: [
+      { storeName: 'Bodega Aurrera', suggestedVariety: 'Regio Luxury / Great Value 32 rollos', reason: 'Verificar si el paquete grande baja el costo por rollo.', addedAt: '2026-10-28' }
     ],
     preferredStore: "Sam's Club",
     repurchaseVerdict: 'yes',
@@ -108,8 +111,11 @@ const initialHousehold = [
     name: 'Crema Hidratante Facial CeraVe',
     category: 'Skincare',
     stores: [
-      { storeName: 'Farmacias Guadalajara', price: 380, quantity: 1, unitPrice: 380 },
-      { storeName: 'Amazon', price: 320, quantity: 1, unitPrice: 320 }
+      { storeName: 'Farmacias Guadalajara', variety: 'CeraVe Loción 473ml', price: 380, quantity: 1, unitPrice: 380, updatedAt: '2026-10-12' },
+      { storeName: 'Amazon', variety: 'CeraVe Loción 473ml', price: 320, quantity: 1, unitPrice: 320, updatedAt: '2026-10-27' }
+    ],
+    pendingStores: [
+      { storeName: 'Costco', suggestedVariety: 'Dúo CeraVe Tarro / Loción', reason: 'Revisar paquete doble dermatológico en farmacia de Costco.', addedAt: '2026-10-29' }
     ],
     preferredStore: 'Amazon',
     repurchaseVerdict: 'yes',
@@ -120,8 +126,8 @@ const initialHousehold = [
     name: 'Pasta Dental Preventiva',
     category: 'Dental',
     stores: [
-      { storeName: 'Bodega Aurrera', price: 65, quantity: 1, unitPrice: 65 },
-      { storeName: 'Tiendas 3B', price: 45, quantity: 1, unitPrice: 45 }
+      { storeName: 'Bodega Aurrera', variety: 'Colgate Total 12', price: 65, quantity: 1, unitPrice: 65, updatedAt: '2026-10-15' },
+      { storeName: 'Tiendas 3B', variety: 'Colgate Triple Acción', price: 45, quantity: 1, unitPrice: 45, updatedAt: '2026-10-26' }
     ],
     preferredStore: 'Tiendas 3B',
     repurchaseVerdict: 'yes',
@@ -132,10 +138,14 @@ const initialHousehold = [
     name: 'Jamón',
     category: 'Despensa',
     stores: [
-      { storeName: 'Walmart', variety: 'Pechuga de Pavo San Rafael', price: 82.50, quantity: 250, unitPrice: 82.50 / 250 },
-      { storeName: 'Costco', variety: 'Pechuga de Pavo San Rafael', price: 260.00, quantity: 1000, unitPrice: 260.00 / 1000 },
-      { storeName: 'Bodega Aurrera', variety: 'FUD Virginia de Pavo', price: 54.00, quantity: 250, unitPrice: 54.00 / 250 },
-      { storeName: 'Chedraui', variety: 'Pierna Peñaranda Selecto', price: 115.00, quantity: 200, unitPrice: 115.00 / 200 }
+      { storeName: 'Walmart', variety: 'Pechuga de Pavo San Rafael', price: 82.50, quantity: 250, unitPrice: 82.50 / 250, updatedAt: '2026-10-20' },
+      { storeName: 'Costco', variety: 'Pechuga de Pavo San Rafael', price: 260.00, quantity: 1000, unitPrice: 260.00 / 1000, updatedAt: '2026-10-24' },
+      { storeName: 'Bodega Aurrera', variety: 'FUD Virginia de Pavo', price: 54.00, quantity: 250, unitPrice: 54.00 / 250, updatedAt: '2026-10-19' },
+      { storeName: 'Chedraui', variety: 'Pierna Peñaranda Selecto', price: 115.00, quantity: 200, unitPrice: 115.00 / 200, updatedAt: '2026-10-14' }
+    ],
+    pendingStores: [
+      { storeName: "Sam's Club", suggestedVariety: "FUD Virginia / Member's Mark Pechuga de Pavo 1kg", reason: 'Comparar precio por kilo frente al paquete de Costco y Aurrera.', addedAt: '2026-10-30' },
+      { storeName: 'Tiendas 3B', suggestedVariety: 'Jamón de Pavo Nuestro Campo / FUD', reason: 'Verificar presentación económica de 250g o 500g.', addedAt: '2026-10-30' }
     ],
     favoriteVariety: 'Pechuga de Pavo San Rafael',
     varietyOpinions: {
@@ -164,8 +174,11 @@ const initialHousehold = [
     name: 'Jabón',
     category: 'Higiene',
     stores: [
-      { storeName: 'Walmart', variety: 'Sedal Hidratación', price: 32.00, quantity: 3, unitPrice: 32 / 3 },
-      { storeName: 'Bodega Aurrera', variety: 'Dove Original', price: 58.00, quantity: 4, unitPrice: 58 / 4 }
+      { storeName: 'Walmart', variety: 'Sedal Hidratación', price: 32.00, quantity: 3, unitPrice: 32 / 3, updatedAt: '2026-10-17' },
+      { storeName: 'Bodega Aurrera', variety: 'Dove Original', price: 58.00, quantity: 4, unitPrice: 58 / 4, updatedAt: '2026-10-21' }
+    ],
+    pendingStores: [
+      { storeName: 'Costco', suggestedVariety: 'Dove Paquete 12 barras / Kirkland Body Soap', reason: 'Revisar costo por barra en paquete grande.', addedAt: '2026-10-29' }
     ],
     favoriteVariety: 'Dove Original',
     varietyOpinions: {
