@@ -42,6 +42,7 @@ import {
   getDaysDifference 
 } from '../utils/dateUtils';
 import BagEssentialsChecklist from './BagEssentialsChecklist';
+import SimilarityDialogModal from './SimilarityDialogModal';
 
 export default function ScheduleModule({
   weight,
@@ -60,6 +61,7 @@ export default function ScheduleModule({
 }) {
   // Navigation Tabs: 'daily' | 'selfcare'
   const [activeTab, setActiveTab] = useState('daily');
+  const [similarPrompt, setSimilarPrompt] = useState(null);
   
   // Daily Schedule state
   const [newTitle, setNewTitle] = useState('');
@@ -152,23 +154,7 @@ export default function ScheduleModule({
     return mins < 300 ? mins + 1440 : mins;
   };
 
-  const handleAddActivity = (e) => {
-    e.preventDefault();
-    const trimmedTitle = newTitle.trim();
-    if (!trimmedTitle) return;
-
-    // Scan for duplicate/similar items before adding manually
-    const similar = findSimilarity(trimmedTitle, schedule, 'title');
-    if (similar) {
-      const proceed = window.confirm(
-        `⚠️ Detectamos una actividad similar en tu horario:\n\n` +
-        `• Ya programada: "${similar.title}" (${similar.time || ''})\n` +
-        `• Nueva a agregar: "${trimmedTitle}"\n\n` +
-        `¿Estás seguro de que deseas agregarla de todos modos?`
-      );
-      if (!proceed) return;
-    }
-
+  const executeSaveScheduleActivity = (trimmedTitle) => {
     const timeStr = `${newHour}:${newMinute} ${newPeriod}`;
     const cat = calculateCategory(newHour, newMinute, newPeriod);
 
@@ -185,7 +171,33 @@ export default function ScheduleModule({
     setNewTitle('');
     setNewDesc('');
     setIsAdding(false);
+    setSimilarPrompt(null);
     showToast('success', 'Actividad Añadida', `Se ha programado "${trimmedTitle}"`);
+  };
+
+  const handleAddActivity = (e) => {
+    e.preventDefault();
+    const trimmedTitle = newTitle.trim();
+    if (!trimmedTitle) return;
+
+    // Scan for duplicate/similar items before adding manually
+    const similar = findSimilarity(trimmedTitle, schedule, 'title');
+    if (similar) {
+      setSimilarPrompt({
+        kind: 'schedule',
+        description: 'Detectamos una actividad similar en tu horario diario:',
+        existingLabel: 'Ya programada',
+        existingName: similar.title || '',
+        existingMeta: similar.time || '',
+        existingNotes: similar.desc || '',
+        newLabel: 'Nueva actividad',
+        newName: trimmedTitle,
+        newMeta: `${newHour}:${newMinute} ${newPeriod}`
+      });
+      return;
+    }
+
+    executeSaveScheduleActivity(trimmedTitle);
   };
 
   const handleToggleComplete = (id) => {
@@ -432,23 +444,7 @@ export default function ScheduleModule({
     handleUpdateSelfCareDate(id, getLocalDateString(), title);
   };
 
-  const handleAddSelfCare = (e) => {
-    e.preventDefault();
-    const trimmedTitle = scTitle.trim();
-    if (!trimmedTitle) return;
-
-    // Scan for duplicate/similar activities before adding manually
-    const similar = findSimilarity(trimmedTitle, selfCareActivities, 'title');
-    if (similar) {
-      const proceed = window.confirm(
-        `⚠️ Ya tienes una actividad similar en tu calendario de autocuidado:\n\n` +
-        `• Existente: "${similar.title}" (${similar.protocol || 'Cada ' + (similar.daysInterval || 2) + ' días'})\n` +
-        `• Nueva a registrar: "${trimmedTitle}"\n\n` +
-        `¿Estás seguro de que deseas agregarla de todos modos?`
-      );
-      if (!proceed) return;
-    }
-
+  const executeSaveSelfCareActivity = (trimmedTitle) => {
     let days = 30;
     if (scFrequency === 'custom') {
       const val = Math.max(1, parseInt(scCustomValue, 10) || 1);
@@ -482,7 +478,33 @@ export default function ScheduleModule({
     setScCustomUnit('weeks');
     setScLastDate(getLocalDateString());
     setIsAddingSelfCare(false);
+    setSimilarPrompt(null);
     showToast('success', 'Actividad Registrada', `Se añadió "${newItem.title}" al calendario de autocuidado.`);
+  };
+
+  const handleAddSelfCare = (e) => {
+    e.preventDefault();
+    const trimmedTitle = scTitle.trim();
+    if (!trimmedTitle) return;
+
+    // Scan for duplicate/similar activities before adding manually
+    const similar = findSimilarity(trimmedTitle, selfCareActivities, 'title');
+    if (similar) {
+      setSimilarPrompt({
+        kind: 'selfcare',
+        description: 'Ya tienes una actividad similar en tu calendario de autocuidado:',
+        existingLabel: 'Actividad existente',
+        existingName: similar.title || '',
+        existingMeta: `Cada ${similar.daysInterval || 2} días`,
+        existingNotes: similar.protocol || similar.notes || '',
+        newLabel: 'Nueva actividad',
+        newName: trimmedTitle,
+        newMeta: scCategory
+      });
+      return;
+    }
+
+    executeSaveSelfCareActivity(trimmedTitle);
   };
 
   const handleDeleteSelfCare = (id, title) => {
@@ -1799,6 +1821,28 @@ export default function ScheduleModule({
         </div>,
         document.body
       )}
+
+      <SimilarityDialogModal
+        isOpen={Boolean(similarPrompt)}
+        title="Posible Similitud"
+        description={similarPrompt?.description}
+        existingLabel={similarPrompt?.existingLabel}
+        existingName={similarPrompt?.existingName || ''}
+        existingMeta={similarPrompt?.existingMeta || ''}
+        existingNotes={similarPrompt?.existingNotes || ''}
+        newLabel={similarPrompt?.newLabel}
+        newName={similarPrompt?.newName || ''}
+        newMeta={similarPrompt?.newMeta || ''}
+        onCancel={() => setSimilarPrompt(null)}
+        onConfirm={() => {
+          if (!similarPrompt?.newName) return;
+          if (similarPrompt.kind === 'schedule') {
+            executeSaveScheduleActivity(similarPrompt.newName);
+          } else {
+            executeSaveSelfCareActivity(similarPrompt.newName);
+          }
+        }}
+      />
 
     </div>
   );

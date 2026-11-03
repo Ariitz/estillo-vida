@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BookOpen, ChevronDown, ChevronUp, Plus, Search, Trash2, Heart, HelpCircle, Save, AlertTriangle } from 'lucide-react';
 import { sanitizeManualList } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
+import SimilarityDialogModal from './SimilarityDialogModal';
 
 export default function ManualsModule({
   customManuals,
@@ -11,6 +12,7 @@ export default function ManualsModule({
   const [searchTerm, setSearchTerm] = useState('');
   const [openSections, setOpenSections] = useState({});
   const [isAdding, setIsAdding] = useState(false);
+  const [similarPrompt, setSimilarPrompt] = useState(null);
   
   // New manual form states
   const [manualTitle, setManualTitle] = useState('');
@@ -118,23 +120,7 @@ export default function ManualsModule({
     }));
   };
 
-  const handleAddManual = (e) => {
-    e.preventDefault();
-    const trimmedTitle = manualTitle.trim();
-    if (!trimmedTitle || !manualContent.trim()) return;
-
-    // Scan for duplicate/similar manuals before adding manually
-    const similar = findSimilarity(trimmedTitle, allManuals, 'title');
-    if (similar) {
-      const proceed = window.confirm(
-        `⚠️ Ya existe un protocolo o manual con un tema similar:\n\n` +
-        `• Existente: "${similar.title}" (${similar.category})\n` +
-        `• Nuevo: "${trimmedTitle}"\n\n` +
-        `¿Estás seguro de que deseas guardarlo de todos modos?`
-      );
-      if (!proceed) return;
-    }
-
+  const executeSaveManual = (trimmedTitle) => {
     const newManual = {
       id: 'custom-' + Date.now(),
       category: manualCategory.trim() || 'General',
@@ -146,7 +132,27 @@ export default function ManualsModule({
     setManualTitle('');
     setManualContent('');
     setIsAdding(false);
+    setSimilarPrompt(null);
     showToast('success', 'Manual Guardado', `Se guardó "${trimmedTitle}" en tu biblioteca.`);
+  };
+
+  const handleAddManual = (e) => {
+    e.preventDefault();
+    const trimmedTitle = manualTitle.trim();
+    if (!trimmedTitle || !manualContent.trim()) return;
+
+    // Scan for duplicate/similar manuals before adding manually
+    const similar = findSimilarity(trimmedTitle, allManuals, 'title');
+    if (similar) {
+      setSimilarPrompt({
+        similar,
+        newName: trimmedTitle,
+        newMeta: manualCategory.trim() || 'General'
+      });
+      return;
+    }
+
+    executeSaveManual(trimmedTitle);
   };
 
   const handleDeleteCustomManual = (id, title) => {
@@ -335,6 +341,24 @@ export default function ManualsModule({
           })
         )}
       </div>
+
+      <SimilarityDialogModal
+        isOpen={Boolean(similarPrompt)}
+        title="Posible Similitud"
+        description="Ya existe un protocolo o manual con un tema similar en tu biblioteca:"
+        existingLabel="Manual existente"
+        existingName={similarPrompt?.similar?.title || ''}
+        existingMeta={similarPrompt?.similar?.category || ''}
+        newLabel="Nuevo manual"
+        newName={similarPrompt?.newName || ''}
+        newMeta={similarPrompt?.newMeta || ''}
+        onCancel={() => setSimilarPrompt(null)}
+        onConfirm={() => {
+          if (similarPrompt?.newName) {
+            executeSaveManual(similarPrompt.newName);
+          }
+        }}
+      />
 
     </div>
   );

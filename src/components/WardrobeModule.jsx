@@ -30,6 +30,7 @@ import {
 import { compressImage, analyzeClothingImage, recommendOutfitForOccasion } from '../utils/geminiService';
 import { sanitizeWardrobeList, sanitizeCustomOutfitList } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
+import SimilarityDialogModal from './SimilarityDialogModal';
 
 export default function WardrobeModule({
   wardrobe,
@@ -59,6 +60,7 @@ export default function WardrobeModule({
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [tempApiKey, setTempApiKey] = useState('');
   const [showTempKey, setShowTempKey] = useState(false);
+  const [similarPrompt, setSimilarPrompt] = useState(null);
 
   // Lock body scroll when API Key modal is open
   useEffect(() => {
@@ -208,23 +210,7 @@ export default function WardrobeModule({
     await runAiAnalysis(base64, mimeType);
   };
 
-  const handleAddGarment = (e) => {
-    e.preventDefault();
-    const trimmedName = gName.trim();
-    if (!trimmedName) return;
-
-    // Scan for duplicate/similar garments before adding manually
-    const similar = findSimilarity(trimmedName, wardrobe, 'name');
-    if (similar) {
-      const proceed = window.confirm(
-        `⚠️ Detectamos una prenda similar en tu armario:\n\n` +
-        `• Ya registrada: "${similar.name}" (${similar.color || ''} - ${categories[similar.category] || similar.category})\n` +
-        `• Nueva a registrar: "${trimmedName}"\n\n` +
-        `¿Estás seguro de que deseas agregarla de todos modos?`
-      );
-      if (!proceed) return;
-    }
-
+  const executeSaveGarment = (trimmedName) => {
     const tagsArr = gTags.split(',').map(t => t.trim()).filter(t => t.length > 0);
     const newGarment = {
       id: Date.now().toString(),
@@ -242,7 +228,32 @@ export default function WardrobeModule({
     setGTags('');
     setGImage('');
     setIsAddingGarment(false);
+    setSimilarPrompt(null);
     showToast('success', 'Prenda Registrada', `Se añadió "${trimmedName}" a tu Armario.`);
+  };
+
+  const handleAddGarment = (e) => {
+    e.preventDefault();
+    const trimmedName = gName.trim();
+    if (!trimmedName) return;
+
+    // Scan for duplicate/similar garments before adding manually
+    const similar = findSimilarity(trimmedName, wardrobe, 'name');
+    if (similar) {
+      setSimilarPrompt({
+        kind: 'garment',
+        description: 'Detectamos una prenda similar en tu armario:',
+        existingLabel: 'Prenda ya registrada',
+        existingName: similar.name || '',
+        existingMeta: `${similar.color || ''} ${categories[similar.category] ? `• ${categories[similar.category]}` : ''}`.trim(),
+        newLabel: 'Nueva prenda',
+        newName: trimmedName,
+        newMeta: `${gColor || 'Varios'} • ${categories[gCategory] || gCategory}`
+      });
+      return;
+    }
+
+    executeSaveGarment(trimmedName);
   };
 
   const handleToggleClean = (id) => {
@@ -268,24 +279,7 @@ export default function WardrobeModule({
     showToast('warning', 'Prenda Eliminada', `Se retiró "${name || 'Prenda'}" de tu inventario.`);
   };
 
-  // Add custom outfit
-  const handleAddOutfit = (e) => {
-    e.preventDefault();
-    const trimmedOutfitName = outfitName.trim();
-    if (!trimmedOutfitName || selectedGarments.length === 0) return;
-
-    // Scan for duplicate/similar outfits before adding manually
-    const similar = findSimilarity(trimmedOutfitName, customOutfits, 'name');
-    if (similar) {
-      const proceed = window.confirm(
-        `⚠️ Ya tienes un outfit con un nombre similar:\n\n` +
-        `• Guardado: "${similar.name}"\n` +
-        `• Nuevo: "${trimmedOutfitName}"\n\n` +
-        `¿Estás seguro de que deseas guardarlo de todos modos?`
-      );
-      if (!proceed) return;
-    }
-
+  const executeSaveOutfit = (trimmedOutfitName) => {
     const newOutfit = {
       id: Date.now().toString(),
       name: trimmedOutfitName,
@@ -296,7 +290,33 @@ export default function WardrobeModule({
     setOutfitName('');
     setSelectedGarments([]);
     setIsAddingOutfit(false);
+    setSimilarPrompt(null);
     showToast('success', 'Outfit Creado', `Se guardó tu combinación "${trimmedOutfitName}"`);
+  };
+
+  // Add custom outfit
+  const handleAddOutfit = (e) => {
+    e.preventDefault();
+    const trimmedOutfitName = outfitName.trim();
+    if (!trimmedOutfitName || selectedGarments.length === 0) return;
+
+    // Scan for duplicate/similar outfits before adding manually
+    const similar = findSimilarity(trimmedOutfitName, customOutfits, 'name');
+    if (similar) {
+      setSimilarPrompt({
+        kind: 'outfit',
+        description: 'Ya tienes un outfit guardado con un nombre similar:',
+        existingLabel: 'Outfit guardado',
+        existingName: similar.name || '',
+        existingMeta: `${(similar.garmentIds || []).length} prendas`,
+        newLabel: 'Nuevo outfit',
+        newName: trimmedOutfitName,
+        newMeta: `${selectedGarments.length} prendas`
+      });
+      return;
+    }
+
+    executeSaveOutfit(trimmedOutfitName);
   };
 
   const handleDeleteOutfit = (id, name) => {
@@ -1506,6 +1526,27 @@ export default function WardrobeModule({
         </div>,
         document.body
       )}
+
+      <SimilarityDialogModal
+        isOpen={Boolean(similarPrompt)}
+        title="Posible Similitud"
+        description={similarPrompt?.description}
+        existingLabel={similarPrompt?.existingLabel}
+        existingName={similarPrompt?.existingName || ''}
+        existingMeta={similarPrompt?.existingMeta || ''}
+        newLabel={similarPrompt?.newLabel}
+        newName={similarPrompt?.newName || ''}
+        newMeta={similarPrompt?.newMeta || ''}
+        onCancel={() => setSimilarPrompt(null)}
+        onConfirm={() => {
+          if (!similarPrompt?.newName) return;
+          if (similarPrompt.kind === 'garment') {
+            executeSaveGarment(similarPrompt.newName);
+          } else {
+            executeSaveOutfit(similarPrompt.newName);
+          }
+        }}
+      />
 
     </div>
   );

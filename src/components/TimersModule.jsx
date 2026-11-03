@@ -3,6 +3,7 @@ import { Play, Pause, RotateCcw, Plus, Trash2, Clock, Volume2, X, Edit3 } from '
 import { sanitizeTimerList } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
 import { AlertTriangle } from 'lucide-react';
+import SimilarityDialogModal from './SimilarityDialogModal';
 
 export default function TimersModule({
   customTimers,
@@ -13,6 +14,7 @@ export default function TimersModule({
   const [timerTitle, setTimerTitle] = useState('');
   const [timerMins, setTimerMins] = useState(5);
   const [timerSecs, setTimerSecs] = useState(0);
+  const [similarPrompt, setSimilarPrompt] = useState(null);
 
   // Edit timer state
   const [editingTimer, setEditingTimer] = useState(null);
@@ -67,25 +69,7 @@ export default function TimersModule({
     }
   };
 
-  const handleAddTimer = (e) => {
-    e.preventDefault();
-    const trimmedTitle = timerTitle.trim();
-    if (!trimmedTitle) return;
-
-    // Scan for duplicate/similar timers before adding manually
-    const similar = findSimilarity(trimmedTitle, allTimers, 'title');
-    if (similar) {
-      const simMins = Math.floor((similar.duration || 0) / 60);
-      const simSecs = (similar.duration || 0) % 60;
-      const proceed = window.confirm(
-        `⚠️ Detectamos un temporizador similar:\n\n` +
-        `• Ya existente: "${similar.title}" (${simMins}m ${simSecs}s)\n` +
-        `• Nuevo a crear: "${trimmedTitle}" (${timerMins}m ${timerSecs}s)\n\n` +
-        `¿Estás seguro de que deseas agregarlo de todos modos?`
-      );
-      if (!proceed) return;
-    }
-
+  const executeSaveTimer = (trimmedTitle) => {
     const totalSecs = (parseInt(timerMins) || 0) * 60 + (parseInt(timerSecs) || 0);
     if (totalSecs <= 0) return;
 
@@ -98,7 +82,30 @@ export default function TimersModule({
     setCustomTimers(prev => [...(Array.isArray(prev) ? prev : []), newTimer]);
     setTimerTitle('');
     setIsAdding(false);
+    setSimilarPrompt(null);
     showToast('success', 'Temporizador Creado', `Se añadió "${trimmedTitle}" (${timerMins}m ${timerSecs}s)`);
+  };
+
+  const handleAddTimer = (e) => {
+    e.preventDefault();
+    const trimmedTitle = timerTitle.trim();
+    if (!trimmedTitle) return;
+
+    // Scan for duplicate/similar timers before adding manually
+    const similar = findSimilarity(trimmedTitle, allTimers, 'title');
+    if (similar) {
+      const simMins = Math.floor((similar.duration || 0) / 60);
+      const simSecs = (similar.duration || 0) % 60;
+      setSimilarPrompt({
+        similar,
+        existingMeta: `${simMins}m ${simSecs}s`,
+        newName: trimmedTitle,
+        newMeta: `${timerMins}m ${timerSecs}s`
+      });
+      return;
+    }
+
+    executeSaveTimer(trimmedTitle);
   };
 
   const handleDeleteCustom = (id, title) => {
@@ -337,6 +344,24 @@ export default function TimersModule({
           />
         ))}
       </div>
+
+      <SimilarityDialogModal
+        isOpen={Boolean(similarPrompt)}
+        title="Posible Similitud"
+        description="Detectamos un temporizador similar que ya tienes configurado:"
+        existingLabel="Temporizador existente"
+        existingName={similarPrompt?.similar?.title || ''}
+        existingMeta={similarPrompt?.existingMeta || ''}
+        newLabel="Nuevo temporizador"
+        newName={similarPrompt?.newName || ''}
+        newMeta={similarPrompt?.newMeta || ''}
+        onCancel={() => setSimilarPrompt(null)}
+        onConfirm={() => {
+          if (similarPrompt?.newName) {
+            executeSaveTimer(similarPrompt.newName);
+          }
+        }}
+      />
 
     </div>
   );

@@ -23,6 +23,7 @@ import {
 import { compressImage, analyzeExperienceImage } from '../utils/geminiService';
 import { sanitizeExperienceList, sanitizeExperienceItem } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
+import SimilarityDialogModal from './SimilarityDialogModal';
 
 export default function ExperiencesModule({
   experiences = [],
@@ -54,6 +55,7 @@ export default function ExperiencesModule({
 
   // Edit modal state
   const [editingItem, setEditingItem] = useState(null);
+  const [similarPrompt, setSimilarPrompt] = useState(null);
   const editFileInputRef = useRef(null);
 
   const categories = [
@@ -97,23 +99,7 @@ export default function ExperiencesModule({
     }
   };
 
-  const handleAddItem = (e) => {
-    e.preventDefault();
-    const trimmedName = name.trim();
-    if (!trimmedName) return;
-
-    // Scan for duplicate/similar experiences before adding manually
-    const similar = findSimilarity(trimmedName, experiences, 'name');
-    if (similar) {
-      const proceed = window.confirm(
-        `⚠️ Detectamos una experiencia o lugar similar en tu bitácora:\n\n` +
-        `• Registrado: "${similar.name}" (${similar.placeOrBrand || similar.category || ''})\n` +
-        `• Nuevo registro: "${trimmedName}"\n\n` +
-        `¿Estás seguro de que deseas agregarlo de todos modos?`
-      );
-      if (!proceed) return;
-    }
-
+  const executeSaveExperience = (trimmedName) => {
     const newItem = {
       id: 'exp-' + Date.now(),
       name: trimmedName,
@@ -138,7 +124,27 @@ export default function ExperiencesModule({
     setNotes('');
     setPlaceImage('');
     setIsAdding(false);
+    setSimilarPrompt(null);
     showToast('success', 'Registro Guardado', `Se guardó "${trimmedName}" en tu bitácora.`);
+  };
+
+  const handleAddItem = (e) => {
+    e.preventDefault();
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+
+    // Scan for duplicate/similar experiences before adding manually
+    const similar = findSimilarity(trimmedName, experiences, 'name');
+    if (similar) {
+      setSimilarPrompt({
+        similar,
+        newName: trimmedName,
+        newMeta: placeOrBrand.trim() || category
+      });
+      return;
+    }
+
+    executeSaveExperience(trimmedName);
   };
 
   const handleDeleteItem = (id, itemName) => {
@@ -1060,6 +1066,35 @@ export default function ExperiencesModule({
         </div>,
         document.body
       )}
+
+      {/* Centered In-App Similarity Detection Dialog */}
+      <SimilarityDialogModal
+        isOpen={Boolean(similarPrompt)}
+        title="Posible Similitud"
+        description="Detectamos una experiencia, producto o lugar similar en tu bitácora:"
+        existingLabel="Registrado en tu bitácora"
+        existingName={similarPrompt?.similar?.name || ''}
+        existingMeta={similarPrompt?.similar?.placeOrBrand || similarPrompt?.similar?.category || ''}
+        existingNotes={similarPrompt?.similar?.notes || ''}
+        newLabel="Nuevo registro"
+        newName={similarPrompt?.newName || ''}
+        newMeta={similarPrompt?.newMeta || ''}
+        onCancel={() => setSimilarPrompt(null)}
+        onEditExisting={
+          similarPrompt?.similar
+            ? () => {
+                const target = similarPrompt.similar;
+                setSimilarPrompt(null);
+                handleOpenEdit(target);
+              }
+            : undefined
+        }
+        onConfirm={() => {
+          if (similarPrompt?.newName) {
+            executeSaveExperience(similarPrompt.newName);
+          }
+        }}
+      />
 
     </div>
   );

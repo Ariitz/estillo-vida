@@ -4687,9 +4687,11 @@ export default function PriceComparatorModule({
                   <ArrowUpDown className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-100 font-outfit">
-                    ¿Deseas agregarlo como subproducto o variedad?
-                  </h3>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h3 className="text-base font-bold text-slate-100 font-outfit">
+                      Posible Similitud — ¿Agregar como subproducto o variedad?
+                    </h3>
+                  </div>
                   <p className="text-xs text-slate-400">
                     {similarProductPrompt.topMatch?.matchType === 'subproduct'
                       ? `Detectamos que ya registraste la variedad "${similarProductPrompt.topMatch.matchedSubproduct}" dentro de "${similarProductPrompt.similarProduct.name}".`
