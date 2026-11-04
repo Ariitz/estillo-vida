@@ -291,7 +291,7 @@ export const findSimilarItems = (newItemName, existingList = [], nameKey = 'name
  * @param {number} maxResults - Max candidates to return (default 3)
  * @returns {Array<{ item: Object, score: number, matchType: 'name'|'subproduct'|'both', matchedSubproduct: string }>}
  */
-export const findSimilarHouseholdItems = (newItemName, householdList = [], maxResults = 3) => {
+export const findSimilarHouseholdItems = (newItemName, householdList = [], maxResults = 3, options = {}) => {
   if (!newItemName || !householdList || !Array.isArray(householdList) || householdList.length === 0) {
     return [];
   }
@@ -299,20 +299,33 @@ export const findSimilarHouseholdItems = (newItemName, householdList = [], maxRe
   const cleanNew = normalizeString(newItemName);
   if (!cleanNew || cleanNew.length < 2) return [];
 
+  const preferredCategory = typeof options === 'string'
+    ? options
+    : (options?.preferredCategory || '');
+  const normPreferredCategory = preferredCategory && preferredCategory !== 'All'
+    ? normalizeString(preferredCategory)
+    : '';
+
   const newWords = cleanNew.split(/\s+/).filter(w => w.length >= 2);
   const stopWords = new Set([
-    'con', 'para', 'del', 'los', 'las', 'una', 'uno', 'por', 'que', 'min',
-    'sesion', 'rutina', 'tiempo', 'de', 'el', 'la', 'en', 'un', 'y', 'al'
+    'con', 'sin', 'para', 'del', 'los', 'las', 'una', 'uno', 'unos', 'unas',
+    'por', 'que', 'como', 'mas', 'muy', 'sus', 'mis', 'tus', 'este', 'esta',
+    'pero', 'entre', 'hasta', 'desde', 'sobre', 'bajo', 'min', 'sesion',
+    'rutina', 'tiempo', 'de', 'el', 'la', 'en', 'un', 'y', 'o', 'u', 'e',
+    'al', 'lo', 'le', 'se', 'su', 'mi', 'tu', 'es', 'son', 'ej', 'etc'
   ]);
   const significantNewWords = newWords.filter(w => !stopWords.has(w));
 
   const scoredCandidates = [];
 
   const wordMatchesFlexible = (qWord, targetWordsArr) => {
+    if (stopWords.has(qWord)) return 0;
     const qStem = getWordStem(qWord);
     for (const tw of targetWordsArr) {
+      if (stopWords.has(tw)) continue;
       if (tw === qWord) return 2; // exact word
-      if (qWord.length >= 2 && (tw.startsWith(qWord) || (tw.length >= 3 && qWord.startsWith(tw)))) return 1.6;
+      if (qWord.length >= 3 && tw.startsWith(qWord)) return 1.6;
+      if (tw.length >= 4 && qWord.startsWith(tw)) return 1.5;
       if (qStem.length >= 4) {
         const tStem = getWordStem(tw);
         if (tStem.length >= 4 && (tStem.startsWith(qStem) || qStem.startsWith(tStem))) return 1.3;
@@ -340,14 +353,16 @@ export const findSimilarHouseholdItems = (newItemName, householdList = [], maxRe
 
     // 1. Check against item.name (with strong priority for prefix matches like "mas" / "más" -> "Máscara Facial LED de Luz Roja")
     if (existingName && existingName.length >= 2) {
-      const existingWordsArr = existingName.split(/\s+/).filter(w => w.length >= 2);
+      const existingWordsArr = existingName
+        .split(/\s+/)
+        .filter(w => w.length >= 2 && !stopWords.has(w));
       if (cleanNew === existingName) {
         nameScore = 1000;
       } else if (existingName.startsWith(cleanNew)) {
         nameScore = 420 + (cleanNew.length / existingName.length) * 50;
-      } else if (existingWordsArr.some(w => w.startsWith(cleanNew))) {
+      } else if (newWords.length === 1 && existingWordsArr.some(w => w.startsWith(cleanNew))) {
         nameScore = 340 + (cleanNew.length / existingName.length) * 50;
-      } else if (cleanNew.length >= 2 && existingName.includes(cleanNew)) {
+      } else if (cleanNew.length >= 3 && existingName.includes(cleanNew) && !stopWords.has(cleanNew)) {
         nameScore = 200 + (cleanNew.length / existingName.length) * 50;
       } else if (existingName.length >= 3 && cleanNew.includes(existingName)) {
         nameScore = 200 + (existingName.length / cleanNew.length) * 50;
@@ -363,7 +378,7 @@ export const findSimilarHouseholdItems = (newItemName, householdList = [], maxRe
         }
         if (matchedCount >= 2) {
           nameScore = 100 + matchedWeight * 25;
-        } else if (matchedCount === 1 && significantNewWords[0].length >= 2) {
+        } else if (matchedCount === 1 && significantNewWords[0].length >= 3) {
           nameScore = 50 + matchedWeight * 15;
         }
       }
@@ -377,12 +392,14 @@ export const findSimilarHouseholdItems = (newItemName, householdList = [], maxRe
       let currentSubScore = 0;
       if (cleanNew === cleanSub) {
         currentSubScore = 500;
-      } else if (cleanSub.length >= 3 && cleanNew.includes(cleanSub)) {
+      } else if (cleanSub.length >= 3 && cleanNew.includes(cleanSub) && !stopWords.has(cleanSub)) {
         currentSubScore = 240 + (cleanSub.length / cleanNew.length) * 50;
-      } else if (cleanNew.length >= 3 && cleanSub.includes(cleanNew)) {
+      } else if (cleanNew.length >= 3 && cleanSub.includes(cleanNew) && !stopWords.has(cleanNew)) {
         currentSubScore = 180 + (cleanNew.length / cleanSub.length) * 50;
       } else if (significantNewWords.length > 0) {
-        const subWordsArr = cleanSub.split(/\s+/).filter(w => w.length >= 2);
+        const subWordsArr = cleanSub
+          .split(/\s+/)
+          .filter(w => w.length >= 2 && !stopWords.has(w));
         let matchedWeight = 0;
         let matchedCount = 0;
         for (const qw of significantNewWords) {
@@ -405,34 +422,60 @@ export const findSimilarHouseholdItems = (newItemName, householdList = [], maxRe
       }
     }
 
-    // Determine final score and match classification
-    let totalScore = 0;
+    // Determine raw score and match classification
+    let rawScore = 0;
     let matchType = 'name';
 
     if (nameScore > 0 && bestSubScore > 0) {
-      totalScore = nameScore + bestSubScore * 0.8;
+      rawScore = nameScore + bestSubScore * 0.8;
       matchType = 'both';
     } else if (nameScore > 0) {
-      totalScore = nameScore;
+      rawScore = nameScore;
       matchType = 'name';
     } else if (bestSubScore > 0) {
-      totalScore = bestSubScore;
+      rawScore = bestSubScore;
       matchType = 'subproduct';
     }
 
-    if (totalScore >= 45) {
-      scoredCandidates.push({
-        item,
-        score: totalScore,
-        matchType,
-        matchedSubproduct: matchedSubproduct || (subTerms[0] || ''),
-        matchedName: existingRawName
-      });
+    if (rawScore < 45) continue;
+
+    // Category filtering & priority adjustment when a target category is specified
+    const normItemCat = normalizeString(item.category || '');
+    const isSameCategory = !normPreferredCategory || normItemCat === normPreferredCategory;
+    let finalScore = rawScore;
+
+    if (normPreferredCategory) {
+      if (isSameCategory) {
+        // Boost same-category matches so they always take priority
+        finalScore = rawScore * 1.35 + 35;
+      } else {
+        // Eliminate weak/loose matches from other categories (e.g. Skincare when adding Despensa)
+        // Only keep very strong direct product/subproduct matches with lower priority
+        if (rawScore < 180) {
+          continue;
+        }
+        finalScore = rawScore * 0.55;
+      }
     }
+
+    scoredCandidates.push({
+      item,
+      score: finalScore,
+      rawScore,
+      isSameCategory,
+      matchType,
+      matchedSubproduct: matchedSubproduct || (subTerms[0] || ''),
+      matchedName: existingRawName
+    });
   }
 
   return scoredCandidates
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => {
+      if (normPreferredCategory && a.isSameCategory !== b.isSameCategory) {
+        return a.isSameCategory ? -1 : 1;
+      }
+      return b.score - a.score;
+    })
     .slice(0, maxResults);
 };
 

@@ -1037,8 +1037,10 @@ export default function PriceComparatorModule({
       })
       .filter(s => s.price > 0 && s.quantity > 0);
 
-    // Scan for duplicate/similar items (checking both main item name and subproducts) before adding manually
-    const similarMatches = findSimilarHouseholdItems(trimmedName, householdItems, 3);
+    // Scan for duplicate/similar items (checking both main item name, subproducts, and selected category) before adding manually
+    const similarMatches = findSimilarHouseholdItems(trimmedName, householdItems, 3, {
+      preferredCategory: itemCategory
+    });
     if (similarMatches && similarMatches.length > 0) {
       const topMatch = similarMatches[0];
       const suggestedVariety = topMatch.matchType === 'subproduct'
@@ -2803,152 +2805,6 @@ export default function PriceComparatorModule({
                 className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                 required
               />
-              {itemName.trim().length >= 2 && (() => {
-                const matches = findSimilarHouseholdItems(itemName.trim(), householdItems, 3);
-                if (!matches || matches.length === 0) return null;
-
-                return (
-                  <div className="mt-2.5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-3 text-xs animate-fade-in shadow-inner">
-                    <div className="flex items-center justify-between gap-2 border-b border-amber-500/20 pb-2">
-                      <div className="flex items-center gap-1.5 text-amber-300 font-bold">
-                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>Sugerencias de productos y subproductos existentes ({matches.length})</span>
-                      </div>
-                      <span className="text-[10px] text-amber-300/80 font-medium">
-                        Detección por nombre y subpresentación
-                      </span>
-                    </div>
-
-                    <div className="space-y-2.5">
-                      {matches.map(({ item: matchedItem, matchType, matchedSubproduct }, mIdx) => {
-                        const suggestedSub = matchType === 'subproduct' 
-                          ? (deriveVarietySuggestion(itemName.trim(), matchedItem.name) || matchedSubproduct)
-                          : deriveVarietySuggestion(itemName.trim(), matchedItem.name);
-                        const hasFavorite = matchedItem.favoriteVariety;
-                        const matchedVarietyOpinion = matchedSubproduct ? matchedItem.varietyOpinions?.[matchedSubproduct] : null;
-
-                        return (
-                          <div key={matchedItem.id || mIdx} className="bg-[#0b0c10]/85 p-3 rounded-xl border border-slate-800 space-y-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-bold text-slate-100 text-sm">{matchedItem.name}</span>
-                                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                                    {matchedItem.category}
-                                  </span>
-                                  {matchType === 'name' && (
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                                      ✓ Mismo producto principal
-                                    </span>
-                                  )}
-                                  {matchType === 'subproduct' && (
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                                      <Tag className="w-2.5 h-2.5 text-amber-400" />
-                                      <span>Ya tienes el subproducto "{matchedSubproduct}" aquí</span>
-                                    </span>
-                                  )}
-                                  {matchType === 'both' && (
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                                      ⭐ Coincide en producto y subproducto
-                                    </span>
-                                  )}
-                                </div>
-
-                                {hasFavorite && (
-                                  <div className="text-[11px] text-amber-400 font-medium flex items-center gap-1 mt-1">
-                                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                    <span>Tu favorito registrado en este producto: <strong>"{hasFavorite}"</strong></span>
-                                  </div>
-                                )}
-
-                                {matchedVarietyOpinion && (
-                                  <div className="text-[10.5px] text-slate-300 italic bg-slate-900/90 p-1.5 rounded mt-1 border border-slate-800">
-                                    💬 Opinión guardada de "{matchedSubproduct}": <strong>"{matchedVarietyOpinion.opinion || 'Sin comentario escrito'}"</strong>
-                                    {matchedVarietyOpinion.rating && ` (${matchedVarietyOpinion.rating === 'liked' ? '👍 Me gustó' : matchedVarietyOpinion.rating === 'disliked' ? '👎 No me gustó' : matchedVarietyOpinion.rating === 'favorite' ? '⭐ Favorito' : '😐 Regular'})`}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Subproducts list preview */}
-                            {Array.isArray(matchedItem.subproducts) && matchedItem.subproducts.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                                <span className="text-[10px] text-slate-400 font-semibold">Otras variedades:</span>
-                                {matchedItem.subproducts.map((sp, sIdx) => (
-                                  <span key={sIdx} className={`text-[10px] px-1.5 py-0.2 rounded border ${
-                                    sp === matchedItem.favoriteVariety 
-                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
-                                      : 'bg-[#e0a96d]/10 text-[#e0a96d] border-[#e0a96d]/20'
-                                  }`}>
-                                    {sp === matchedItem.favoriteVariety ? `⭐ ${sp}` : sp}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Quick action buttons */}
-                            <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-slate-800/60">
-                              {suggestedSub && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const valid = (storePrices || [])
-                                      .filter(s => s && s.storeName && s.price && s.quantity)
-                                      .map(s => ({
-                                        storeName: String(s.storeName).trim() || 'Tienda',
-                                        variety: s.variety || suggestedSub,
-                                        price: safeNumber(s.price, 0),
-                                        quantity: safeNumber(s.quantity, 1),
-                                        unitPrice: safeNumber(s.quantity, 1) > 0 ? safeNumber(s.price, 0) / safeNumber(s.quantity, 1) : 0
-                                      }))
-                                      .filter(s => s.price > 0 && s.quantity > 0);
-
-                                    handleMergeAndCompareWithExisting(matchedItem, valid, itemNotes, suggestedSub);
-                                  }}
-                                  className="btn-rose-gold text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md"
-                                >
-                                  <Tag className="w-3.5 h-3.5" />
-                                  <span>🏷️ Guardar como subproducto "{suggestedSub}" en "{matchedItem.name}"</span>
-                                </button>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const valid = (storePrices || [])
-                                    .filter(s => s && s.storeName && s.price && s.quantity)
-                                    .map(s => ({
-                                      storeName: String(s.storeName).trim() || 'Tienda',
-                                      variety: s.variety || '',
-                                      price: safeNumber(s.price, 0),
-                                      quantity: safeNumber(s.quantity, 1),
-                                      unitPrice: safeNumber(s.quantity, 1) > 0 ? safeNumber(s.price, 0) / safeNumber(s.quantity, 1) : 0
-                                    }))
-                                    .filter(s => s.price > 0 && s.quantity > 0);
-
-                                  handleMergeAndCompareWithExisting(matchedItem, valid, itemNotes);
-                                }}
-                                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer"
-                              >
-                                <ArrowUpDown className="w-3.5 h-3.5 text-[#e0a96d]" />
-                                <span>⚖️ Comparar en "{matchedItem.name}"</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEdit(matchedItem)}
-                                className="text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg font-medium transition-colors cursor-pointer border border-slate-800"
-                              >
-                                Ver Ficha
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Categoría</label>
@@ -2977,6 +2833,152 @@ export default function PriceComparatorModule({
                 <option value="no">✕ No volver a comprar</option>
               </select>
             </div>
+
+            {itemName.trim().length >= 2 && (() => {
+              const matches = findSimilarHouseholdItems(itemName.trim(), householdItems, 3, {
+                preferredCategory: itemCategory
+              });
+              if (!matches || matches.length === 0) return null;
+
+              return (
+                <div className="col-span-full p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2.5 text-xs animate-fade-in shadow-inner">
+                  <div className="flex items-center justify-between gap-2 flex-wrap border-b border-amber-500/20 pb-1.5">
+                    <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>Sugerencias existentes en tu comparador ({matches.length})</span>
+                    </div>
+                    <span className="text-[10px] text-amber-300/80 font-medium">
+                      Priorizando categoría: <strong>{itemCategory}</strong>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {matches.map(({ item: matchedItem, matchType, matchedSubproduct, isSameCategory }, mIdx) => {
+                      const suggestedSub = matchType === 'subproduct' 
+                        ? (deriveVarietySuggestion(itemName.trim(), matchedItem.name) || matchedSubproduct)
+                        : deriveVarietySuggestion(itemName.trim(), matchedItem.name);
+                      const hasFavorite = matchedItem.favoriteVariety;
+                      const matchedVarietyOpinion = matchedSubproduct ? matchedItem.varietyOpinions?.[matchedSubproduct] : null;
+
+                      return (
+                        <div
+                          key={matchedItem.id || mIdx}
+                          className={`bg-[#0b0c10]/90 p-2.5 rounded-xl border flex flex-col justify-between gap-2 ${
+                            isSameCategory === false ? 'border-slate-800/80 opacity-85' : 'border-slate-800'
+                          }`}
+                        >
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-slate-100 text-xs">{matchedItem.name}</span>
+                              <span className={`text-[9.5px] uppercase font-bold px-1.5 py-0.2 rounded border ${
+                                isSameCategory === false
+                                  ? 'bg-slate-900 text-slate-400 border-slate-700'
+                                  : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                              }`}>
+                                {matchedItem.category}
+                              </span>
+                              {matchType === 'subproduct' && (
+                                <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                                  <Tag className="w-2.5 h-2.5 text-amber-400" />
+                                  <span>Subproducto: "{matchedSubproduct}"</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {hasFavorite && (
+                              <div className="text-[10.5px] text-amber-400 font-medium flex items-center gap-1">
+                                <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400 shrink-0" />
+                                <span className="truncate">Fav: <strong>{hasFavorite}</strong></span>
+                              </div>
+                            )}
+
+                            {matchedVarietyOpinion && (
+                              <div className="text-[10px] text-slate-300 italic bg-slate-900/90 px-2 py-1 rounded border border-slate-800 truncate">
+                                💬 "{matchedVarietyOpinion.opinion || 'Sin comentario'}"
+                              </div>
+                            )}
+
+                            {Array.isArray(matchedItem.subproducts) && matchedItem.subproducts.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="text-[9.5px] text-slate-400 font-semibold">Variedades:</span>
+                                {matchedItem.subproducts.slice(0, 4).map((sp, sIdx) => (
+                                  <span key={sIdx} className={`text-[9.5px] px-1.5 py-0.1 rounded border ${
+                                    sp === matchedItem.favoriteVariety 
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
+                                      : 'bg-[#e0a96d]/10 text-[#e0a96d] border-[#e0a96d]/20'
+                                  }`}>
+                                    {sp === matchedItem.favoriteVariety ? `⭐ ${sp}` : sp}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Compact single-row action buttons */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-800/60">
+                            {suggestedSub && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const valid = (storePrices || [])
+                                    .filter(s => s && s.storeName && s.price && s.quantity)
+                                    .map(s => ({
+                                      storeName: String(s.storeName).trim() || 'Tienda',
+                                      variety: s.variety || suggestedSub,
+                                      price: safeNumber(s.price, 0),
+                                      quantity: safeNumber(s.quantity, 1),
+                                      unitPrice: safeNumber(s.quantity, 1) > 0 ? safeNumber(s.price, 0) / safeNumber(s.quantity, 1) : 0
+                                    }))
+                                    .filter(s => s.price > 0 && s.quantity > 0);
+
+                                  handleMergeAndCompareWithExisting(matchedItem, valid, itemNotes, suggestedSub);
+                                }}
+                                title={`Guardar "${suggestedSub}" como subproducto en "${matchedItem.name}"`}
+                                className="btn-rose-gold text-[11px] font-bold py-1 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer shadow-sm"
+                              >
+                                <Tag className="w-3 h-3 shrink-0" />
+                                <span>Agregar como subproducto</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const valid = (storePrices || [])
+                                  .filter(s => s && s.storeName && s.price && s.quantity)
+                                  .map(s => ({
+                                    storeName: String(s.storeName).trim() || 'Tienda',
+                                    variety: s.variety || '',
+                                    price: safeNumber(s.price, 0),
+                                    quantity: safeNumber(s.quantity, 1),
+                                    unitPrice: safeNumber(s.quantity, 1) > 0 ? safeNumber(s.price, 0) / safeNumber(s.quantity, 1) : 0
+                                  }))
+                                  .filter(s => s.price > 0 && s.quantity > 0);
+
+                                handleMergeAndCompareWithExisting(matchedItem, valid, itemNotes);
+                              }}
+                              title={`Comparar en "${matchedItem.name}"`}
+                              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-bold py-1 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer"
+                            >
+                              <ArrowUpDown className="w-3 h-3 text-[#e0a96d] shrink-0" />
+                              <span>Comparar</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(matchedItem)}
+                              className="text-[11px] text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 px-2 py-1 rounded-lg font-medium transition-colors cursor-pointer border border-slate-800 ml-auto"
+                            >
+                              Ver Ficha
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="space-y-3">
@@ -4847,38 +4849,41 @@ export default function PriceComparatorModule({
 
             {/* Actions */}
             <div className="space-y-2 pt-2">
-              {similarProductPrompt.suggestedVariety && (
+              <div className="flex flex-col sm:flex-row items-stretch gap-2">
+                {similarProductPrompt.suggestedVariety && (
+                  <button
+                    type="button"
+                    onClick={() => handleMergeAndCompareWithExisting(
+                      similarProductPrompt.similarProduct,
+                      similarProductPrompt.validStores,
+                      similarProductPrompt.newNotes,
+                      similarProductPrompt.suggestedVariety
+                    )}
+                    title={`Guardar "${similarProductPrompt.suggestedVariety}" en "${similarProductPrompt.similarProduct.name}"`}
+                    className="btn-rose-gold flex-1 py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all"
+                  >
+                    <Tag className="w-4 h-4 shrink-0" />
+                    <span>Agregar como subproducto</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => handleMergeAndCompareWithExisting(
                     similarProductPrompt.similarProduct,
                     similarProductPrompt.validStores,
-                    similarProductPrompt.newNotes,
-                    similarProductPrompt.suggestedVariety
+                    similarProductPrompt.newNotes
                   )}
-                  className="btn-rose-gold w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all"
+                  className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                    similarProductPrompt.suggestedVariety
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                      : 'btn-rose-gold shadow-lg'
+                  }`}
                 >
-                  <Tag className="w-4 h-4" />
-                  <span>🏷️ Guardar como subproducto "{similarProductPrompt.suggestedVariety}" dentro de "{similarProductPrompt.similarProduct.name}" (Recomendado)</span>
+                  <ArrowUpDown className="w-4 h-4 shrink-0" />
+                  <span>Comparar en "{similarProductPrompt.similarProduct.name}"</span>
                 </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => handleMergeAndCompareWithExisting(
-                  similarProductPrompt.similarProduct,
-                  similarProductPrompt.validStores,
-                  similarProductPrompt.newNotes
-                )}
-                className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                  similarProductPrompt.suggestedVariety
-                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                    : 'btn-rose-gold shadow-lg'
-                }`}
-              >
-                <ArrowUpDown className="w-4 h-4" />
-                <span>⚖️ Comparar directamente en "{similarProductPrompt.similarProduct.name}"</span>
-              </button>
+              </div>
 
               <p className="text-[10px] text-center text-slate-400">
                 Añadirá la información a la ficha existente para comparar precios y evitar tener múltiples tarjetas del mismo insumo.
