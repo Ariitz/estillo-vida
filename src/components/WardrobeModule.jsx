@@ -27,7 +27,7 @@ import {
   Calendar,
   Layers
 } from 'lucide-react';
-import { compressImage, analyzeClothingImage, recommendOutfitForOccasion } from '../utils/geminiService';
+import { compressImage, analyzeClothingImage, generateFallbackClothingFitFeedback, recommendOutfitForOccasion } from '../utils/geminiService';
 import { sanitizeWardrobeList, sanitizeCustomOutfitList } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
 import SimilarityDialogModal from './SimilarityDialogModal';
@@ -54,7 +54,47 @@ export default function WardrobeModule({
   const [gColor, setGColor] = useState('');
   const [gTags, setGTags] = useState('');
   const [gImage, setGImage] = useState('');
+  const [gFitFeedback, setGFitFeedback] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Body Type & Fit Critique Modal State
+  const [bodyTypeProfile, setBodyTypeProfile] = useState(() => {
+    return localStorage.getItem('aura-wardrobe-body-profile') || 'Curvy / Reloj de arena (definir cintura, estilizar cadera y busto sin agregar volumen)';
+  });
+  const [activeFitModalGarmentId, setActiveFitModalGarmentId] = useState(null);
+  const [isAnalyzingExistingFit, setIsAnalyzingExistingFit] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('aura-wardrobe-body-profile', bodyTypeProfile);
+  }, [bodyTypeProfile]);
+
+  const bodyTypeOptions = [
+    {
+      id: 'curvy',
+      label: '⏳ Curvy / Reloj de Arena (Definir cintura y alargar silueta)',
+      value: 'Curvy / Reloj de arena (definir cintura, estilizar cadera y busto sin agregar volumen)'
+    },
+    {
+      id: 'pear',
+      label: '🍐 Triángulo / Pera (Equilibrar hombros con cadera y estilizar piernas)',
+      value: 'Triángulo / Pera (equilibrar línea de hombros con cadera, definir cintura y alargar piernas)'
+    },
+    {
+      id: 'rectangle',
+      label: '📐 Rectángulo (Crear definición en cintura y curvas armónicas)',
+      value: 'Rectángulo (crear definición visual en cintura, aportar estructura y curvas armónicas)'
+    },
+    {
+      id: 'inverted',
+      label: '🔻 Triángulo Invertido (Suavizar hombros y dar caída fluida abajo)',
+      value: 'Triángulo Invertido (suavizar línea de hombros con escotes en V y dar volumen equilibrado en cadera)'
+    },
+    {
+      id: 'apple',
+      label: '🍎 Oval / Manzana (Estilizar torso con líneas verticales y tiro alto)',
+      value: 'Oval / Manzana (estilizar zona media con líneas verticales, corte imperio/V y caída estructurada)'
+    }
+  ];
 
   // Gemini API Key inline modal
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
@@ -158,24 +198,33 @@ export default function WardrobeModule({
     }
   ];
 
-  // AI Image analysis handler
+  // AI Image analysis handler (works with Gemini Vision or smart local stylist fallback)
   const runAiAnalysis = async (base64, mimeType) => {
-    if (!geminiApiKey?.trim()) {
-      setShowApiKeyModal(true);
-      return;
-    }
-
     setIsAnalyzing(true);
     try {
-      const result = await analyzeClothingImage(base64, mimeType, geminiApiKey);
+      const result = await analyzeClothingImage(base64, mimeType, geminiApiKey, { bodyTypeProfile });
       if (result.name) setGName(result.name);
       if (result.category) setGCategory(result.category);
       if (result.color) setGColor(result.color);
       if (result.tags?.length > 0) setGTags(result.tags.join(', '));
-      showToast('success', 'Prenda Reconocida con IA', `Gemini clasificó: "${result.name}"`);
+      if (result.fitFeedback) setGFitFeedback(result.fitFeedback);
+      showToast(
+        'success',
+        result.fitFeedback?.isWornOnBody ? '🪞 Prenda Puesta Analizada' : '✨ Prenda Analizada con IA',
+        `Diagnóstico: ${result.fitFeedback?.verdictTitle || result.name}`
+      );
     } catch (err) {
       console.error('AI analysis error:', err);
-      showToast('error', 'Fallo de Análisis IA', err.message);
+      const fallback = generateFallbackClothingFitFeedback({
+        name: gName || 'Prenda Analizada',
+        category: gCategory,
+        color: gColor || 'Neutro',
+        tags: gTags ? gTags.split(',').map(t => t.trim()) : [],
+        isWornOnBody: true,
+        bodyTypeProfile
+      });
+      setGFitFeedback(fallback);
+      showToast('info', 'Diagnóstico de Silueta Listo', 'Se generó retroalimentación de ajuste, tipo de cuerpo y conservación.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -186,15 +235,10 @@ export default function WardrobeModule({
     if (!file) return;
 
     try {
-      showToast('info', 'Procesando Foto', 'Comprimiendo imagen...');
+      showToast('info', 'Procesando Foto', 'Comprimiendo y evaluando cómo luce la prenda...');
       const { dataUrl, base64, mimeType } = await compressImage(file);
       setGImage(dataUrl);
-
-      if (geminiApiKey?.trim()) {
-        await runAiAnalysis(base64, mimeType);
-      } else {
-        showToast('info', 'Foto Cargada', 'Configura tu Gemini API Key para autollenar detalles automáticamente con IA.');
-      }
+      await runAiAnalysis(base64, mimeType);
     } catch (err) {
       console.error('Image compression error:', err);
       showToast('error', 'Error de Imagen', err.message);
@@ -204,14 +248,112 @@ export default function WardrobeModule({
   };
 
   const handleReanalyze = async () => {
-    if (!gImage) return;
+    if (!gImage) {
+      const fallback = generateFallbackClothingFitFeedback({
+        name: gName || 'Prenda en Revisión',
+        category: gCategory,
+        color: gColor || 'Neutro',
+        tags: gTags ? gTags.split(',').map(t => t.trim()) : [],
+        isWornOnBody: false,
+        bodyTypeProfile
+      });
+      setGFitFeedback(fallback);
+      showToast('success', 'Diagnóstico Generado', 'Revisa el análisis de silueta y veredicto.');
+      return;
+    }
     const base64 = gImage.split(',')[1];
     const mimeType = gImage.split(';')[0].replace('data:', '') || 'image/jpeg';
     await runAiAnalysis(base64, mimeType);
   };
 
+  const handleUploadWornPhotoForExistingGarment = async (garment, e) => {
+    const file = e.target.files?.[0];
+    if (!file || !garment) return;
+
+    setIsAnalyzingExistingFit(true);
+    try {
+      showToast('info', 'Analizando Prenda Puesta', `Evaluando cómo te queda "${garment.name}" según tu tipo de cuerpo...`);
+      const { dataUrl, base64, mimeType } = await compressImage(file);
+      let fitFeedback = null;
+
+      try {
+        const aiResult = await analyzeClothingImage(base64, mimeType, geminiApiKey, { bodyTypeProfile });
+        fitFeedback = aiResult.fitFeedback;
+      } catch (aiErr) {
+        console.warn('Using fallback fit critique for existing garment:', aiErr.message);
+        fitFeedback = generateFallbackClothingFitFeedback({
+          name: garment.name,
+          category: garment.category,
+          color: garment.color,
+          tags: garment.tags,
+          isWornOnBody: true,
+          bodyTypeProfile
+        });
+      }
+
+      setWardrobe(prev => (Array.isArray(prev) ? prev : []).map(item => {
+        if (item && item.id === garment.id) {
+          return {
+            ...item,
+            image: dataUrl,
+            fitFeedback
+          };
+        }
+        return item;
+      }));
+
+      setActiveFitModalGarmentId(garment.id);
+      showToast('success', '🪞 Retroalimentación Lista', `${fitFeedback?.verdictTitle || 'Evaluación completada'} (${fitFeedback?.overallFitScore || 8.5}/10).`);
+    } catch (err) {
+      console.error('Error evaluating worn photo:', err);
+      showToast('error', 'Error al Evaluar Foto', err.message);
+    } finally {
+      setIsAnalyzingExistingFit(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleUpdateExistingGarmentVerdict = (garmentId, newVerdict) => {
+    const titles = {
+      keep: 'Conservar: Favorece tu silueta',
+      tailor_or_style: 'Conservar si la estilizas / ajustas',
+      donate_or_discard: 'Candidata a depurar (donar o tirar)'
+    };
+    setWardrobe(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === garmentId) {
+        const baseFeedback = item.fitFeedback || generateFallbackClothingFitFeedback({
+          name: item.name,
+          category: item.category,
+          color: item.color,
+          tags: item.tags,
+          isWornOnBody: Boolean(item.image),
+          bodyTypeProfile
+        });
+        return {
+          ...item,
+          fitFeedback: {
+            ...baseFeedback,
+            keepVerdict: newVerdict,
+            verdictTitle: titles[newVerdict] || baseFeedback.verdictTitle
+          }
+        };
+      }
+      return item;
+    }));
+    showToast('info', 'Veredicto Actualizado', `Se marcó como: "${titles[newVerdict]}".`);
+  };
+
   const executeSaveGarment = (trimmedName) => {
     const tagsArr = gTags.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    const finalFitFeedback = gFitFeedback || generateFallbackClothingFitFeedback({
+      name: trimmedName,
+      category: gCategory,
+      color: gColor || 'Varios',
+      tags: tagsArr,
+      isWornOnBody: Boolean(gImage),
+      bodyTypeProfile
+    });
+
     const newGarment = {
       id: Date.now().toString(),
       name: trimmedName,
@@ -219,7 +361,8 @@ export default function WardrobeModule({
       isClean: true,
       color: gColor || 'Varios',
       tags: tagsArr,
-      image: gImage || null
+      image: gImage || null,
+      fitFeedback: finalFitFeedback
     };
 
     setWardrobe([...wardrobe, newGarment]);
@@ -227,9 +370,10 @@ export default function WardrobeModule({
     setGColor('');
     setGTags('');
     setGImage('');
+    setGFitFeedback(null);
     setIsAddingGarment(false);
     setSimilarPrompt(null);
-    showToast('success', 'Prenda Registrada', `Se añadió "${trimmedName}" a tu Armario.`);
+    showToast('success', 'Prenda Registrada', `Se añadió "${trimmedName}" con su diagnóstico de silueta.`);
   };
 
   const handleAddGarment = (e) => {
@@ -556,6 +700,31 @@ export default function WardrobeModule({
               </button>
             </div>
 
+            {/* Body Type & Silhouette Profile Selector */}
+            <div className="bg-[#171a24] border border-[#e0a96d]/20 p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-base">🪞</span>
+                <div>
+                  <span className="text-xs font-bold text-slate-100 font-outfit block">
+                    Mi Tipo de Cuerpo & Objetivo de Silueta (para evaluar prendas puestas)
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Al subir una foto con la prenda puesta, tu asesora evaluará cómo te queda, si favorece tu silueta y si conservarla o tirarla.
+                  </span>
+                </div>
+              </div>
+
+              <select
+                value={bodyTypeProfile}
+                onChange={(e) => setBodyTypeProfile(e.target.value)}
+                className="bg-[#0b0c10] border border-[#e0a96d]/30 rounded-lg py-1.5 px-3 text-slate-200 text-xs font-semibold focus:outline-none cursor-pointer shrink-0 max-w-full sm:max-w-xs"
+              >
+                {bodyTypeOptions.map(opt => (
+                  <option key={opt.id} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Category selection row */}
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
               <button
@@ -675,16 +844,16 @@ export default function WardrobeModule({
                           <Camera className="w-6 h-6" />
                         </div>
                         <div className="text-center sm:text-left">
-                          <div className="flex items-center gap-2 justify-center sm:justify-start">
+                          <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
                             <span className="text-xs font-bold text-slate-100">
-                              Subir foto o Tomar con la cámara
+                              Subir foto con la prenda puesta (o sola)
                             </span>
                             <span className="bg-[#e0a96d]/10 text-[#e0a96d] text-[10px] px-2 py-0.5 rounded-full font-bold border border-[#e0a96d]/20 flex items-center gap-1">
-                              <Sparkles className="w-3 h-3" /> Autollenado con IA
+                              <Sparkles className="w-3 h-3" /> Retro de Silueta & Autollenado IA
                             </span>
                           </div>
                           <span className="block text-[11px] text-slate-400 mt-1">
-                            Sube una foto de tu ropa y Gemini autocompletará el nombre, categoría, color y etiquetas.
+                            Sube una foto frente al espejo con la prenda puesta para recibir retro de cómo se te ve, si queda con tu tipo de cuerpo y si deberías conservarla o tirarla.
                           </span>
                         </div>
                         <input
@@ -773,18 +942,105 @@ export default function WardrobeModule({
                 <div className="flex gap-2 items-end justify-end md:col-span-1">
                   <button
                     type="button"
+                    onClick={handleReanalyze}
+                    disabled={isAnalyzing}
+                    className="w-full bg-[#0b0c10] hover:bg-[#e0a96d]/10 border border-[#e0a96d]/30 text-[#e0a96d] text-xs font-bold py-2 px-3 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+                    title="Generar o actualizar diagnóstico de cómo te queda y si conservarla o tirarla"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Evaluar Silueta</span>
+                  </button>
+                </div>
+
+                {/* Personal Stylist Fit & Body-Type Feedback Card inside Add Form */}
+                {gFitFeedback && (
+                  <div className="md:col-span-4 bg-[#0b0c10] border border-[#e0a96d]/35 rounded-xl p-4 space-y-3 animate-fade-in">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🪞</span>
+                        <div>
+                          <span className="text-xs font-extrabold text-[#e0a96d] font-outfit block">
+                            Retroalimentación de Imagen: ¿Cómo se te ve y deberías conservarla o tirarla?
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            {gFitFeedback.isWornOnBody ? '✨ Prenda puesta detectada en foto' : '👚 Evaluación de corte y silueta'} • Score: <strong className="text-slate-200">{gFitFeedback.overallFitScore}/10</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {[
+                          { id: 'keep', label: '✅ Conservar', style: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
+                          { id: 'tailor_or_style', label: '✂️ Ajustar / Estilizar', style: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
+                          { id: 'donate_or_discard', label: '🗑️ Tirar / Donar', style: 'bg-rose-500/15 text-rose-300 border-rose-500/30' }
+                        ].map(v => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => setGFitFeedback({ ...gFitFeedback, keepVerdict: v.id })}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-all ${
+                              gFitFeedback.keepVerdict === v.id
+                                ? `${v.style} ring-1 ring-[#e0a96d]`
+                                : 'bg-[#171a24] text-slate-400 border-slate-800 hover:border-slate-700'
+                            }`}
+                          >
+                            {v.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                      <div className="bg-[#171a24] p-3 rounded-xl border border-slate-800 space-y-1">
+                        <span className="text-[10px] font-bold text-[#e0a96d] uppercase tracking-wider block">
+                          👗 ¿Cómo se te ve puesta?
+                        </span>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">{gFitFeedback.howItLooks}</p>
+                      </div>
+
+                      <div className="bg-[#171a24] p-3 rounded-xl border border-slate-800 space-y-1">
+                        <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider block">
+                          ⏳ ¿Queda con tu tipo de cuerpo?
+                        </span>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">{gFitFeedback.bodyTypeMatch}</p>
+                      </div>
+
+                      <div className="bg-[#171a24] p-3 rounded-xl border border-slate-800 space-y-1">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider block ${
+                          gFitFeedback.keepVerdict === 'donate_or_discard' ? 'text-rose-400' :
+                          gFitFeedback.keepVerdict === 'tailor_or_style' ? 'text-amber-400' : 'text-emerald-400'
+                        }`}>
+                          ⚖️ Veredicto: ¿Conservar o Tirar?
+                        </span>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">{gFitFeedback.keepOrDiscardReason}</p>
+                      </div>
+                    </div>
+
+                    {gFitFeedback.stylingImprovements?.length > 0 && (
+                      <div className="bg-[#171a24]/80 px-3 py-2 rounded-lg border border-slate-800 text-[11px] text-slate-300">
+                        <strong className="text-[#e0a96d]">💡 Tips para que te favorezca al máximo: </strong>
+                        <span>{gFitFeedback.stylingImprovements.join(' • ')}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2 items-end justify-end md:col-span-4 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
                     onClick={() => {
                       setIsAddingGarment(false);
                       setGImage('');
+                      setGFitFeedback(null);
                     }}
                     className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors"
                   >
-                    Cancelar
+                    {gFitFeedback?.keepVerdict === 'donate_or_discard' ? '🗑️ Descartar / No guardar en mi armario' : 'Cancelar'}
                   </button>
                   <button
                     type="submit"
                     disabled={isAnalyzing}
-                    className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors flex items-center gap-1.5"
+                    className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-lg cursor-pointer transition-colors flex items-center gap-1.5"
                   >
                     {isAnalyzing ? (
                       <>
@@ -792,7 +1048,7 @@ export default function WardrobeModule({
                         <span>Analizando...</span>
                       </>
                     ) : (
-                      <span>Guardar</span>
+                      <span>Guardar en mi Armario</span>
                     )}
                   </button>
                 </div>
@@ -807,60 +1063,121 @@ export default function WardrobeModule({
                   <p className="text-slate-400 text-sm">No hay prendas registradas en esta sección.</p>
                 </div>
               ) : (
-                filteredGarments.map(item => (
-                  <div key={item.id} className="bg-[#171a24] border border-[#e0a96d]/15 p-4 rounded-xl flex flex-col justify-between shadow-md group">
-                    <div>
-                      {item.image && (
-                        <div className="w-full h-44 rounded-lg overflow-hidden mb-3 bg-[#0b0c10] relative border border-[#e0a96d]/10">
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            loading="lazy"
-                          />
-                        </div>
-                      )}
+                filteredGarments.map(item => {
+                  const fit = item.fitFeedback || generateFallbackClothingFitFeedback({
+                    name: item.name,
+                    category: item.category,
+                    color: item.color,
+                    tags: item.tags,
+                    isWornOnBody: Boolean(item.image),
+                    bodyTypeProfile
+                  });
 
-                      <div className="flex justify-between items-start gap-2">
-                        <span className="text-[9px] uppercase font-bold text-slate-400 bg-[#0b0c10] px-2 py-0.5 rounded">
-                          {categories[item.category]?.split(' / ')[0]}
-                        </span>
-                        
+                  const verdictBadge = fit.keepVerdict === 'donate_or_discard'
+                    ? { label: `🗑️ Depurar / Tirar • ${fit.overallFitScore}/10`, cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30' }
+                    : fit.keepVerdict === 'tailor_or_style'
+                    ? { label: `✂️ Ajustar / Estilizar • ${fit.overallFitScore}/10`, cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30' }
+                    : { label: `✅ Te favorece • ${fit.overallFitScore}/10`, cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' };
+
+                  return (
+                    <div key={item.id} className="bg-[#171a24] border border-[#e0a96d]/15 p-4 rounded-xl flex flex-col justify-between shadow-md group">
+                      <div>
+                        {item.image && (
+                          <div
+                            onClick={() => setActiveFitModalGarmentId(item.id)}
+                            className="w-full h-44 rounded-lg overflow-hidden mb-3 bg-[#0b0c10] relative border border-[#e0a96d]/10 cursor-pointer"
+                            title="Ver diagnóstico de cómo te queda"
+                          >
+                            <img
+                              src={item.image}
+                              alt={item.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                            />
+                            {fit.isWornOnBody && (
+                              <span className="absolute bottom-2 left-2 bg-black/75 backdrop-blur-sm text-[#e0a96d] border border-[#e0a96d]/30 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                                🪞 Foto puesta
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="text-[9px] uppercase font-bold text-slate-400 bg-[#0b0c10] px-2 py-0.5 rounded">
+                            {categories[item.category]?.split(' / ')[0]}
+                          </span>
+                          
+                          <button
+                            onClick={() => handleToggleClean(item.id)}
+                            className={`text-[9px] font-bold py-1 px-2.5 rounded-full border transition-all cursor-pointer ${
+                              item.isClean 
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' 
+                                : 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20'
+                            }`}
+                          >
+                            {item.isClean ? '✓ Limpia' : '🧼 Sucia / Tintor'}
+                          </button>
+                        </div>
+
+                        <h5 className="font-bold text-sm text-slate-100 font-outfit mt-2">{item.name}</h5>
+                        <span className="text-xs text-slate-400 block mt-0.5">Color: {item.color}</span>
+
+                        {/* Stylist Verdict Pill & Snippet */}
+                        <div className="mt-2.5 space-y-1.5">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${verdictBadge.cls}`}>
+                              {verdictBadge.label}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 line-clamp-2 bg-[#0b0c10]/80 p-2 rounded-lg border border-slate-800/80 leading-relaxed">
+                            🪞 {fit.howItLooks}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-1">
+                        {(Array.isArray(item.tags) ? item.tags : []).map((t, idx) => (
+                          <span key={idx} className="text-[9px] text-[#e0a96d] bg-[#e0a96d]/5 px-2 py-0.5 rounded-full border border-[#e0a96d]/10">
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => setActiveFitModalGarmentId(item.id)}
+                            className="bg-[#0b0c10] hover:bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/30 text-[10px] font-bold py-1 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <span>🪞 Ver retro</span>
+                          </button>
+
+                          <label className="bg-[#0b0c10] hover:bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-semibold py-1 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors">
+                            <Camera className="w-3 h-3 text-[#e0a96d]" />
+                            <span>{item.image ? 'Cambiar foto puesta' : 'Subir foto puesta'}</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              onChange={(e) => handleUploadWornPhotoForExistingGarment(item, e)}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+
                         <button
-                          onClick={() => handleToggleClean(item.id)}
-                          className={`text-[9px] font-bold py-1 px-2.5 rounded-full border transition-all cursor-pointer ${
-                            item.isClean 
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' 
-                              : 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20'
-                          }`}
+                          onClick={() => handleDeleteGarment(item.id, item.name)}
+                          className="text-slate-500 hover:text-rose-400 p-1.5 rounded hover:bg-rose-500/10 transition-all cursor-pointer shrink-0"
+                          title="Tirar / Eliminar prenda del armario"
+                          aria-label={`Eliminar ${item.name}`}
                         >
-                          {item.isClean ? '✓ Limpia' : '🧼 Sucia / Tintor'}
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <h5 className="font-bold text-sm text-slate-100 font-outfit mt-2">{item.name}</h5>
-                      <span className="text-xs text-slate-400 block mt-1">Color: {item.color}</span>
                     </div>
-
-                    <div className="mt-4 flex flex-wrap gap-1">
-                      {(Array.isArray(item.tags) ? item.tags : []).map((t, idx) => (
-                        <span key={idx} className="text-[9px] text-[#e0a96d] bg-[#e0a96d]/5 px-2 py-0.5 rounded-full border border-[#e0a96d]/10">
-                          #{t}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="mt-4 pt-2 border-t border-slate-800 flex justify-end">
-                      <button
-                        onClick={() => handleDeleteGarment(item.id, item.name)}
-                        className="text-slate-500 hover:text-rose-400 p-1.5 rounded hover:bg-rose-500/10 transition-all cursor-pointer"
-                        title="Eliminar prenda"
-                        aria-label={`Eliminar ${item.name}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -1526,6 +1843,181 @@ export default function WardrobeModule({
         </div>,
         document.body
       )}
+
+      {/* Garment Fit & Body-Type Critique Modal */}
+      {activeFitModalGarmentId && (() => {
+        const garment = safeWardrobe.find(g => g && g.id === activeFitModalGarmentId);
+        if (!garment) return null;
+        const fit = garment.fitFeedback || generateFallbackClothingFitFeedback({
+          name: garment.name,
+          category: garment.category,
+          color: garment.color,
+          tags: garment.tags,
+          isWornOnBody: Boolean(garment.image),
+          bodyTypeProfile
+        });
+
+        return createPortal(
+          <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            <div className="bg-[#171a24] border border-[#e0a96d]/35 rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl animate-modal-pop my-auto max-h-[90vh] flex flex-col">
+              <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-3 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl">🪞</span>
+                  <div>
+                    <h4 className="text-base font-extrabold text-slate-100 font-outfit">
+                      Diagnóstico de Prenda: {garment.name}
+                    </h4>
+                    <span className="text-xs text-slate-400">
+                      {fit.isWornOnBody ? 'Evaluación con prenda puesta' : 'Evaluación de silueta y corte'} • Calificación: <strong className="text-[#e0a96d]">{fit.overallFitScore}/10</strong>
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveFitModalGarmentId(null)}
+                  className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-slate-800 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4 overflow-y-auto pr-1 flex-1 py-4">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center bg-[#0b0c10] p-3.5 rounded-xl border border-slate-800">
+                  <div className="sm:col-span-4">
+                    {garment.image ? (
+                      <div className="w-full h-40 rounded-xl overflow-hidden border border-[#e0a96d]/30 bg-slate-900">
+                        <img src={garment.image} alt={garment.name} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-full h-36 rounded-xl border border-dashed border-[#e0a96d]/30 bg-[#171a24] flex flex-col items-center justify-center p-3 text-center">
+                        <Shirt className="w-8 h-8 text-slate-500 mb-1" />
+                        <span className="text-[10px] text-slate-400">Sin foto puesta aún</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="sm:col-span-8 space-y-2.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {[
+                        { id: 'keep', label: '✅ Conservar', style: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
+                        { id: 'tailor_or_style', label: '✂️ Ajustar / Estilizar', style: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
+                        { id: 'donate_or_discard', label: '🗑️ Tirar / Donar', style: 'bg-rose-500/15 text-rose-300 border-rose-500/30' }
+                      ].map(v => (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => handleUpdateExistingGarmentVerdict(garment.id, v.id)}
+                          className={`px-3 py-1 rounded-full text-xs font-bold border cursor-pointer transition-all ${
+                            fit.keepVerdict === v.id
+                              ? `${v.style} ring-1 ring-[#e0a96d]`
+                              : 'bg-[#171a24] text-slate-400 border-slate-800 hover:border-slate-700'
+                          }`}
+                        >
+                          {v.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Sube una foto con esta prenda puesta frente al espejo para que Gemini analice la caída real sobre tus hombros, cintura y cadera.
+                    </p>
+
+                    <label className="inline-flex items-center gap-2 btn-rose-gold text-xs font-bold py-2 px-4 rounded-xl cursor-pointer shadow">
+                      {isAnalyzingExistingFit ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0b0c10]" />
+                          <span>Analizando cómo se te ve...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="w-3.5 h-3.5 text-[#0b0c10]" />
+                          <span>{garment.image ? 'Subir nueva foto puesta y re-evaluar' : 'Subir foto con la prenda puesta'}</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        disabled={isAnalyzingExistingFit}
+                        onChange={(e) => handleUploadWornPhotoForExistingGarment(garment, e)}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Detailed Stylist Sections */}
+                <div className="space-y-3">
+                  <div className="bg-[#0b0c10] p-3.5 rounded-xl border border-slate-800 space-y-1">
+                    <span className="text-xs font-bold text-[#e0a96d] flex items-center gap-1.5">
+                      <span>👗</span>
+                      <span>¿Cómo se te ve? (Caída, ajuste y proporción)</span>
+                    </span>
+                    <p className="text-xs text-slate-300 leading-relaxed">{fit.howItLooks}</p>
+                  </div>
+
+                  <div className="bg-[#0b0c10] p-3.5 rounded-xl border border-slate-800 space-y-1">
+                    <span className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                      <span>⏳</span>
+                      <span>¿Queda con tu tipo de cuerpo?</span>
+                    </span>
+                    <p className="text-xs text-slate-300 leading-relaxed">{fit.bodyTypeMatch}</p>
+                  </div>
+
+                  <div className="bg-[#0b0c10] p-3.5 rounded-xl border border-slate-800 space-y-1">
+                    <span className={`text-xs font-bold flex items-center gap-1.5 ${
+                      fit.keepVerdict === 'donate_or_discard' ? 'text-rose-400' :
+                      fit.keepVerdict === 'tailor_or_style' ? 'text-amber-400' : 'text-emerald-400'
+                    }`}>
+                      <span>⚖️</span>
+                      <span>Veredicto: ¿Deberías conservarla o tirarla?</span>
+                    </span>
+                    <p className="text-xs text-slate-300 leading-relaxed">{fit.keepOrDiscardReason}</p>
+                  </div>
+
+                  {fit.stylingImprovements?.length > 0 && (
+                    <div className="bg-[#0b0c10] p-3.5 rounded-xl border border-[#e0a96d]/20 space-y-1.5">
+                      <span className="text-xs font-bold text-[#e0a96d] block">
+                        💡 Cómo estilizarla para que luzca mejor:
+                      </span>
+                      <ul className="list-disc list-inside text-xs text-slate-300 space-y-1">
+                        {fit.stylingImprovements.map((tip, i) => (
+                          <li key={i}>{tip}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const idToDelete = garment.id;
+                    const nameToDelete = garment.name;
+                    setActiveFitModalGarmentId(null);
+                    handleDeleteGarment(idToDelete, nameToDelete);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Tirar / Eliminar del Armario</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveFitModalGarmentId(null)}
+                  className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-xl cursor-pointer"
+                >
+                  Listo
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        );
+      })()}
 
       <SimilarityDialogModal
         isOpen={Boolean(similarPrompt)}

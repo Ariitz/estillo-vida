@@ -40,7 +40,8 @@ import {
   compressImage, 
   analyzeMealImage, 
   analyzeMealText,
-  generateAdaptiveCoachingAdvice 
+  generateAdaptiveCoachingAdvice,
+  calculateMealHydrationAndCompensation
 } from '../utils/geminiService';
 import { 
   safeNumber, 
@@ -98,10 +99,73 @@ export default function NutritionModule({
     localStorage.setItem(`aura-extra-burned-${selectedDate}`, extraBurnedKcal.toString());
   }, [extraBurnedKcal, selectedDate]);
 
+  // Meal Excess & Hydration Compensation State
+  const [expandedCompMealId, setExpandedCompMealId] = useState(null);
+  const [compModeByMeal, setCompModeByMeal] = useState({}); // 'excess' | 'full'
+  const [customSurplusKcal, setCustomSurplusKcal] = useState(250);
+  const [selectedCompMealId, setSelectedCompMealId] = useState('auto');
+
+  const getMealIdealBudget = (mealType, isMultiMealBatch = false) => {
+    const target = profile.dailyCalorieTarget || 1500;
+    if (isMultiMealBatch || mealType === 'full_day') return target; // Full day budget when logging multiple meals at once
+    if (mealType === 'breakfast') return Math.round(target * 0.25); // ~375 kcal
+    if (mealType === 'lunch') return Math.round(target * 0.35);     // ~525 kcal
+    if (mealType === 'dinner') return Math.round(target * 0.25);    // ~375 kcal
+    return Math.round(target * 0.15);                               // ~225 kcal (snack)
+  };
+
+  const handleToggleMultiMealBatch = (mealId) => {
+    setNutritionMeals(prev => (Array.isArray(prev) ? prev : []).map(m => {
+      if (m && m.id === mealId) {
+        const nextBatch = !m.isMultiMealBatch;
+        showToast(
+          'info',
+          nextBatch ? '📦 Marcado como Varias Comidas' : '🍽️ Marcado como 1 Sola Comida',
+          nextBatch
+            ? `"${m.name}" se evaluará como registro acumulado del día y no como una sola sentada.`
+            : `"${m.name}" se evaluará como un plato individual.`
+        );
+        return sanitizeNutritionMeal({
+          ...m,
+          isMultiMealBatch: nextBatch
+        });
+      }
+      return m;
+    }));
+  };
+
+  const handleAddWaterMl = (mlToAdd, label = '') => {
+    if (typeof setWaterIntake !== 'function') return;
+    const amount = Math.max(50, Math.round(mlToAdd));
+    setWaterIntake(prev => Math.max(0, safeNumber(prev, 0) + amount));
+    showToast('success', '💧 Agua Registrada', `Se sumaron +${amount} ml a tu hidratación de hoy${label ? ` (${label})` : ''}.`);
+  };
+
+  const handleApplyExerciseCompensation = (exercise, extraWaterMl = 0) => {
+    const burned = Math.max(20, Math.round(exercise.kcalBurned || 150));
+    setExtraBurnedKcal(prev => Math.max(0, safeNumber(prev, 0) + burned));
+    if (extraWaterMl > 0 && typeof setWaterIntake === 'function') {
+      setWaterIntake(prev => Math.max(0, safeNumber(prev, 0) + extraWaterMl));
+      showToast(
+        'success',
+        '⚡ Compensación Aplicada',
+        `+${burned} kcal quemadas (${exercise.minutes} min de ${exercise.name}) y +${extraWaterMl} ml de agua registrados.`
+      );
+    } else {
+      showToast(
+        'success',
+        '⚡ Ejercicio de Compensación Registrado',
+        `Se sumaron +${burned} kcal a tu gasto de hoy (${exercise.minutes} min de ${exercise.name}).`
+      );
+    }
+  };
+
   // Form State for Manual Add
   const [manualForm, setManualForm] = useState({
     name: '',
     mealType: 'lunch',
+    isMultiMealBatch: false,
+    detectedMeals: [],
     calories: '',
     protein: '',
     carbs: '',
@@ -188,6 +252,130 @@ export default function NutritionModule({
     };
   }, [weight, height, profile.activityLevel, profile.dailyCalorieTarget, schedule, extraBurnedKcal, dailyTotals.calories]);
 
+  // Dynamic Daily Water Goal (~35ml per kg + extra for macros/calories)
+  const dailyWaterRecommendation = useMemo(() => {
+    const w = safeNumber(weight, 65);
+    const baseByWeight = Math.round((w * 32) / 50) * 50; // e.g., 65kg -> 2100ml
+    const extraFromMeals = dayMeals.reduce((acc, m) => {
+      const mealBudget = getMealIdealBudget(m.mealType, m.isMultiMealBatch);
+      const excess = Math.max(0, safeNumber(m.calories, 0) - mealBudget);
+      return acc + Math.round(excess * 0.6) + Math.round(safeNumber(m.protein, 0) * 1.5);
+    }, 0);
+    const totalGoalMl = Math.min(3500, Math.max(2000, baseByWeight + Math.round(extraFromMeals / 50) * 50));
+    const remainingMl = Math.max(0, totalGoalMl - safeNumber(waterIntake, 0));
+    const remainingGlasses = Math.ceil(remainingMl / 250);
+    const progressPct = Math.min(100, Math.round((safeNumber(waterIntake, 0) / totalGoalMl) * 100));
+    return {
+      totalGoalMl,
+      remainingMl,
+      remainingGlasses,
+      progressPct
+    };
+  }, [weight, dayMeals, waterIntake, profile.dailyCalorieTarget]);
+
+  // Active Excess / Compensation Calculator for the Dashboard
+  const activeDashboardCompensation = useMemo(() => {
+    const w = safeNumber(weight, 65);
+    // Find if a specific meal is selected or auto-detect daily surplus / heaviest meal excess
+    if (selectedCompMealId !== 'auto' && selectedCompMealId !== 'custom') {
+      const chosen = dayMeals.find(m => m.id === selectedCompMealId);
+      if (chosen) {
+        const budget = getMealIdealBudget(chosen.mealType, chosen.isMultiMealBatch);
+        const excess = Math.max(100, safeNumber(chosen.calories, 0) - budget);
+        return {
+          modeLabel: chosen.isMultiMealBatch
+            ? `Registro acumulado "${chosen.name}" (${chosen.calories} kcal vs ${budget} kcal meta diaria)`
+            : `Exceso en "${chosen.name}" (${chosen.calories} kcal vs ${budget} kcal meta)`,
+          kcalToCompensate: excess,
+          ...calculateMealHydrationAndCompensation({
+            calories: chosen.calories,
+            carbs: chosen.carbs,
+            protein: chosen.protein,
+            fat: chosen.fat,
+            targetMealKcal: budget,
+            weightKg: w,
+            surplusKcal: excess
+          })
+        };
+      }
+    }
+
+    if (selectedCompMealId === 'custom') {
+      const kcal = Math.max(50, safeNumber(customSurplusKcal, 250));
+      return {
+        modeLabel: `Compensación personalizada (${kcal} kcal)`,
+        kcalToCompensate: kcal,
+        ...calculateMealHydrationAndCompensation({
+          calories: kcal,
+          targetMealKcal: 0,
+          weightKg: w,
+          surplusKcal: kcal
+        })
+      };
+    }
+
+    // Auto mode: 1) Check if daily total exceeds dailyCalorieTarget
+    const dailySurplus = dailyTotals.calories - profile.dailyCalorieTarget;
+    if (dailySurplus > 0) {
+      return {
+        modeLabel: `Superávit sobre tu meta diaria (+${dailySurplus} kcal)`,
+        kcalToCompensate: dailySurplus,
+        ...calculateMealHydrationAndCompensation({
+          calories: dailyTotals.calories,
+          carbs: dailyTotals.carbs,
+          protein: dailyTotals.protein,
+          fat: dailyTotals.fat,
+          targetMealKcal: profile.dailyCalorieTarget,
+          weightKg: w,
+          surplusKcal: dailySurplus
+        })
+      };
+    }
+
+    // 2) Otherwise check if any SINGLE meal today (excluding batch/full_day entries) exceeded its ideal meal-type budget
+    let maxExcessMeal = null;
+    let maxExcessVal = 0;
+    dayMeals.forEach(m => {
+      if (m.isMultiMealBatch || m.mealType === 'full_day') return; // Do not treat multi-meal batches as single-sitting excess
+      const budget = getMealIdealBudget(m.mealType, false);
+      const ex = safeNumber(m.calories, 0) - budget;
+      if (ex > maxExcessVal) {
+        maxExcessVal = ex;
+        maxExcessMeal = m;
+      }
+    });
+
+    if (maxExcessMeal && maxExcessVal >= 80) {
+      const budget = getMealIdealBudget(maxExcessMeal.mealType, false);
+      return {
+        modeLabel: `Plato individual más abundante: "${maxExcessMeal.name}" (+${maxExcessVal} kcal sobre ${budget} kcal). Si fueron varias comidas juntas, márcalo como "📦 Varias comidas".`,
+        kcalToCompensate: maxExcessVal,
+        ...calculateMealHydrationAndCompensation({
+          calories: maxExcessMeal.calories,
+          carbs: maxExcessMeal.carbs,
+          protein: maxExcessMeal.protein,
+          fat: maxExcessMeal.fat,
+          targetMealKcal: budget,
+          weightKg: w,
+          surplusKcal: maxExcessVal
+        })
+      };
+    }
+
+    // 3) Default fallback using customSurplusKcal so user can always simulate
+    const fallbackKcal = Math.max(100, safeNumber(customSurplusKcal, 250));
+    return {
+      modeLabel: `Vas dentro de tu meta diaria (${dailyTotals.calories} / ${profile.dailyCalorieTarget} kcal) • Simulador por si quieres compensar ${fallbackKcal} kcal`,
+      kcalToCompensate: fallbackKcal,
+      ...calculateMealHydrationAndCompensation({
+        calories: fallbackKcal,
+        targetMealKcal: 0,
+        weightKg: w,
+        surplusKcal: fallbackKcal
+      })
+    };
+  }, [weight, selectedCompMealId, customSurplusKcal, dayMeals, dailyTotals, profile.dailyCalorieTarget]);
+
   // Live Adaptive Coaching Tips
   const adaptiveTips = useMemo(() => {
     const latest = dayMeals[dayMeals.length - 1];
@@ -196,10 +384,11 @@ export default function NutritionModule({
       todayCalories: dailyTotals.calories,
       dailyCalorieTarget: profile.dailyCalorieTarget,
       waterIntake: waterIntake,
-      waterGoal: 2000,
-      tdee: metabolicStats.tdee
+      waterGoal: dailyWaterRecommendation.totalGoalMl,
+      tdee: metabolicStats.tdee,
+      weightKg: safeNumber(weight, 65)
     });
-  }, [dayMeals, dailyTotals.calories, profile.dailyCalorieTarget, waterIntake, metabolicStats.tdee]);
+  }, [dayMeals, dailyTotals.calories, profile.dailyCalorieTarget, waterIntake, dailyWaterRecommendation.totalGoalMl, metabolicStats.tdee, weight]);
 
   // Handle Photo Upload with Multimodal Gemini Vision
   const handlePhotoUpload = async (e) => {
@@ -224,6 +413,8 @@ export default function NutritionModule({
         fiber: parsed.macros?.fiber || 5,
         satietyScore: parsed.satietyScore || 8.0,
         glycemicImpact: parsed.glycemicImpact || 'low',
+        recommendedWaterMl: parsed.recommendedWaterMl || 400,
+        compensationExercises: parsed.compensationExercises || [],
         weightLossVerdict: parsed.weightLossVerdict || 'Muy favorable para déficit calórico.',
         weightLossTips: parsed.weightLossTips || [],
         ingredients: parsed.ingredients || [],
@@ -246,20 +437,37 @@ export default function NutritionModule({
   const handleSaveScannedMeal = () => {
     if (!scannedMeal) return;
 
+    const scaledCalories = Math.round(scannedMeal.calories * portionScale);
+    const scaledProtein = Math.round(scannedMeal.protein * portionScale);
+    const scaledCarbs = Math.round(scannedMeal.carbs * portionScale);
+    const scaledFat = Math.round(scannedMeal.fat * portionScale);
+    const isBatch = Boolean(scannedMeal.isMultiMealBatch || scannedMeal.mealType === 'full_day');
+    const comp = calculateMealHydrationAndCompensation({
+      calories: scaledCalories,
+      carbs: scaledCarbs,
+      protein: scaledProtein,
+      fat: scaledFat,
+      targetMealKcal: getMealIdealBudget(scannedMeal.mealType || 'lunch', isBatch),
+      weightKg: safeNumber(weight, 65)
+    });
+
     const scaled = {
       id: 'meal-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       date: selectedDate,
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       name: scannedMeal.name || 'Platillo Escaneado',
       mealType: scannedMeal.mealType || 'lunch',
-      calories: Math.round(scannedMeal.calories * portionScale),
-      protein: Math.round(scannedMeal.protein * portionScale),
-      carbs: Math.round(scannedMeal.carbs * portionScale),
-      fat: Math.round(scannedMeal.fat * portionScale),
+      isMultiMealBatch: isBatch,
+      calories: scaledCalories,
+      protein: scaledProtein,
+      carbs: scaledCarbs,
+      fat: scaledFat,
       fiber: Math.round(scannedMeal.fiber * portionScale),
       image: scannedImage || '',
       satietyScore: scannedMeal.satietyScore || 8,
       glycemicImpact: scannedMeal.glycemicImpact || 'low',
+      recommendedWaterMl: comp.recommendedWaterMl,
+      compensationExercises: comp.exercises,
       weightLossVerdict: scannedMeal.weightLossVerdict || '',
       weightLossTips: scannedMeal.weightLossTips || [],
       ingredients: (scannedMeal.ingredients || []).map(i => ({
@@ -286,7 +494,7 @@ export default function NutritionModule({
   const handleCalculateWithIA = async () => {
     const query = manualForm.name.trim();
     if (!query) {
-      showToast('warning', 'Ingresa un Alimento', 'Escribe el nombre o descripción del alimento (ej. "Capuccino Venti Starbucks con leche deslactosada") antes de calcular.');
+      showToast('warning', 'Ingresa un Alimento', 'Escribe el nombre o descripción del alimento (ej. "Capuccino Venti Starbucks con leche deslactosada" o todo lo que comiste en el día) antes de calcular.');
       return;
     }
 
@@ -295,11 +503,14 @@ export default function NutritionModule({
       showToast('info', 'Calculando con IA', `Estimando calorías y macros para "${query}"...`);
 
       const result = await analyzeMealText(query, geminiApiKey);
-      
+      const isBatch = Boolean(result.isMultiMealBatch || result.mealType === 'full_day' || (result.detectedMeals?.length >= 2));
+
       setManualForm(prev => ({
         ...prev,
         name: result.dishName || prev.name,
         mealType: result.mealType || prev.mealType,
+        isMultiMealBatch: isBatch || prev.isMultiMealBatch,
+        detectedMeals: Array.isArray(result.detectedMeals) ? result.detectedMeals : [],
         calories: result.calories !== undefined ? result.calories.toString() : prev.calories,
         protein: result.macros?.protein !== undefined ? result.macros.protein.toString() : prev.protein,
         carbs: result.macros?.carbs !== undefined ? result.macros.carbs.toString() : prev.carbs,
@@ -310,13 +521,79 @@ export default function NutritionModule({
         notes: result.weightLossTips?.[0] ? `${result.weightLossVerdict ? result.weightLossVerdict + ' ' : ''}${result.weightLossTips[0]}` : prev.notes
       }));
 
-      showToast('success', '¡Cálculo IA Completado!', `Se estimaron ${result.calories} kcal y macros para "${result.dishName}". Puedes modificarlos libremente.`);
+      showToast(
+        'success',
+        isBatch ? '📦 Varias Comidas Detectadas' : '¡Cálculo IA Completado!',
+        isBatch
+          ? `Se estimaron ${result.calories} kcal totales (${result.detectedMeals?.length || 'varios'} alimentos). Puedes separarlos por comida o guardarlos juntos.`
+          : `Se estimaron ${result.calories} kcal y macros para "${result.dishName}".`
+      );
     } catch (err) {
       console.error('Error calculating meal with IA:', err);
       showToast('warning', 'Estimación IA', err.message || 'No se pudo completar la estimación.');
     } finally {
       setIsCalculatingTextIA(false);
     }
+  };
+
+  // Save detected multiple meals as individual meal cards (Breakfast, Lunch, Dinner, Snack)
+  const handleSaveDetectedSeparateMeals = () => {
+    if (!Array.isArray(manualForm.detectedMeals) || manualForm.detectedMeals.length === 0) return;
+
+    const nowTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const createdMeals = manualForm.detectedMeals.map((dm, idx) => {
+      const mType = ['breakfast', 'lunch', 'dinner', 'snack'].includes(dm.mealType) ? dm.mealType : 'lunch';
+      const kcalVal = Math.max(0, parseInt(dm.calories, 10) || 300);
+      const protVal = Math.max(0, parseInt(dm.macros?.protein, 10) || 18);
+      const carbsVal = Math.max(0, parseInt(dm.macros?.carbs, 10) || 30);
+      const fatVal = Math.max(0, parseInt(dm.macros?.fat, 10) || 10);
+      const comp = calculateMealHydrationAndCompensation({
+        calories: kcalVal,
+        carbs: carbsVal,
+        protein: protVal,
+        fat: fatVal,
+        targetMealKcal: getMealIdealBudget(mType, false),
+        weightKg: safeNumber(weight, 65)
+      });
+
+      return sanitizeNutritionMeal({
+        id: `meal-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+        date: selectedDate,
+        time: nowTime,
+        name: dm.dishName || `Alimento ${idx + 1}`,
+        mealType: mType,
+        isMultiMealBatch: false,
+        calories: kcalVal,
+        protein: protVal,
+        carbs: carbsVal,
+        fat: fatVal,
+        fiber: Math.max(0, parseInt(dm.macros?.fiber, 10) || 3),
+        satietyScore: 7.5,
+        glycemicImpact: 'medium',
+        recommendedWaterMl: comp.recommendedWaterMl,
+        compensationExercises: comp.exercises,
+        weightLossVerdict: 'Desglosado de registro múltiple con IA.',
+        weightLossTips: [`Acompaña con ${comp.recommendedWaterMl} ml de agua.`]
+      });
+    }).filter(Boolean);
+
+    setNutritionMeals(prev => [...createdMeals, ...(Array.isArray(prev) ? prev : [])]);
+    showToast('success', '✨ Comidas Separadas Guardadas', `Se registraron ${createdMeals.length} alimentos en sus tiempos de comida.`);
+    setIsManualModalOpen(false);
+    setManualForm({
+      name: '',
+      mealType: 'lunch',
+      isMultiMealBatch: false,
+      detectedMeals: [],
+      calories: '',
+      protein: '',
+      carbs: '',
+      fat: '',
+      fiber: '',
+      notes: '',
+      satietyScore: 7,
+      glycemicImpact: 'medium'
+    });
   };
 
   // Calculate with IA for Edit Meal form
@@ -365,22 +642,43 @@ export default function NutritionModule({
       return;
     }
 
+    const kcalVal = Math.max(0, parseInt(manualForm.calories, 10) || 0);
+    const protVal = Math.max(0, parseInt(manualForm.protein, 10) || 0);
+    const carbsVal = Math.max(0, parseInt(manualForm.carbs, 10) || 0);
+    const fatVal = Math.max(0, parseInt(manualForm.fat, 10) || 0);
+    const isBatch = Boolean(manualForm.isMultiMealBatch || manualForm.mealType === 'full_day');
+    const comp = calculateMealHydrationAndCompensation({
+      calories: kcalVal,
+      carbs: carbsVal,
+      protein: protVal,
+      fat: fatVal,
+      targetMealKcal: getMealIdealBudget(manualForm.mealType || 'lunch', isBatch),
+      weightKg: safeNumber(weight, 65)
+    });
+
     const newMeal = {
       id: 'meal-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       date: selectedDate,
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       name: manualForm.name.trim(),
       mealType: manualForm.mealType || 'lunch',
-      calories: Math.max(0, parseInt(manualForm.calories, 10) || 0),
-      protein: Math.max(0, parseInt(manualForm.protein, 10) || 0),
-      carbs: Math.max(0, parseInt(manualForm.carbs, 10) || 0),
-      fat: Math.max(0, parseInt(manualForm.fat, 10) || 0),
+      isMultiMealBatch: isBatch,
+      calories: kcalVal,
+      protein: protVal,
+      carbs: carbsVal,
+      fat: fatVal,
       fiber: Math.max(0, parseInt(manualForm.fiber, 10) || 0),
       image: '',
       satietyScore: manualForm.satietyScore || 7,
       glycemicImpact: manualForm.glycemicImpact || 'medium',
-      weightLossVerdict: 'Registro manual.',
-      weightLossTips: ['Procura acompañar con agua e incluir vegetales verdes.'],
+      recommendedWaterMl: comp.recommendedWaterMl,
+      compensationExercises: comp.exercises,
+      weightLossVerdict: isBatch ? 'Registro acumulado de varias comidas.' : 'Registro manual.',
+      weightLossTips: [
+        isBatch
+          ? `Registro de varias comidas (${kcalVal} kcal). Toma ~${comp.recommendedWaterMl} ml de agua distribuida durante el día.`
+          : `Acompaña con ${comp.recommendedWaterMl} ml de agua (${comp.recommendedGlasses} vasos) e incluye vegetales verdes.`
+      ],
       ingredients: [],
       notes: manualForm.notes || '',
       portionMultiplier: 1
@@ -395,6 +693,8 @@ export default function NutritionModule({
     setManualForm({
       name: '',
       mealType: 'lunch',
+      isMultiMealBatch: false,
+      detectedMeals: [],
       calories: '',
       protein: '',
       carbs: '',
@@ -477,7 +777,8 @@ export default function NutritionModule({
     { id: 'breakfast', label: 'Desayuno', icon: <Coffee className="w-4 h-4 text-amber-400" />, bg: 'from-amber-500/10 to-transparent' },
     { id: 'lunch', label: 'Almuerzo / Comida', icon: <Sun className="w-4 h-4 text-emerald-400" />, bg: 'from-emerald-500/10 to-transparent' },
     { id: 'dinner', label: 'Cena', icon: <Moon className="w-4 h-4 text-indigo-400" />, bg: 'from-indigo-500/10 to-transparent' },
-    { id: 'snack', label: 'Snacks & Bebidas', icon: <Cookie className="w-4 h-4 text-rose-400" />, bg: 'from-rose-500/10 to-transparent' }
+    { id: 'snack', label: 'Snacks & Bebidas', icon: <Cookie className="w-4 h-4 text-rose-400" />, bg: 'from-rose-500/10 to-transparent' },
+    { id: 'full_day', label: 'Registro Acumulado / Varias Comidas (Subido de Golpe)', icon: <Calendar className="w-4 h-4 text-sky-400" />, bg: 'from-sky-500/10 to-transparent' }
   ];
 
   return (
@@ -725,8 +1026,154 @@ export default function NutritionModule({
       )}
 
       {/* ========================================== */}
-      {/* 3. SCANNER & QUICK ACTIONS */}
+      {/* 2.5. HYDRATION & EXCESS COMPENSATION HUB */}
       {/* ========================================== */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Hydration Tracker & Recommendation Card */}
+        <div className="lg:col-span-5 bg-[#171a24] border border-sky-500/25 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between space-y-3">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-xs font-extrabold text-sky-400 font-outfit flex items-center gap-1.5 uppercase tracking-wider">
+                <Droplet className="w-4 h-4 text-sky-400" />
+                <span>Sugerencia de Agua Hoy</span>
+              </span>
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                {waterIntake} / {dailyWaterRecommendation.totalGoalMl} ml
+              </span>
+            </div>
+
+            <div className="w-full bg-[#0b0c10] h-2.5 rounded-full overflow-hidden border border-slate-800 mb-2">
+              <div
+                className="bg-gradient-to-r from-sky-500 to-cyan-400 h-full rounded-full transition-all duration-500"
+                style={{ width: `${dailyWaterRecommendation.progressPct}%` }}
+              />
+            </div>
+
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              {dailyWaterRecommendation.remainingMl > 0 ? (
+                <>
+                  Te faltan <strong className="text-sky-300">{dailyWaterRecommendation.remainingMl} ml</strong> (~{dailyWaterRecommendation.remainingGlasses} vasos de 250 ml) para cubrir tu hidratación basal y metabolizar los alimentos registrados hoy.
+                </>
+              ) : (
+                <span className="text-emerald-400 font-semibold">
+                  ¡Meta de hidratación cubierta! Tu metabolismo y digestión están en nivel óptimo.
+                </span>
+              )}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80">
+            <button
+              type="button"
+              onClick={() => handleAddWaterMl(250, '1 vaso')}
+              className="flex-1 py-2 px-3 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+            >
+              <Droplet className="w-3.5 h-3.5" />
+              <span>+250 ml (1 vaso)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAddWaterMl(500, 'Termo / Botella')}
+              className="flex-1 py-2 px-3 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+500 ml</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Excess Compensation Calculator Card ("¿Me sobrepasé en un alimento?") */}
+        <div className="lg:col-span-7 bg-[#171a24] border border-[#e0a96d]/25 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+            <div>
+              <span className="text-xs font-extrabold text-[#e0a96d] font-outfit flex items-center gap-1.5 uppercase tracking-wider">
+                <Activity className="w-4 h-4 text-[#e0a96d]" />
+                <span>¿Me sobrepasé en un alimento? • Plan de Compensación</span>
+              </span>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {activeDashboardCompensation.modeLabel}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <select
+                value={selectedCompMealId}
+                onChange={(e) => setSelectedCompMealId(e.target.value)}
+                className="bg-[#0b0c10] border border-[#e0a96d]/30 rounded-lg py-1.5 px-2.5 text-slate-200 text-[11px] font-semibold focus:outline-none cursor-pointer"
+              >
+                <option value="auto">✨ Detectar exceso automático</option>
+                {dayMeals.map(m => (
+                  <option key={m.id} value={m.id}>
+                    🍽️ {m.name} ({m.calories} kcal)
+                  </option>
+                ))}
+                <option value="custom">⚙️ Elegir kcal a compensar...</option>
+              </select>
+
+              {(selectedCompMealId === 'custom' || (selectedCompMealId === 'auto' && dailyTotals.calories <= profile.dailyCalorieTarget)) && (
+                <div className="flex items-center gap-1 bg-[#0b0c10] border border-slate-700 rounded-lg px-2 py-1">
+                  <input
+                    type="number"
+                    min="50"
+                    max="2000"
+                    step="50"
+                    value={customSurplusKcal}
+                    onChange={(e) => {
+                      setSelectedCompMealId('custom');
+                      setCustomSurplusKcal(Math.max(50, parseInt(e.target.value, 10) || 100));
+                    }}
+                    className="w-14 bg-transparent text-xs font-bold text-[#e0a96d] focus:outline-none text-center"
+                  />
+                  <span className="text-[10px] text-slate-400 font-semibold">kcal</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-[#0b0c10]/90 px-3 py-2 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-2 text-xs">
+              <Droplet className="w-4 h-4 text-sky-400 shrink-0" />
+              <span className="text-slate-300">
+                Agua extra para compensar y desinflamar: <strong className="text-sky-300">+{activeDashboardCompensation.extraWaterForSurplusMl} ml</strong> ({Math.ceil(activeDashboardCompensation.extraWaterForSurplusMl / 250)} vasos)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleAddWaterMl(activeDashboardCompensation.extraWaterForSurplusMl, 'Agua de compensación')}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 cursor-pointer transition-colors"
+            >
+              + Sumar {activeDashboardCompensation.extraWaterForSurplusMl} ml
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {(activeDashboardCompensation.exercises || []).map((ex) => (
+              <div
+                key={ex.id}
+                className="bg-[#0b0c10] border border-slate-800 hover:border-[#e0a96d]/40 rounded-xl p-2.5 flex items-center justify-between gap-2 transition-all"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm">{ex.icon}</span>
+                    <span className="text-xs font-bold text-slate-100 truncate">{ex.name}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    <strong className="text-[#e0a96d]">{ex.minutes} min</strong> • Quema ~{ex.kcalBurned} kcal ({ex.intensity})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleApplyExerciseCompensation(ex, 0)}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold shrink-0 cursor-pointer transition-colors"
+                  title="Registrar este ejercicio en tu gasto calórico de hoy"
+                >
+                  + Registrar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
       <div className="bg-[#171a24] border border-[#e0a96d]/20 rounded-2xl p-5 shadow-xl space-y-4">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-slate-800 pb-3">
           <div>
@@ -818,13 +1265,18 @@ export default function NutritionModule({
                     </span>
                     <select
                       value={scannedMeal.mealType}
-                      onChange={(e) => setScannedMeal({ ...scannedMeal, mealType: e.target.value })}
+                      onChange={(e) => setScannedMeal({
+                        ...scannedMeal,
+                        mealType: e.target.value,
+                        isMultiMealBatch: e.target.value === 'full_day' ? true : scannedMeal.isMultiMealBatch
+                      })}
                       className="bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-1 px-2 text-slate-200 text-xs font-semibold focus:outline-none"
                     >
                       <option value="breakfast">🍳 Desayuno</option>
                       <option value="lunch">🥗 Almuerzo / Comida</option>
                       <option value="dinner">🌙 Cena</option>
                       <option value="snack">🍎 Snack</option>
+                      <option value="full_day">📦 Varias comidas / De golpe</option>
                     </select>
                   </div>
                 </div>
@@ -871,6 +1323,43 @@ export default function NutritionModule({
                     Saciedad: {scannedMeal.satietyScore}/10
                   </span>
                 </div>
+
+                {/* Hydration & Excess Compensation Preview for Scanned Meal */}
+                {(() => {
+                  const scaledKcal = Math.round(scannedMeal.calories * portionScale);
+                  const budget = getMealIdealBudget(scannedMeal.mealType);
+                  const scanComp = calculateMealHydrationAndCompensation({
+                    calories: scaledKcal,
+                    carbs: Math.round(scannedMeal.carbs * portionScale),
+                    protein: Math.round(scannedMeal.protein * portionScale),
+                    fat: Math.round(scannedMeal.fat * portionScale),
+                    targetMealKcal: budget,
+                    weightKg: safeNumber(weight, 65)
+                  });
+                  return (
+                    <div className="bg-[#171a24] p-3 rounded-xl border border-sky-500/20 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                          <Droplet className="w-3.5 h-3.5 text-sky-400" />
+                          <span>Agua sugerida para este plato: <strong>{scanComp.recommendedWaterMl} ml</strong> ({scanComp.recommendedGlasses} vasos)</span>
+                        </span>
+                        {scanComp.isOverBudget && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            ⚡ +{scanComp.excessKcal} kcal sobre meta de este tiempo ({budget} kcal)
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-300">
+                        <span className="text-slate-400">Para compensar {scanComp.isOverBudget ? `el exceso (+${scanComp.excessKcal} kcal)` : `este alimento`}: </span>
+                        {scanComp.exercises.slice(0, 3).map((ex, i) => (
+                          <span key={ex.id} className="inline-block mr-2 font-semibold text-[#e0a96d]">
+                            {ex.icon} {ex.name}: {ex.minutes} min{i < 2 ? ' •' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* AI Weight loss Tips */}
                 {scannedMeal.weightLossTips?.length > 0 && (
@@ -1008,23 +1497,169 @@ export default function NutritionModule({
                             </div>
                           </div>
 
-                          {/* Macro pills */}
-                          <div className="flex flex-wrap gap-1.5 text-[10px] font-semibold">
-                            <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                              P: {meal.protein}g
-                            </span>
-                            <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                              C: {meal.carbs}g
-                            </span>
-                            <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20">
-                              G: {meal.fat}g
-                            </span>
-                            {meal.fiber > 0 && (
-                              <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                                F: {meal.fiber}g
-                              </span>
-                            )}
-                          </div>
+                          {/* Macro pills & Hydration badge */}
+                          {(() => {
+                            const isBatch = Boolean(meal.isMultiMealBatch || meal.mealType === 'full_day');
+                            const mealBudget = getMealIdealBudget(meal.mealType, isBatch);
+                            const mode = compModeByMeal[meal.id] || (meal.calories > mealBudget ? 'excess' : 'full');
+                            const surplusTarget = mode === 'excess' && meal.calories > mealBudget
+                              ? meal.calories - mealBudget
+                              : meal.calories;
+                            const mealComp = calculateMealHydrationAndCompensation({
+                              calories: meal.calories,
+                              carbs: meal.carbs,
+                              protein: meal.protein,
+                              fat: meal.fat,
+                              targetMealKcal: mealBudget,
+                              weightKg: safeNumber(weight, 65),
+                              surplusKcal: surplusTarget
+                            });
+                            const waterMl = meal.recommendedWaterMl || mealComp.recommendedWaterMl;
+                            const isExpanded = expandedCompMealId === meal.id;
+
+                            return (
+                              <>
+                                <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold">
+                                  <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                                    P: {meal.protein}g
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                    C: {meal.carbs}g
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                                    G: {meal.fat}g
+                                  </span>
+                                  {meal.fiber > 0 && (
+                                    <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                                      F: {meal.fiber}g
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddWaterMl(waterMl, meal.name)}
+                                    className="px-2 py-0.5 rounded bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 flex items-center gap-1 cursor-pointer transition-colors"
+                                    title="Haz clic para sumar esta cantidad de agua sugerida a tu registro de hoy"
+                                  >
+                                    <Droplet className="w-3 h-3 text-sky-400" />
+                                    <span>💧 {waterMl} ml (+Sumar)</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleMultiMealBatch(meal.id)}
+                                    className={`px-2 py-0.5 rounded border flex items-center gap-1 cursor-pointer transition-colors ${
+                                      isBatch
+                                        ? 'bg-purple-500/15 text-purple-300 border-purple-500/30 hover:bg-purple-500/25'
+                                        : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:border-slate-700'
+                                    }`}
+                                    title="Alternar si este registro corresponde a varias comidas subidas de golpe o a una sola comida"
+                                  >
+                                    <span>{isBatch ? '📦 Varias comidas (de golpe)' : '🍽️ 1 sola comida'}</span>
+                                  </button>
+                                </div>
+
+                                {/* Excess / Compensation Toggle Button */}
+                                <div className="pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedCompMealId(isExpanded ? null : meal.id)}
+                                    className={`w-full py-1.5 px-2.5 rounded-xl border text-[11px] font-bold flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                                      meal.calories > mealBudget
+                                        ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                        : 'bg-[#0b0c10] hover:bg-slate-800/80 text-slate-300 border-slate-800'
+                                    }`}
+                                  >
+                                    <span className="flex items-center gap-1.5 truncate">
+                                      <Activity className="w-3.5 h-3.5 text-[#e0a96d] shrink-0" />
+                                      <span>
+                                        {isBatch
+                                          ? `📦 Registro acumulado (${meal.calories} kcal): Ver agua o ejercicio`
+                                          : meal.calories > mealBudget
+                                          ? `⚡ Exceso de +${meal.calories - mealBudget} kcal: Ver agua y ejercicio para compensar`
+                                          : '⚡ ¿Me sobrepasé? Ver ejercicio y agua para compensar'}
+                                      </span>
+                                    </span>
+                                    <span className="text-[10px] text-[#e0a96d] shrink-0">
+                                      {isExpanded ? 'Ocultar ▲' : 'Ver plan ▼'}
+                                    </span>
+                                  </button>
+
+                                  {isExpanded && (
+                                    <div className="mt-2 bg-[#0b0c10] border border-[#e0a96d]/30 rounded-xl p-3 space-y-2.5 animate-fade-in">
+                                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                                        <span className="text-[10px] font-bold text-slate-300">
+                                          ¿Qué deseas compensar?
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                          {meal.calories > mealBudget && (
+                                            <button
+                                              type="button"
+                                              onClick={() => setCompModeByMeal(prev => ({ ...prev, [meal.id]: 'excess' }))}
+                                              className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                                                mode === 'excess'
+                                                  ? 'bg-[#e0a96d] text-[#0b0c10]'
+                                                  : 'bg-[#171a24] text-slate-400 border border-slate-700'
+                                              }`}
+                                            >
+                                              Solo exceso ({meal.calories - mealBudget} kcal)
+                                            </button>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={() => setCompModeByMeal(prev => ({ ...prev, [meal.id]: 'full' }))}
+                                            className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                                              mode === 'full'
+                                                ? 'bg-[#e0a96d] text-[#0b0c10]'
+                                                : 'bg-[#171a24] text-slate-400 border border-slate-700'
+                                            }`}
+                                          >
+                                            Todo el plato ({meal.calories} kcal)
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center justify-between gap-2 bg-[#171a24] px-2.5 py-1.5 rounded-lg border border-sky-500/20 text-[10px]">
+                                        <span className="text-slate-300">
+                                          💧 Agua sugerida para metabolizar y drenar: <strong className="text-sky-300">{waterMl} ml</strong> ({Math.ceil(waterMl / 250)} vasos)
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleAddWaterMl(waterMl, meal.name)}
+                                          className="text-sky-300 font-bold hover:underline cursor-pointer shrink-0"
+                                        >
+                                          + Beber ahora
+                                        </button>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                        {mealComp.exercises.map(ex => (
+                                          <div
+                                            key={ex.id}
+                                            className="bg-[#171a24] border border-slate-800 rounded-lg p-2 flex items-center justify-between gap-2"
+                                          >
+                                            <div className="min-w-0">
+                                              <span className="text-[11px] font-bold text-slate-200 block truncate">
+                                                {ex.icon} {ex.name}
+                                              </span>
+                                              <span className="text-[10px] text-[#e0a96d] font-extrabold">
+                                                {ex.minutes} min <span className="text-slate-400 font-normal">(-{ex.kcalBurned} kcal)</span>
+                                              </span>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleApplyExerciseCompensation(ex, 0)}
+                                              className="px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold cursor-pointer shrink-0"
+                                            >
+                                              + Hacer
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            );
+                          })()}
 
                           {/* Recommendation snippet */}
                           {meal.weightLossTips?.length > 0 && (
@@ -1101,9 +1736,54 @@ export default function NutritionModule({
                 <div className="mt-1.5 p-2 rounded-lg bg-[#0b0c10]/70 border border-[#e0a96d]/15 flex items-start gap-1.5 text-[10px] text-slate-400">
                   <Sparkles className="w-3.5 h-3.5 text-[#e0a96d] shrink-0 mt-0.5" />
                   <span>
-                    ¿No sabes las calorías o ingredientes? Escribe el alimento (ej. tamaño, marca, leche, etc.) y haz clic en <strong>Calcular con IA</strong>. Puedes ajustar o corregir cualquier campo manualmente.
+                    ¿Subes todo lo que comiste en el día de golpe? Escríbelo todo junto (ej. <em>"Desayuné huevos con café, en la tarde tacos y en la noche pan"</em>) y pulsa <strong>Calcular con IA</strong>: podrás separarlo en varias comidas o guardarlo como registro acumulado.
                   </span>
                 </div>
+              </div>
+
+              {/* Multi-meal batch toggle & Auto-split option */}
+              <div className="bg-[#0b0c10] border border-purple-500/25 rounded-xl p-2.5 space-y-2">
+                <label className="flex items-center gap-2 text-xs text-slate-200 font-semibold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(manualForm.isMultiMealBatch || manualForm.mealType === 'full_day')}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setManualForm(prev => ({
+                        ...prev,
+                        isMultiMealBatch: checked,
+                        mealType: checked ? 'full_day' : (prev.mealType === 'full_day' ? 'lunch' : prev.mealType)
+                      }));
+                    }}
+                    className="rounded border-slate-700 text-[#e0a96d] focus:ring-[#e0a96d]"
+                  />
+                  <span>📦 Subí lo que comí de golpe (fueron varias comidas, no una sola sentada)</span>
+                </label>
+
+                {Array.isArray(manualForm.detectedMeals) && manualForm.detectedMeals.length >= 2 && (
+                  <div className="pt-1.5 border-t border-slate-800 space-y-2">
+                    <span className="text-[10px] font-bold text-purple-300 block">
+                      ✨ Detectamos {manualForm.detectedMeals.length} alimentos de distintos momentos:
+                    </span>
+                    <div className="space-y-1">
+                      {manualForm.detectedMeals.map((dm, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-[10px] bg-[#171a24] px-2 py-1 rounded border border-slate-800">
+                          <span className="text-slate-200 truncate pr-2">
+                            {dm.mealType === 'breakfast' ? '🍳' : dm.mealType === 'dinner' ? '🌙' : dm.mealType === 'snack' ? '🍎' : '🥗'} {dm.dishName}
+                          </span>
+                          <span className="text-[#e0a96d] font-bold shrink-0">{dm.calories} kcal</span>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveDetectedSeparateMeals}
+                      className="w-full py-1.5 px-3 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40 text-xs font-bold cursor-pointer transition-colors"
+                    >
+                      ✨ Guardar separados en sus tiempos de comida ({manualForm.detectedMeals.length})
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1111,13 +1791,18 @@ export default function NutritionModule({
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Tiempo de Comida</label>
                   <select
                     value={manualForm.mealType}
-                    onChange={(e) => setManualForm({ ...manualForm, mealType: e.target.value })}
+                    onChange={(e) => setManualForm({
+                      ...manualForm,
+                      mealType: e.target.value,
+                      isMultiMealBatch: e.target.value === 'full_day' ? true : manualForm.isMultiMealBatch
+                    })}
                     className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] cursor-pointer"
                   >
                     <option value="breakfast">Desayuno 🍳</option>
                     <option value="lunch">Almuerzo / Comida 🥗</option>
                     <option value="dinner">Cena 🌙</option>
                     <option value="snack">Snack 🍎</option>
+                    <option value="full_day">📦 Varias comidas / De golpe</option>
                   </select>
                 </div>
                 <div>
@@ -1261,13 +1946,18 @@ export default function NutritionModule({
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Tiempo</label>
                   <select
                     value={editingMeal.mealType}
-                    onChange={(e) => setEditingMeal({ ...editingMeal, mealType: e.target.value })}
+                    onChange={(e) => setEditingMeal({
+                      ...editingMeal,
+                      mealType: e.target.value,
+                      isMultiMealBatch: e.target.value === 'full_day' ? true : editingMeal.isMultiMealBatch
+                    })}
                     className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none cursor-pointer"
                   >
                     <option value="breakfast">Desayuno 🍳</option>
                     <option value="lunch">Almuerzo / Comida 🥗</option>
                     <option value="dinner">Cena 🌙</option>
                     <option value="snack">Snack 🍎</option>
+                    <option value="full_day">📦 Varias comidas / De golpe</option>
                   </select>
                 </div>
                 <div>

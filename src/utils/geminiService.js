@@ -57,28 +57,147 @@ export const compressImage = (file, maxDimension = 800, quality = 0.75) => {
 };
 
 /**
- * Analyzes a clothing image using Google Gemini Multimodal API and returns
- * structured JSON fields corresponding to Aura Nexus wardrobe categories.
+ * Generates an intelligent algorithmic stylist critique for a garment (worn or standalone)
+ * based on its cut, category, color, tags, and the user's body silhouette profile.
+ */
+export const generateFallbackClothingFitFeedback = ({
+  name = '',
+  category = 'tops',
+  color = '',
+  tags = [],
+  bodyType = 'Equilibrado / Curvy',
+  fitGoals = 'Definir cintura, alargar silueta y proyectar estilo con confort',
+  isWornPhoto = true
+} = {}) => {
+  const fullText = `${name} ${category} ${color} ${(Array.isArray(tags) ? tags : [tags]).join(' ')}`.toLowerCase();
+  const isOversize = /oversize|holgad|ancha|ancho|baggy|sudadera|hoodie|floj/.test(fullText);
+  const isStructured = /blazer|saco|estructurad|tiro alto|corte recto|pinza|cintura/.test(fullText);
+  const isCompressionOrSlim = /legging|compresion|ajustad|slim|skinny|faja/.test(fullText);
+  const isWornOut = /viej|desgastad|rot|manchad|bolitas|pilling|deformad/.test(fullText);
+
+  let keepVerdict = 'keep';
+  let verdictTitle = '✅ ¡Consérvala! Favorece tu silueta y estilo';
+  let overallFitScore = 8.5;
+  let howItLooks = 'La prenda proyecta buena caída y estructura visual. El tono armoniza bien y aporta versatilidad para armar combinaciones limpias.';
+  let bodyTypeMatch = `Para tu tipo de cuerpo (${bodyType}), esta prenda ayuda a mantener proporciones armónicas cuando se equilibra el volumen superior e inferior.`;
+  let keepOrDiscardReason = 'Vale la pena conservarla en tu armario activo porque mantiene buena forma, color y combina fácilmente con tus básicos.';
+  let stylingImprovements = [
+    'Aplica la regla de tercios (1/3 arriba, 2/3 abajo) usando tiro alto o fajado frontal ligero para alargar visualmente las piernas.',
+    'Remanga ligeramente las mangas o deja visibles muñecas/clavículas para estilizar el torso.'
+  ];
+
+  if (isWornOut) {
+    keepVerdict = 'donate_or_discard';
+    verdictTitle = '🗑️ Sugerencia: Depurar o sacar del armario';
+    overallFitScore = 4.2;
+    howItLooks = 'La prenda muestra signos de desgaste o pérdida de estructura que restan pulcritud a tu imagen general.';
+    bodyTypeMatch = 'Cuando una tela pierde tensión en hombros, cuello o cintura, deja de enmarcar tu silueta y añade volumen sin forma.';
+    keepOrDiscardReason = 'Deberías descartarla o reemplazarla: una prenda deformada o desgastada baja la calidad visual de todo tu outfit.';
+    stylingImprovements = [
+      'Sustitúyela por una versión de tela más densa (algodón pesado o punto estructurado) que mantenga su caída.'
+    ];
+  } else if (isOversize) {
+    keepVerdict = 'tailor_or_style';
+    verdictTitle = '✨ Consérvala usando contraste de silueta (para no ocultar tu forma)';
+    overallFitScore = 7.8;
+    howItLooks = 'El corte holgado/oversize se ve moderno y cómodo, pero si se lleva totalmente suelto con pantalones anchos puede acortar visualmente tu estatura o esconder tu cintura.';
+    bodyTypeMatch = `En siluetas ${bodyType}, el volumen amplio funciona excelente siempre que marques un punto de cintura o lo equilibres con una prenda inferior más definida.`;
+    keepOrDiscardReason = 'Consérvala si la tela y el cuello están en buen estado, pero evita usarla sin dar estructura al resto del conjunto.';
+    stylingImprovements = [
+      'Haz un "french tuck" (fajado ligero solo al frente) en un pantalón de tiro alto para marcar la cintura de inmediato.',
+      'Combínala con leggings de compresión o pantalón recto estructurado para equilibrar el volumen superior.',
+      'Si es sudadera o chamarra, dobla ligeramente el puño para estilizar los brazos.'
+    ];
+  } else if (isStructured) {
+    keepVerdict = 'keep';
+    verdictTitle = '✅ ¡Pieza Clave! Estiliza y define tu tipo de cuerpo';
+    overallFitScore = 9.2;
+    howItLooks = 'Excelente estructura en líneas verticales. Enmarca los hombros y alarga el torso, creando una silueta pulcra, estilizada y segura.';
+    bodyTypeMatch = `Ideal para tu tipo de cuerpo (${bodyType}): las costuras definidas y el corte estructurado afinan la cintura y dan soporte visual sin marcar zonas indeseadas.`;
+    keepOrDiscardReason = 'Definitivamente consérvala: es una prenda comodín de alto impacto que eleva cualquier playera o básico.';
+    stylingImprovements = [
+      'Úsala abierta sobre un top monocromático para crear dos líneas verticales que estilizan el torso al instante.',
+      'Asegúrate de que el hombro asiente exactamente en el hueso acromion para un calce de sastrería.'
+    ];
+  } else if (isCompressionOrSlim) {
+    keepVerdict = 'keep';
+    verdictTitle = '✅ Consérvala — Define la silueta y da soporte';
+    overallFitScore = 8.6;
+    howItLooks = 'Se ajusta con firmeza moldeando la silueta de forma limpia. Excelente base para combinar con prendas superiores estructuradas o ligeramente holgadas.';
+    bodyTypeMatch = `Favorece tu tipo de cuerpo (${bodyType}) al estilizar la línea de las piernas y dar soporte en la zona media.`;
+    keepOrDiscardReason = 'Consérvala mientras conserve su elasticidad y opacidad original (si se transparenta al estirar, es momento de renovarla).';
+    stylingImprovements = [
+      'Combina con un blazer estructurado, camisa abierta o sudadera con caída a la cadera para un balance de volúmenes impecable.'
+    ];
+  }
+
+  return {
+    isWornOnBody: Boolean(isWornPhoto),
+    keepVerdict,
+    verdictTitle,
+    overallFitScore,
+    howItLooks,
+    bodyTypeMatch,
+    keepOrDiscardReason,
+    stylingImprovements
+  };
+};
+
+/**
+ * Analyzes a clothing image (especially when worn on the body!) using Google Gemini Multimodal API
+ * and returns both catalog classification AND honest personal stylist feedback on fit, body type harmony,
+ * and whether to keep, adjust, or discard/donate the garment.
  * 
  * @param {string} base64Data - Raw base64 string without data:image/jpeg;base64, prefix
  * @param {string} mimeType - e.g. 'image/jpeg'
  * @param {string} apiKey - Gemini API Key from Google AI Studio
- * @returns {Promise<{ name: string, category: string, color: string, tags: string[] }>}
+ * @param {Object} userProfileContext - Optional body type & fit goals context
+ * @returns {Promise<{ name: string, category: string, color: string, tags: string[], fitFeedback: Object }>}
  */
-export const analyzeClothingImage = async (base64Data, mimeType, apiKey) => {
+export const analyzeClothingImage = async (base64Data, mimeType, apiKey, userProfileContext = {}) => {
+  const bodyType = userProfileContext?.bodyType || 'Curvy / Reloj de arena suave (estatura ~1.60m, buscando estilizar cintura y alargar silueta)';
+  const fitGoals = userProfileContext?.fitGoals || 'Estilizar figura, definir cintura, alargar piernas, comodidad y verse pulcra';
+
   if (!apiKey || !apiKey.trim()) {
-    throw new Error('Debes configurar tu Gemini API Key para usar el análisis automático.');
+    throw new Error('Debes configurar tu Gemini API Key para usar el análisis visual automático.');
   }
 
   const prompt = `
-Eres un asistente experto en estilismo, moda y organización de guardarropas.
-Analiza la prenda de vestir en esta fotografía y responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicional, sin bloques de código ni texto antes o después) con la siguiente estructura:
+Eres un asesor de imagen personal de élite, sastre experto y estilista honesto pero empático para AURA Nexus.
+La usuaria ha subido una foto de una prenda (en la medida de lo posible LLEVÁNDOLA PUESTA para que evalúes cómo se le ve, o bien en foto individual).
+
+CONTEXTO CORPORAL Y OBJETIVOS DE ESTILO DE LA USUARIA:
+- Tipo de cuerpo / silueta: "${bodyType}"
+- Objetivos al vestir: "${fitGoals}"
+
+Analiza minuciosamente la fotografía:
+1. Identifica la prenda (nombre, categoría, color, tags).
+2. Evalúa si la prenda está PUESTA en el cuerpo ("isWornOnBody": true) o sola en gancho/superficie ("isWornOnBody": false).
+3. Da una RETROALIMENTACIÓN HONESTA Y CONSTRUCTIVA ("fitFeedback"):
+   - ¿Cómo se le ve puesta? (Evalúa hombros, ajuste en busto/torso/cintura/cadera, largo de la prenda, caída de la tela, si le suma volumen innecesario o si la estiliza, si se ve desgastada o impecable). Si la foto no es puesta, evalúa cómo ese corte específico le quedará a su tipo de cuerpo.
+   - ¿Queda bien con su tipo de cuerpo y proporciones?
+   - ¿Debería CONSERVARLA ("keep"), CONSERVARLA PERO ESTILIZARLA/AJUSTARLA ("tailor_or_style"), o TIRARLA/DONARLA ("donate_or_discard")? Sé sincero: si la prenda le acorta la figura, le queda mal de hombros/tiro, no favorece su silueta o se ve vieja/desgastada, recomiéndale depurarla o ajustarla.
+
+Responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicional, sin bloques de código ni texto antes o después) con la siguiente estructura exacta:
 
 {
-  "name": "Nombre descriptivo, estilizado y conciso de la prenda (ej. 'Playera Gráfica Oversize', 'Blazer Cruzado Marino', 'Botas Chelsea de Cuero')",
+  "name": "Nombre descriptivo, estilizado y conciso de la prenda (ej. 'Playera Gráfica Oversize', 'Blazer Cruzado Marino', 'Pantalón Cargo Tiro Alto')",
   "category": "tops" | "bottoms" | "outerwear" | "footwear" | "accessories",
-  "color": "Color predominante y tono en español (ej. 'Negro profundo', 'Azul marino', 'Verde olivo', 'Gris jaspeado')",
-  "tags": ["3 a 5 palabras clave sobre estilo, corte, ocasión o material, ej: 'algodón', 'oversize', 'casual', 'cuero', 'formal', 'grunge', 'geek'"]
+  "color": "Color predominante y tono en español (ej. 'Negro profundo', 'Azul marino', 'Rojo vino')",
+  "tags": ["3 a 5 palabras clave sobre estilo, corte, ocasión o material"],
+  "fitFeedback": {
+    "isWornOnBody": true,
+    "keepVerdict": "keep" | "tailor_or_style" | "donate_or_discard",
+    "verdictTitle": "Veredicto directo y claro (ej. '✅ ¡Te queda excelente! Estiliza tu cintura', '✨ Consérvala pero fájala para no acortar el torso', '🗑️ Mejor depurar/tirar: no favorece tu silueta o se ve desgastada')",
+    "overallFitScore": 8.5,
+    "howItLooks": "Crítica detallada y honesta de cómo se le ve la prenda (caída, ajuste en hombros/cintura/cadera, largo, color y estado de la tela).",
+    "bodyTypeMatch": "Explicación de por qué este corte sí o no favorece su tipo de cuerpo y proporciones.",
+    "keepOrDiscardReason": "Recomendación directa sobre si debe conservarla en su armario, mandarla a ajustar o tirarla/donarla y por qué.",
+    "stylingImprovements": [
+      "Truco práctico #1 para que se le vea aún mejor (ej. fajado francés, remangar mangas, usar con tiro alto)",
+      "Truco práctico #2 de combinación o proporción"
+    ]
+  }
 }
 
 Reglas estrictas de categoría:
@@ -90,7 +209,6 @@ Reglas estrictas de categoría:
 `;
 
   // Production models with automatic fallback
-  // 'gemini-flash-latest' always points to the latest production Flash model (supports vision & fast inference)
   const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
   let lastError = null;
 
@@ -114,7 +232,7 @@ Reglas estrictas de categoría:
         ],
         generationConfig: {
           response_mime_type: 'application/json',
-          temperature: 0.2
+          temperature: 0.25
         }
       };
 
@@ -169,16 +287,43 @@ Reglas estrictas de categoría:
         }
       }
 
+      const fallbackFb = generateFallbackClothingFitFeedback({
+        name: parsed.name,
+        category,
+        color: parsed.color,
+        tags: parsed.tags,
+        bodyType,
+        fitGoals
+      });
+
+      const rawFb = parsed.fitFeedback && typeof parsed.fitFeedback === 'object' ? parsed.fitFeedback : {};
+      const validVerdicts = ['keep', 'tailor_or_style', 'donate_or_discard'];
+
+      const fitFeedback = {
+        isWornOnBody: rawFb.isWornOnBody !== undefined ? Boolean(rawFb.isWornOnBody) : true,
+        keepVerdict: validVerdicts.includes(rawFb.keepVerdict) ? rawFb.keepVerdict : fallbackFb.keepVerdict,
+        verdictTitle: rawFb.verdictTitle || fallbackFb.verdictTitle,
+        overallFitScore: typeof rawFb.overallFitScore === 'number'
+          ? Math.min(10, Math.max(1, Number(rawFb.overallFitScore.toFixed(1))))
+          : fallbackFb.overallFitScore,
+        howItLooks: rawFb.howItLooks || fallbackFb.howItLooks,
+        bodyTypeMatch: rawFb.bodyTypeMatch || fallbackFb.bodyTypeMatch,
+        keepOrDiscardReason: rawFb.keepOrDiscardReason || fallbackFb.keepOrDiscardReason,
+        stylingImprovements: Array.isArray(rawFb.stylingImprovements) && rawFb.stylingImprovements.length > 0
+          ? rawFb.stylingImprovements
+          : fallbackFb.stylingImprovements
+      };
+
       return {
         name: parsed.name || 'Prenda sin título',
         category,
         color: parsed.color || 'Varios',
-        tags: Array.isArray(parsed.tags) ? parsed.tags : []
+        tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+        fitFeedback
       };
     } catch (err) {
       console.warn(`Attempt with ${model} failed:`, err.message);
       lastError = err;
-      // If error is definitely an invalid API key, do not retry other models uselessly
       if (err.message.includes('API Key ingresada no es válida')) {
         break;
       }
@@ -1353,10 +1498,116 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
 // ==========================================
 
 /**
+ * Calculates recommended water intake (ml) and exact exercise durations (in minutes)
+ * to compensate for a meal's excess calories (or a specified calorie amount) based on body weight (METs).
+ */
+export const calculateMealHydrationAndCompensation = ({
+  calories = 450,
+  carbs = 40,
+  protein = 25,
+  fat = 15,
+  mealType = 'lunch',
+  weightKg = 80,
+  targetKcalToCompensate = null
+} = {}) => {
+  const kcal = Math.max(0, Number(calories) || 0);
+  const c = Math.max(0, Number(carbs) || 0);
+  const p = Math.max(0, Number(protein) || 0);
+  const f = Math.max(0, Number(fat) || 0);
+  const w = Math.max(45, Number(weightKg) || 80);
+
+  // Typical meal calorie budget for fat-loss deficit (~1500 kcal/day)
+  const mealBudgets = {
+    breakfast: 400,
+    lunch: 550,
+    dinner: 450,
+    snack: 200
+  };
+  const budget = mealBudgets[mealType] || 450;
+  const mealExcessKcal = Math.max(0, kcal - budget);
+  const isOverMealBudget = mealExcessKcal >= 60;
+
+  // Recommended water for this meal:
+  // Base 300 ml + ~3 ml per gram of carbs (glycogen/sodium balance) + ~2 ml per gram of protein + extra if high fat/calories
+  const rawWater = 250 + c * 3.2 + p * 2.0 + f * 1.5 + (mealExcessKcal > 0 ? mealExcessKcal * 0.5 : 0);
+  const recommendedWaterMl = Math.min(1000, Math.max(250, Math.round(rawWater / 50) * 50));
+  const recommendedGlasses = Number((recommendedWaterMl / 250).toFixed(1));
+
+  // Calories to burn in the compensation plan:
+  // If user specified an explicit target, use it; otherwise if the meal exceeded its budget, compensate the excess;
+  // otherwise show how to burn 100% or 50% of the meal.
+  const kcalToBurn = targetKcalToCompensate !== null && targetKcalToCompensate > 0
+    ? Math.round(targetKcalToCompensate)
+    : (isOverMealBudget ? mealExcessKcal : Math.max(100, Math.round(kcal * 0.5)));
+
+  // Extra water specifically to flush excess sodium/glycogen when overeating
+  const extraWaterForExcessMl = Math.min(750, Math.max(250, Math.round((kcalToBurn * 1.2) / 50) * 50));
+
+  // MET formula: kcal/min = (MET * 3.5 * weightKg) / 200
+  const calcMinutes = (met) => {
+    const kcalPerMin = (met * 3.5 * w) / 200;
+    return Math.max(5, Math.round(kcalToBurn / Math.max(2, kcalPerMin)));
+  };
+
+  const exercises = [
+    {
+      id: 'walk',
+      name: '🚶‍♀️ Caminata rápida / Paseo activo',
+      minutes: calcMinutes(3.8),
+      kcalBurned: kcalToBurn,
+      intensity: 'Baja-Media (Ideal post-comida para bajar glucosa)',
+      waterDuringMl: 250
+    },
+    {
+      id: 'bike_dance',
+      name: '🚴‍♀️ Bicicleta fija / Elíptica / Baile',
+      minutes: calcMinutes(5.5),
+      kcalBurned: kcalToBurn,
+      intensity: 'Moderada (Cardio continuo quema-grasa)',
+      waterDuringMl: 350
+    },
+    {
+      id: 'strength_circuit',
+      name: '🏋️‍♀️ Circuito en casa (Sentadillas + Lagartijas + Plancha)',
+      minutes: calcMinutes(6.5),
+      kcalBurned: kcalToBurn,
+      intensity: 'Media-Alta (Activa metabolismo por horas)',
+      waterDuringMl: 400
+    },
+    {
+      id: 'stairs_hiit',
+      name: '🔥 Subir escaleras / Cardio HIIT / Saltar cuerda',
+      minutes: calcMinutes(8.2),
+      kcalBurned: kcalToBurn,
+      intensity: 'Alta (Compensación rápida en menos tiempo)',
+      waterDuringMl: 500
+    }
+  ];
+
+  return {
+    recommendedWaterMl,
+    recommendedGlasses,
+    mealBudgetKcal: budget,
+    mealExcessKcal,
+    isOverMealBudget,
+    kcalToBurn,
+    extraWaterForExcessMl,
+    exercises
+  };
+};
+
+/**
  * Fallback nutrition generator when offline, no API key or image reading fails
  */
 export const generateFallbackMealAnalysis = (customName = '') => {
   const name = customName && customName.trim() ? customName.trim() : 'Platillo Nutritivo Balanceado';
+  const comp = calculateMealHydrationAndCompensation({
+    calories: 460,
+    carbs: 40,
+    protein: 34,
+    fat: 14,
+    mealType: 'lunch'
+  });
   
   return {
     dishName: name,
@@ -1377,10 +1628,12 @@ export const generateFallbackMealAnalysis = (customName = '') => {
     ],
     satietyScore: 8.2,
     glycemicImpact: 'low',
+    recommendedWaterMl: comp.recommendedWaterMl,
+    compensationExercises: comp.exercises,
     weightLossVerdict: 'Muy favorable para déficit calórico con buen balance proteico.',
     weightLossTips: [
       'Orden metabólico sugerido: Inicia con las verduras y ensalada para llenar el estómago con fibra, continúa con la proteína y termina con los carbohidratos.',
-      'Acompaña con 1 o 2 vasos de agua (350-500ml) para mejorar la digestión y potenciar la saciedad gástrica.',
+      `Acompaña con ${comp.recommendedWaterMl} ml de agua (${comp.recommendedGlasses} vasos) para mejorar la digestión y potenciar la saciedad gástrica.`,
       'Una caminata suave de 10-15 min después de comer ayuda a regular la glucosa en sangre y aumentar tu gasto energético.'
     ],
     healthySwaps: [
@@ -1489,21 +1742,31 @@ Reglas estrictas:
       if (jsonMatch) cleaned = jsonMatch[0];
 
       const parsed = JSON.parse(cleaned);
+      const calories = Math.max(0, parseInt(parsed.calories, 10) || 450);
+      const macros = {
+        protein: Math.max(0, parseInt(parsed.macros?.protein, 10) || 30),
+        carbs: Math.max(0, parseInt(parsed.macros?.carbs, 10) || 40),
+        fat: Math.max(0, parseInt(parsed.macros?.fat, 10) || 15),
+        fiber: Math.max(0, parseInt(parsed.macros?.fiber, 10) || 5)
+      };
+      const comp = calculateMealHydrationAndCompensation({
+        calories,
+        carbs: macros.carbs,
+        protein: macros.protein,
+        fat: macros.fat
+      });
 
       return {
         dishName: parsed.dishName || 'Platillo Identificado',
         mealType: ['breakfast', 'lunch', 'dinner', 'snack'].includes(parsed.mealType) ? parsed.mealType : 'lunch',
-        calories: Math.max(0, parseInt(parsed.calories, 10) || 450),
-        confidenceRange: parsed.confidenceRange || `${Math.max(0, parseInt(parsed.calories, 10) || 450)} kcal`,
-        macros: {
-          protein: Math.max(0, parseInt(parsed.macros?.protein, 10) || 30),
-          carbs: Math.max(0, parseInt(parsed.macros?.carbs, 10) || 40),
-          fat: Math.max(0, parseInt(parsed.macros?.fat, 10) || 15),
-          fiber: Math.max(0, parseInt(parsed.macros?.fiber, 10) || 5)
-        },
+        calories,
+        confidenceRange: parsed.confidenceRange || `${calories} kcal`,
+        macros,
         ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
         satietyScore: typeof parsed.satietyScore === 'number' ? Math.min(10, Math.max(1, parsed.satietyScore)) : 8.0,
         glycemicImpact: ['low', 'medium', 'high'].includes(parsed.glycemicImpact) ? parsed.glycemicImpact : 'medium',
+        recommendedWaterMl: comp.recommendedWaterMl,
+        compensationExercises: comp.exercises,
         weightLossVerdict: parsed.weightLossVerdict || 'Comida balanceada para déficit calórico.',
         weightLossTips: Array.isArray(parsed.weightLossTips) && parsed.weightLossTips.length > 0 
           ? parsed.weightLossTips 
@@ -1531,10 +1794,10 @@ export const generateAdaptiveCoachingAdvice = ({
   dailyCalorieTarget = 1500,
   waterIntake = 0,
   waterGoal = 2000,
-  tdee = 1900
+  tdee = 1900,
+  weightKg = 62
 }) => {
   const tips = [];
-  const deficit = tdee - todayCalories;
   const remaining = dailyCalorieTarget - todayCalories;
 
   // 1. Hydration recommendation
@@ -1543,8 +1806,8 @@ export const generateAdaptiveCoachingAdvice = ({
     tips.push({
       type: 'water',
       icon: 'droplet',
-      title: 'Hidratación Pendiente 💧',
-      text: `Has registrado ${waterIntake} ml de tu meta de ${waterGoal} ml. Beber ${needed} ml de agua ahora mejorará tu digestión y activará tu gasto metabólico.`
+      title: `Hidratación Sugerida: +${needed} ml (${Math.ceil(needed / 250)} vasos) 💧`,
+      text: `Has registrado ${waterIntake} ml de tu meta de ${waterGoal} ml. Beber ${needed} ml de agua ahora mejorará tu digestión, drenaje y activará tu gasto metabólico.`
     });
   } else if (waterIntake >= waterGoal) {
     tips.push({
@@ -1553,34 +1816,60 @@ export const generateAdaptiveCoachingAdvice = ({
       title: '¡Meta de Agua Cumplida! 🌟',
       text: `Excelente nivel de hidratación (${waterIntake} ml). Tu cuerpo tiene el balance óptimo para la termogénesis y quema de grasa.`
     });
+  } else {
+    const leftWater = Math.max(250, waterGoal - waterIntake);
+    tips.push({
+      type: 'water',
+      icon: 'droplet',
+      title: `Agua Restante del Día: ${leftWater} ml (${Math.ceil(leftWater / 250)} vasos) 💧`,
+      text: `Llevas ${waterIntake} ml de ${waterGoal} ml. Toma un vaso de 250-350 ml junto con tus alimentos para optimizar la saciedad.`
+    });
   }
 
   // 2. Meal Timing & Fasting Window recommendation
   if (latestMeal) {
     const mealKcal = latestMeal.calories || 400;
-    if (mealKcal >= 500) {
+    const isMultiBatch = Boolean(latestMeal.isMultiMealBatch || latestMeal.mealType === 'full_day');
+    const mealComp = calculateMealHydrationAndCompensation({
+      calories: mealKcal,
+      carbs: latestMeal.carbs || 0,
+      protein: latestMeal.protein || 0,
+      fat: latestMeal.fat || 0,
+      targetMealKcal: isMultiBatch ? dailyCalorieTarget : 450,
+      weightKg
+    });
+
+    if (isMultiBatch) {
+      tips.push({
+        type: 'timing',
+        icon: 'sparkles',
+        title: `Registro Acumulado (${mealKcal} kcal en varias comidas) 📦`,
+        text: `Registraste varios alimentos de golpe. Tu cuerpo los procesó a lo largo del día; acompáñalos con ~${mealComp.recommendedWaterMl} ml de agua distribuida y evalúa tu balance sobre la meta total del día (${dailyCalorieTarget} kcal).`
+      });
+    } else if (mealKcal >= 550) {
+      const walkMin = mealComp.exercises[0]?.minutes || 25;
       tips.push({
         type: 'timing',
         icon: 'clock',
-        title: 'Ventana de Digestión Óptima ⏳',
-        text: `Dado el aporte calórico y de saciedad de esta comida (${mealKcal} kcal), te sugerimos esperar de 3.5 a 4.5 horas antes de tu siguiente comida o snack para permitir un descenso saludable de insulina.`
+        title: `Comida Abundante (${mealKcal} kcal): Agua + Compensación 💧🏃‍♀️`,
+        text: `Acompaña con ${mealComp.recommendedWaterMl} ml de agua (${mealComp.recommendedGlasses} vasos). Si fue en una sola comida y sientes que te sobrepasaste, ${walkMin} min de caminata rápida o ${mealComp.exercises[2]?.minutes || 15} min de bici compensan el exceso (+${mealComp.excessKcal} kcal).`
       });
     } else {
       tips.push({
         type: 'timing',
         icon: 'sparkles',
-        title: 'Snack Ligero / Digestión Rápida ⚡',
-        text: `Esta comida ligera (${mealKcal} kcal) se digiere con facilidad. Si sientes apetito en 2-3 horas, una infusión de té verde o frutos secos te mantendrá en tu meta.`
+        title: `Hidratación para este alimento: ${mealComp.recommendedWaterMl} ml 💧`,
+        text: `Esta comida (${mealKcal} kcal) requiere ~${mealComp.recommendedWaterMl} ml de agua para metabolizar sus nutrientes y mantener el apetito controlado por 3 horas.`
       });
     }
 
     // 3. Post-meal activity suggestion
-    if (latestMeal.carbs >= 35 || latestMeal.glycemicImpact === 'high') {
+    if (!isMultiBatch && (latestMeal.carbs >= 35 || latestMeal.glycemicImpact === 'high')) {
       tips.push({
         type: 'exercise',
         icon: 'activity',
         title: 'Caminata Post-Comida Sugerida 🚶‍♀️',
-        text: `Una caminata suave de 12 a 20 minutos post-comida transportará la glucosa directamente a los músculos sin disparar picos de insulina, acelerando tu pérdida de grasa.`
+        text: `Una caminata suave de 15 a 20 minutos post-comida transportará la glucosa directamente a los músculos sin disparar picos de insulina, acelerando tu pérdida de grasa.`
       });
     }
   }
@@ -1595,11 +1884,19 @@ export const generateAdaptiveCoachingAdvice = ({
     });
   } else if (remaining < 0) {
     const surplus = Math.abs(remaining);
+    const surplusComp = calculateMealHydrationAndCompensation({
+      calories: surplus,
+      targetMealKcal: 0,
+      weightKg,
+      surplusKcal: surplus
+    });
+    const walkEx = surplusComp.exercises[0];
+    const hiitEx = surplusComp.exercises[3];
     tips.push({
       type: 'warning',
       icon: 'info',
-      title: `Has superado tu meta diaria por ${surplus} kcal`,
-      text: `¡No te preocupes! El balance semanal es lo que cuenta. Una caminata de 30 min o una cena rica en vegetales y proteína magra compensará el día perfectamente.`
+      title: `Exceso de ${surplus} kcal: Plan de Compensación Activo ⚡`,
+      text: `Para compensar las ${surplus} kcal extra de hoy: toma +${surplusComp.extraWaterForSurplusMl} ml de agua adicional y realiza ${walkEx.minutes} min de ${walkEx.name.toLowerCase()} (o ${hiitEx.minutes} min de ${hiitEx.name.toLowerCase()}).`
     });
   }
 
@@ -1613,6 +1910,20 @@ export const generateAdaptiveCoachingAdvice = ({
 export const generateFallbackMealTextAnalysis = (textDescription = '') => {
   const query = String(textDescription || '').toLowerCase().trim();
   
+  const attachHydrationAndComp = (mealObj) => {
+    const comp = calculateMealHydrationAndCompensation({
+      calories: mealObj.calories,
+      carbs: mealObj.macros?.carbs || 0,
+      protein: mealObj.macros?.protein || 0,
+      fat: mealObj.macros?.fat || 0
+    });
+    return {
+      ...mealObj,
+      recommendedWaterMl: comp.recommendedWaterMl,
+      compensationExercises: comp.exercises
+    };
+  };
+
   if (query.includes('capuccino') || query.includes('cappuccino') || query.includes('latte') || query.includes('café') || query.includes('cafe')) {
     const isVenti = query.includes('venti') || query.includes('grande') || query.includes('500ml');
     const isDeslactosada = query.includes('deslactosada') || query.includes('entera');
@@ -1630,7 +1941,7 @@ export const generateFallbackMealTextAnalysis = (textDescription = '') => {
       fat = 4;
     }
 
-    return {
+    return attachHydrationAndComp({
       dishName: textDescription.trim() || 'Café con Leche / Capuccino',
       mealType: 'breakfast',
       calories: kcal,
@@ -1648,11 +1959,11 @@ export const generateFallbackMealTextAnalysis = (textDescription = '') => {
         'Evita jarabes saborizados (vainilla, caramelo) que añaden 20-30g de azúcar pura.'
       ],
       healthySwaps: ['Prueba americano con un toque de leche de almendra para reducir a solo 35 kcal.']
-    };
+    });
   }
 
   if (query.includes('taco') || query.includes('tacos') || query.includes('pastor') || query.includes('suadero') || query.includes('asada')) {
-    return {
+    return attachHydrationAndComp({
       dishName: textDescription.trim() || 'Orden de Tacos',
       mealType: 'lunch',
       calories: 540,
@@ -1672,11 +1983,11 @@ export const generateFallbackMealTextAnalysis = (textDescription = '') => {
         'Pide con copia sencilla de tortilla para ahorrar ~65 kcal por taco.'
       ],
       healthySwaps: ['Pide con tortilla de nopal o pide 2 tacos bien servidos en lugar de 4.']
-    };
+    });
   }
 
   if (query.includes('ensalada') || query.includes('salad') || query.includes('bowl')) {
-    return {
+    return attachHydrationAndComp({
       dishName: textDescription.trim() || 'Ensalada Completa con Proteína',
       mealType: 'lunch',
       calories: 380,
@@ -1696,30 +2007,79 @@ export const generateFallbackMealTextAnalysis = (textDescription = '') => {
         'Consume primero los vegetales de hoja verde para ralentizar el vaciado gástrico.'
       ],
       healthySwaps: ['Usa vinagre balsámico o limón con mostaza en lugar de aderezos cremosos como césar o ranch.']
-    };
+    });
   }
 
-  // Generic fallback
-  return {
+  // Generic fallback (also detects if multiple foods were entered at once "de golpe")
+  const rawParts = String(textDescription || '')
+    .split(/(?:,|;|\+|\bluego\b|\bdespu[eé]s\b|\by en la\b|\bpor la\b|\bcen[eé]\b|\bcom[ií]\b|\bdesayun[eé]\b)/i)
+    .map(s => s.trim())
+    .filter(s => s.length >= 3);
+
+  const isMultiMealBatch = rawParts.length >= 2;
+  const detectedMeals = isMultiMealBatch
+    ? rawParts.map((part, idx) => {
+        const lowerP = part.toLowerCase();
+        const inferredType =
+          lowerP.includes('desayun') || lowerP.includes('mañana') || lowerP.includes('huevo') || lowerP.includes('café') || lowerP.includes('cafe')
+            ? 'breakfast'
+            : lowerP.includes('cena') || lowerP.includes('noche')
+            ? 'dinner'
+            : lowerP.includes('snack') || lowerP.includes('fruta') || lowerP.includes('galleta') || lowerP.includes('dulce')
+            ? 'snack'
+            : idx === 0
+            ? 'breakfast'
+            : idx === 1
+            ? 'lunch'
+            : 'dinner';
+        const estKcal = inferredType === 'snack' ? 180 : inferredType === 'lunch' ? 460 : 320;
+        return {
+          dishName: part.charAt(0).toUpperCase() + part.slice(1),
+          mealType: inferredType,
+          calories: estKcal,
+          macros: {
+            protein: Math.round((estKcal * 0.25) / 4),
+            carbs: Math.round((estKcal * 0.42) / 4),
+            fat: Math.round((estKcal * 0.33) / 9),
+            fiber: 4
+          }
+        };
+      })
+    : [];
+
+  const totalKcal = isMultiMealBatch
+    ? detectedMeals.reduce((sum, m) => sum + m.calories, 0)
+    : 420;
+
+  return attachHydrationAndComp({
     dishName: textDescription.trim() || 'Comida Estimada',
-    mealType: 'lunch',
-    calories: 420,
-    confidenceRange: '380 - 470 kcal',
-    macros: { protein: 28, carbs: 42, fat: 14, fiber: 5 },
+    mealType: isMultiMealBatch ? 'full_day' : 'lunch',
+    isMultiMealBatch,
+    detectedMeals,
+    calories: totalKcal,
+    confidenceRange: `${Math.round(totalKcal * 0.9)} - ${Math.round(totalKcal * 1.1)} kcal`,
+    macros: {
+      protein: isMultiMealBatch ? detectedMeals.reduce((s, m) => s + m.macros.protein, 0) : 28,
+      carbs: isMultiMealBatch ? detectedMeals.reduce((s, m) => s + m.macros.carbs, 0) : 42,
+      fat: isMultiMealBatch ? detectedMeals.reduce((s, m) => s + m.macros.fat, 0) : 14,
+      fiber: isMultiMealBatch ? detectedMeals.length * 4 : 5
+    },
     ingredients: [
-      { name: 'Porción de alimento principal', kcal: 260, portion: '1 porción' },
-      { name: 'Guarnición / acompañamiento', kcal: 120, portion: '1 porción' },
-      { name: 'Condimentos / preparación', kcal: 40, portion: 'Ligero' }
+      { name: 'Porción de alimento principal', kcal: Math.round(totalKcal * 0.6), portion: '1 porción' },
+      { name: 'Guarnición / acompañamiento', kcal: Math.round(totalKcal * 0.3), portion: '1 porción' },
+      { name: 'Condimentos / preparación', kcal: Math.round(totalKcal * 0.1), portion: 'Ligero' }
     ],
     satietyScore: 7.8,
     glycemicImpact: 'medium',
-    weightLossVerdict: 'Platillo balanceado. Ajusta las porciones si tu déficit calórico es estricto.',
+    weightLossVerdict: isMultiMealBatch
+      ? `Registro acumulado de ${detectedMeals.length} alimentos/comidas del día. Puedes separarlos por tiempo de comida o guardarlos juntos.`
+      : 'Platillo balanceado. Ajusta las porciones si tu déficit calórico es estricto.',
     weightLossTips: [
-      'Bebe un vaso de agua antes de comer y mastica despacio para dar tiempo a las señales de saciedad.',
+      'Bebe un vaso de agua antes de cada comida y mastica despacio para dar tiempo a las señales de saciedad.',
       'Prioriza la proteína y las verduras en el plato.'
     ],
     healthySwaps: ['Reduce el uso de aceites añadidos o azúcares para un déficit más marcado.']
-  };
+  });
 };
 
 /**
@@ -1741,16 +2101,25 @@ export const analyzeMealText = async (mealDescription, apiKey = '') => {
   const prompt = `
 Eres una nutrióloga clínica experta en bases de datos nutricionales globales y de cadenas comerciales (Starbucks, Subway, restaurantes, comida mexicana, repostería, supermercados, etc.) y especialista en PÉRDIDA DE GRASA CORPORAL y DÉFICIT CALÓRICO.
 
-La usuaria no le tomó foto a su comida, pero ingresó esta descripción textual:
+La usuaria no le tomó foto a su comida, pero ingresó esta descripción textual (nota: a veces la usuaria sube todo lo que comió en el día o en varias comidas DE GOLPE, y no significa que haya sido en una sola comida):
 "${query}"
 
-Calcula con la mayor precisión nutricional posible las calorías, macronutrientes, impacto glucémico y recomendaciones para pérdida de peso.
+Calcula con la mayor precisión nutricional posible las calorías, macronutrientes, impacto glucémico y recomendaciones para pérdida de peso. Si detectas que el texto menciona varios alimentos de distintos momentos o comidas (ej. desayuno + comida + cena o varios platillos separados), marca "isMultiMealBatch": true, usa "mealType": "full_day" y desglosa cada comida en "detectedMeals".
 
 Responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicional, sin bloques de código ni texto antes o después) con la siguiente estructura:
 
 {
-  "dishName": "Nombre normalizado, limpio y claro del alimento o bebida (ej. 'Capuccino Venti con Leche Deslactosada - Starbucks')",
-  "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+  "dishName": "Nombre normalizado, limpio y claro del alimento o resumen (ej. 'Capuccino Venti - Starbucks' o 'Registro del Día: Huevos, Tacos y Café')",
+  "mealType": "breakfast" | "lunch" | "dinner" | "snack" | "full_day",
+  "isMultiMealBatch": false,
+  "detectedMeals": [
+    {
+      "dishName": "Nombre de la comida individual",
+      "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+      "calories": 220,
+      "macros": { "protein": 14, "carbs": 24, "fat": 6, "fiber": 0 }
+    }
+  ],
   "calories": 220,
   "confidenceRange": "190 - 240 kcal",
   "macros": {
@@ -1765,7 +2134,7 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicion
   ],
   "satietyScore": 7.0,
   "glycemicImpact": "low" | "medium" | "high",
-  "weightLossVerdict": "Explicación breve de si es conveniente para déficit calórico y por qué.",
+  "weightLossVerdict": "Explicación breve de si es conveniente para déficit calórico y por qué (si son varias comidas de golpe, evalúalo como parte del día completo y no como una sola sentada).",
   "weightLossTips": [
     "Consejo 1 práctico para recortar calorías la próxima vez (ej. cambio de tamaño o tipo de leche/aderezo).",
     "Consejo 2 sobre timing de ingesta, agua o control de glucosa."
@@ -1820,21 +2189,35 @@ Reglas estrictas:
       if (jsonMatch) cleaned = jsonMatch[0];
 
       const parsed = JSON.parse(cleaned);
+      const calories = Math.max(0, parseInt(parsed.calories, 10) || 350);
+      const macros = {
+        protein: Math.max(0, parseInt(parsed.macros?.protein, 10) || 20),
+        carbs: Math.max(0, parseInt(parsed.macros?.carbs, 10) || 35),
+        fat: Math.max(0, parseInt(parsed.macros?.fat, 10) || 12),
+        fiber: Math.max(0, parseInt(parsed.macros?.fiber, 10) || 3)
+      };
+      const comp = calculateMealHydrationAndCompensation({
+        calories,
+        carbs: macros.carbs,
+        protein: macros.protein,
+        fat: macros.fat
+      });
+
+      const isMultiMealBatch = Boolean(parsed.isMultiMealBatch || parsed.mealType === 'full_day' || (Array.isArray(parsed.detectedMeals) && parsed.detectedMeals.length >= 2));
 
       return {
         dishName: parsed.dishName || query,
-        mealType: ['breakfast', 'lunch', 'dinner', 'snack'].includes(parsed.mealType) ? parsed.mealType : 'lunch',
-        calories: Math.max(0, parseInt(parsed.calories, 10) || 350),
-        confidenceRange: parsed.confidenceRange || `${Math.max(0, parseInt(parsed.calories, 10) || 350)} kcal`,
-        macros: {
-          protein: Math.max(0, parseInt(parsed.macros?.protein, 10) || 20),
-          carbs: Math.max(0, parseInt(parsed.macros?.carbs, 10) || 35),
-          fat: Math.max(0, parseInt(parsed.macros?.fat, 10) || 12),
-          fiber: Math.max(0, parseInt(parsed.macros?.fiber, 10) || 3)
-        },
+        mealType: ['breakfast', 'lunch', 'dinner', 'snack', 'full_day'].includes(parsed.mealType) ? parsed.mealType : (isMultiMealBatch ? 'full_day' : 'lunch'),
+        isMultiMealBatch,
+        detectedMeals: Array.isArray(parsed.detectedMeals) ? parsed.detectedMeals : [],
+        calories,
+        confidenceRange: parsed.confidenceRange || `${calories} kcal`,
+        macros,
         ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
         satietyScore: typeof parsed.satietyScore === 'number' ? Math.min(10, Math.max(1, parsed.satietyScore)) : 7.5,
         glycemicImpact: ['low', 'medium', 'high'].includes(parsed.glycemicImpact) ? parsed.glycemicImpact : 'medium',
+        recommendedWaterMl: comp.recommendedWaterMl,
+        compensationExercises: comp.exercises,
         weightLossVerdict: parsed.weightLossVerdict || 'Estimación nutricional completada.',
         weightLossTips: Array.isArray(parsed.weightLossTips) && parsed.weightLossTips.length > 0 
           ? parsed.weightLossTips 

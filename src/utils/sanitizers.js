@@ -275,6 +275,27 @@ export const sanitizeExperienceList = (list) => {
 };
 
 // 6. Wardrobe (Armario Virtual)
+export const sanitizeWardrobeFitFeedback = (fb) => {
+  if (!fb || typeof fb !== 'object') return null;
+
+  const validVerdicts = ['keep', 'tailor_or_style', 'donate_or_discard'];
+  const rawVerdict = safeString(fb.keepVerdict || 'keep').toLowerCase();
+  const keepVerdict = validVerdicts.includes(rawVerdict) ? rawVerdict : 'keep';
+
+  return {
+    isWornOnBody: Boolean(fb.isWornOnBody),
+    keepVerdict,
+    verdictTitle: safeString(fb.verdictTitle || 'Evaluación de calce y silueta'),
+    overallFitScore: Math.min(10, Math.max(1, safeNumber(fb.overallFitScore, 8))),
+    howItLooks: safeString(fb.howItLooks || ''),
+    bodyTypeMatch: safeString(fb.bodyTypeMatch || ''),
+    keepOrDiscardReason: safeString(fb.keepOrDiscardReason || ''),
+    stylingImprovements: Array.isArray(fb.stylingImprovements)
+      ? fb.stylingImprovements.map(s => safeString(s)).filter(Boolean)
+      : []
+  };
+};
+
 export const sanitizeWardrobeItem = (w) => {
   if (!w || typeof w !== 'object') return null;
 
@@ -288,7 +309,9 @@ export const sanitizeWardrobeItem = (w) => {
     category: safeString(w.category || 'tops'),
     isClean: w.isClean !== undefined ? Boolean(w.isClean) : true,
     color: safeString(w.color || 'Neutro'),
-    tags: tags
+    tags: tags,
+    image: w.image ? safeString(w.image) : null,
+    fitFeedback: w.fitFeedback ? sanitizeWardrobeFitFeedback(w.fitFeedback) : null
   };
 };
 
@@ -301,11 +324,16 @@ export const sanitizeWardrobeList = (list) => {
 export const sanitizeCustomOutfit = (o) => {
   if (!o || typeof o !== 'object') return null;
 
+  const garmentIds = Array.isArray(o.garmentIds)
+    ? o.garmentIds.map(i => safeString(i)).filter(Boolean)
+    : (Array.isArray(o.items) ? o.items.map(i => safeString(i)).filter(Boolean) : []);
+
   return {
     id: safeString(o.id || 'outfit-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
     name: safeString(o.name || o.title || 'Outfit'),
     occasion: safeString(o.occasion || 'Casual'),
-    items: Array.isArray(o.items) ? o.items.map(i => safeString(i)).filter(Boolean) : [],
+    garmentIds,
+    items: garmentIds,
     notes: safeString(o.notes || '')
   };
 };
@@ -365,7 +393,8 @@ export const sanitizeNutritionMeal = (m) => {
   const defaultTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
   const rawMealType = safeString(m.mealType || 'lunch').toLowerCase();
-  const mealType = ['breakfast', 'lunch', 'dinner', 'snack'].includes(rawMealType) ? rawMealType : 'lunch';
+  const mealType = ['breakfast', 'lunch', 'dinner', 'snack', 'full_day'].includes(rawMealType) ? rawMealType : 'lunch';
+  const isMultiMealBatch = Boolean(m.isMultiMealBatch || mealType === 'full_day');
 
   const rawGlycemic = safeString(m.glycemicImpact || 'medium').toLowerCase();
   const glycemicImpact = ['low', 'medium', 'high'].includes(rawGlycemic) ? rawGlycemic : 'medium';
@@ -384,12 +413,24 @@ export const sanitizeNutritionMeal = (m) => {
     ? m.weightLossTips.map(t => safeString(t)).filter(Boolean)
     : (typeof m.weightLossTips === 'string' && m.weightLossTips ? [m.weightLossTips] : []);
 
+  const compensationExercises = Array.isArray(m.compensationExercises)
+    ? m.compensationExercises
+        .filter(ex => ex && typeof ex === 'object')
+        .map(ex => ({
+          name: safeString(ex.name || 'Caminata rápida'),
+          minutes: Math.max(1, Math.round(safeNumber(ex.minutes, 20))),
+          kcalBurned: Math.max(10, Math.round(safeNumber(ex.kcalBurned, 120))),
+          intensity: safeString(ex.intensity || 'Moderada')
+        }))
+    : [];
+
   return {
     id: safeString(m.id || 'meal-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
     date: safeString(m.date || defaultDate),
     time: safeString(m.time || defaultTime),
     name: safeString(m.name || m.dishName || 'Comida Registrada'),
     mealType: mealType,
+    isMultiMealBatch,
     calories: Math.max(0, Math.round(safeNumber(m.calories || m.estimatedCalories, 0))),
     protein: Math.max(0, Math.round(safeNumber(m.protein, 0))),
     carbs: Math.max(0, Math.round(safeNumber(m.carbs, 0))),
@@ -401,6 +442,8 @@ export const sanitizeNutritionMeal = (m) => {
     weightLossVerdict: safeString(m.weightLossVerdict || 'Bueno para déficit calórico'),
     weightLossTips: weightLossTips,
     ingredients: ingredients,
+    recommendedWaterMl: Math.max(0, Math.round(safeNumber(m.recommendedWaterMl, 0))),
+    compensationExercises,
     notes: safeString(m.notes || ''),
     portionMultiplier: Math.max(0.1, safeNumber(m.portionMultiplier, 1))
   };
