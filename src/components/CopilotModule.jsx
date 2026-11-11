@@ -24,7 +24,7 @@ import {
   X
 } from 'lucide-react';
 import { parseRoutineWithCopilot } from '../utils/geminiService';
-import { sanitizeHouseholdItem, sanitizeSelfCareItem, sanitizePetTip, defaultBiomechanicalTips } from '../utils/sanitizers';
+import { sanitizeHouseholdItem, sanitizeSelfCareItem, sanitizePetTip, defaultBiomechanicalTips, extractRoutineProductsFromText, sanitizeRoutineProduct } from '../utils/sanitizers';
 import { getLocalDateString } from '../utils/dateUtils';
 
 export default function CopilotModule({
@@ -40,7 +40,9 @@ export default function CopilotModule({
   petData,
   setPetData,
   showToast,
-  setActiveModule
+  setActiveModule,
+  copilotInitialPrompt = '',
+  setCopilotInitialPrompt
 }) {
   const [messages, setMessages] = useState(() => {
     if (typeof localStorage !== 'undefined') {
@@ -117,6 +119,8 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
   });
 
   const [inputPrompt, setInputPrompt] = useState('');
+  const [newProductQuickInput, setNewProductQuickInput] = useState('');
+  const [newProductOwnedState, setNewProductOwnedState] = useState('owned'); // 'owned' | 'to_buy'
   const [isProcessing, setIsProcessing] = useState(false);
   const [conflictModal, setConflictModal] = useState(null);
   const messagesEndRef = useRef(null);
@@ -135,6 +139,10 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
   }, [messages]);
 
   const quickPrompts = [
+    {
+      label: '🧴 Compré un producto nuevo: ¿Cómo lo agrego a mi rutina?',
+      text: 'Compré este nuevo producto: "Sérum de Niacinamida 10% + Zinc". ¿Cómo, a qué hora y en qué paso de mi rutina diaria me recomiendas agregarlo?'
+    },
     {
       label: '🌸 Rutina de Skincare & Activos No Diarios',
       text: 'Módulo de Skincare y Frecuencias No Diarias:\n\nMatriz interactiva de activos nocturnos para evitar sobreexposición: días de Retinol vs. días de Concha Nácar + Teatrical Aclaradora.\n\nTemporizador y recordatorio para la Máscara LED roja (3 a 4 veces por semana, 10-15 minutos).\n\nRecordatorio de Mascarilla Coreana de Arroz (un día sí, un día no).'
@@ -165,8 +173,11 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
     setIsProcessing(true);
 
     try {
-      showToast('info', 'AURA Copilot Analizando', 'Extrayendo compras, autocuidado y temporizadores...');
-      const response = await parseRoutineWithCopilot(prompt, messages, geminiApiKey);
+      showToast('info', 'AURA Copilot Analizando', 'Analizando tu rutina actual, compatibilidad de activos y horarios...');
+      const response = await parseRoutineWithCopilot(prompt, messages, geminiApiKey, {
+        schedule,
+        householdItems
+      });
 
       const botMsg = {
         id: 'msg-' + (Date.now() + 1),
@@ -191,6 +202,16 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
       setIsProcessing(false);
     }
   };
+
+  useEffect(() => {
+    if (copilotInitialPrompt && copilotInitialPrompt.trim() && !isProcessing) {
+      const promptToRun = copilotInitialPrompt.trim();
+      if (setCopilotInitialPrompt) {
+        setCopilotInitialPrompt('');
+      }
+      handleSendMessage(promptToRun);
+    }
+  }, [copilotInitialPrompt]);
 
   // Helper for duplicate / similarity detection
   const findItemConflict = (newItemName, existingList, nameKey = 'title') => {
@@ -317,14 +338,34 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
     setSchedule(prev => {
       let list = Array.isArray(prev) ? [...prev] : [];
       itemsToReplace.forEach(({ existingId, updatedItem }) => {
-        list = list.map(s => s && s.id === existingId ? {
-          ...s,
-          time: updatedItem.time || s.time,
-          title: updatedItem.title,
-          desc: updatedItem.desc || s.desc,
-          tag: updatedItem.tag || s.tag,
-          isRoutine: updatedItem.isRoutine !== undefined ? updatedItem.isRoutine : s.isRoutine
-        } : s);
+        list = list.map(s => {
+          if (!s || s.id !== existingId) return s;
+          const baseProds = Array.isArray(s.products)
+            ? [...s.products]
+            : extractRoutineProductsFromText(s.desc, s.title);
+          const incomingProds = Array.isArray(updatedItem.products) ? updatedItem.products : [];
+          incomingProds.forEach(inc => {
+            if (!inc || !inc.name) return;
+            const normInc = inc.name.toLowerCase().trim();
+            const existingIdx = baseProds.findIndex(bp => bp.name.toLowerCase().trim() === normInc);
+            if (existingIdx >= 0) {
+              baseProds[existingIdx] = { ...baseProds[existingIdx], status: inc.status || 'owned', manualOverride: true };
+            } else {
+              baseProds.push(sanitizeRoutineProduct({ ...inc, manualOverride: true }, baseProds.length));
+            }
+          });
+
+          return {
+            ...s,
+            time: updatedItem.time || s.time,
+            title: updatedItem.title || s.title,
+            desc: updatedItem.desc || s.desc,
+            tag: updatedItem.tag || s.tag,
+            routineStatus: updatedItem.routineStatus || s.routineStatus || 'active',
+            products: baseProds.filter(Boolean),
+            isRoutine: updatedItem.isRoutine !== undefined ? updatedItem.isRoutine : s.isRoutine
+          };
+        });
       });
       return [...list, ...finalScheduleToAdd];
     });
@@ -334,7 +375,7 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
       executedActions: { ...(m.executedActions || {}), schedule: true }
     } : m));
 
-    showToast('success', 'Horario Actualizado', `Se procesaron ${finalScheduleToAdd.length + itemsToReplace.length} bloques en el horario.`);
+    showToast('success', 'Horario Actualizado', `Se integraron ${finalScheduleToAdd.length + itemsToReplace.length} bloques/productos en tu Rutina Diaria.`);
   };
 
   const handleAddPetGuide = (msgId, petGuideTips) => {
@@ -430,7 +471,9 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
           category: typeof itemObj.category === 'string' ? itemObj.category : 'Skincare',
           stores: validStores,
           preferredStore: validStores[0]?.storeName || '',
-          repurchaseVerdict: 'need_to_buy',
+          repurchaseVerdict: ['yes', 'need_to_buy', 'running_low', 'buy_later', 'maybe', 'no'].includes(itemObj.repurchaseVerdict)
+            ? itemObj.repurchaseVerdict
+            : 'need_to_buy',
           notes: typeof itemObj.notes === 'string' ? itemObj.notes : (Array.isArray(itemObj.notes) ? itemObj.notes.join('. ') : 'Agregado automáticamente por AURA Copilot.')
         };
 
@@ -594,30 +637,57 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
           cat = (hour < 6 || hour === 12) ? 'afternoon' : 'night';
         }
 
+        const titleStr = typeof sObj.title === 'string' ? sObj.title : 'Bloque de Rutina';
+        const descStr = typeof sObj.desc === 'string' ? sObj.desc : (typeof sObj.notes === 'string' ? sObj.notes : 'Configurado por AURA Copilot');
+        const extractedProds = extractRoutineProductsFromText(descStr, titleStr);
+        const explicitToAdd = Array.isArray(sObj.productsToAdd)
+          ? sObj.productsToAdd.map((p, idx) => sanitizeRoutineProduct(p, idx)).filter(Boolean)
+          : [];
+        const mergedProds = [...extractedProds];
+        explicitToAdd.forEach(ep => {
+          const idx = mergedProds.findIndex(mp => mp.name.toLowerCase().trim() === ep.name.toLowerCase().trim());
+          if (idx >= 0) {
+            mergedProds[idx] = { ...mergedProds[idx], status: ep.status || 'owned', manualOverride: true };
+          } else {
+            mergedProds.push({ ...ep, manualOverride: true });
+          }
+        });
+
         return {
           id: 'sch-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
           time: timeStr,
-          title: typeof sObj.title === 'string' ? sObj.title : 'Bloque de Rutina',
-          desc: typeof sObj.desc === 'string' ? sObj.desc : (typeof sObj.notes === 'string' ? sObj.notes : 'Configurado por AURA Copilot'),
+          title: titleStr,
+          desc: descStr,
           category: typeof sObj.category === 'string' ? sObj.category : cat,
           completed: false,
           tag: typeof sObj.tag === 'string' ? sObj.tag : 'beauty',
+          routineStatus: sObj.routineStatus === 'idea' ? 'idea' : 'active',
+          products: mergedProds,
+          hasProductsToAdd: explicitToAdd.length > 0,
           isRoutine: sObj.isRoutine !== undefined ? Boolean(sObj.isRoutine) : true
         };
       });
 
     const conflicts = [];
     const cleanItems = [];
+    const directMerges = [];
 
     preparedItems.forEach(newItem => {
       const existing = findItemConflict(newItem.title, schedule, 'title');
       if (existing) {
-        conflicts.push({
-          id: newItem.id,
-          newItem,
-          existingItem: existing,
-          resolution: 'replace'
-        });
+        if (newItem.hasProductsToAdd) {
+          directMerges.push({
+            existingId: existing.id,
+            updatedItem: newItem
+          });
+        } else {
+          conflicts.push({
+            id: newItem.id,
+            newItem,
+            existingItem: existing,
+            resolution: 'replace'
+          });
+        }
       } else {
         cleanItems.push(newItem);
       }
@@ -629,10 +699,13 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
         type: 'schedule',
         title: 'Horario Diario',
         conflicts,
-        cleanItems
+        cleanItems: [...cleanItems]
       });
+      if (directMerges.length > 0) {
+        executeApplySchedule(msgId, [], directMerges);
+      }
     } else {
-      executeApplySchedule(msgId, cleanItems, []);
+      executeApplySchedule(msgId, cleanItems, directMerges);
     }
   };
 
@@ -815,6 +888,63 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
           <Trash2 className="w-3.5 h-3.5" />
           <span>Limpiar Chat</span>
         </button>
+      </div>
+
+      {/* Quick New Product Routine Integrator Bar */}
+      <div className="bg-[#171a24] border border-[#e0a96d]/25 p-3.5 rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-2.5">
+          <span className="text-base bg-[#e0a96d]/15 border border-[#e0a96d]/30 w-8 h-8 rounded-lg flex items-center justify-center shrink-0">
+            🧴
+          </span>
+          <div>
+            <h3 className="text-xs font-bold text-slate-100">
+              Integrar Nuevo Producto a mi Rutina Diaria
+            </h3>
+            <p className="text-[11px] text-slate-400">
+              Escribe el producto que compraste (o planeas comprar) y Copilot IA te dirá en qué paso, hora y orden aplicarlo.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto">
+          <input
+            type="text"
+            value={newProductQuickInput}
+            onChange={(e) => setNewProductQuickInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newProductQuickInput.trim()) {
+                e.preventDefault();
+                const prefix = newProductOwnedState === 'owned' ? 'Compré este nuevo producto' : 'Quiero agregar como idea por comprar este producto';
+                handleSendMessage(`${prefix}: "${newProductQuickInput.trim()}". ¿Cómo, a qué hora y en qué paso de mi rutina diaria me recomiendas agregarlo?`);
+                setNewProductQuickInput('');
+              }
+            }}
+            placeholder="Ej. Sérum de Vitamina C, Ácido Glicólico, Contorno de ojos..."
+            className="flex-1 lg:w-64 bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:border-[#e0a96d]"
+          />
+          <select
+            value={newProductOwnedState}
+            onChange={(e) => setNewProductOwnedState(e.target.value)}
+            className="bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl py-1.5 px-2.5 text-[11px] text-slate-200 cursor-pointer"
+          >
+            <option value="owned">✅ Ya lo compré</option>
+            <option value="to_buy">🛒 Idea / Por comprar</option>
+          </select>
+          <button
+            type="button"
+            disabled={!newProductQuickInput.trim() || isProcessing}
+            onClick={() => {
+              if (!newProductQuickInput.trim()) return;
+              const prefix = newProductOwnedState === 'owned' ? 'Compré este nuevo producto' : 'Quiero agregar como idea por comprar este producto';
+              handleSendMessage(`${prefix}: "${newProductQuickInput.trim()}". ¿Cómo, a qué hora y en qué paso de mi rutina diaria me recomiendas agregarlo?`);
+              setNewProductQuickInput('');
+            }}
+            className="btn-rose-gold text-[11px] font-bold py-1.5 px-3.5 rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Recomendar en mi Rutina</span>
+          </button>
+        </div>
       </div>
 
       {/* Quick Prompts Chips */}
@@ -1029,38 +1159,58 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
                       {/* 4. Schedule Blocks */}
                       {hasSchedule && (
                         <div className="bg-[#0b0c10] border border-emerald-500/20 p-3.5 rounded-xl space-y-2">
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
                             <span className="font-bold text-emerald-400 text-xs flex items-center gap-1.5">
                               <CheckCircle2 className="w-4 h-4" />
-                              Horario Diario ({msg.actions.schedule.length} Bloques)
+                              Horario Diario ({msg.actions.schedule.length} {msg.actions.schedule.length === 1 ? 'Paso de Rutina' : 'Bloques'})
                             </span>
-                            <button
-                              disabled={msg.executedActions?.schedule}
-                              onClick={() => handleAddScheduleBlock(msg.id, msg.actions.schedule)}
-                              className={`text-[11px] font-bold py-1 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
-                                msg.executedActions?.schedule
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                                  : 'btn-rose-gold shadow-sm'
-                              }`}
-                            >
-                              {msg.executedActions?.schedule ? (
-                                <>
-                                  <Check className="w-3 h-3" />
-                                  <span>Integrado al Horario</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Plus className="w-3 h-3" />
-                                  <span>Agregar al Horario</span>
-                                </>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                disabled={msg.executedActions?.schedule}
+                                onClick={() => handleAddScheduleBlock(msg.id, msg.actions.schedule)}
+                                className={`text-[11px] font-bold py-1 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
+                                  msg.executedActions?.schedule
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                    : 'btn-rose-gold shadow-sm'
+                                }`}
+                              >
+                                {msg.executedActions?.schedule ? (
+                                  <>
+                                    <Check className="w-3 h-3" />
+                                    <span>Integrado en mi Rutina</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="w-3 h-3" />
+                                    <span>Integrar a mi Rutina Diaria</span>
+                                  </>
+                                )}
+                              </button>
+                              {msg.executedActions?.schedule && setActiveModule && (
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveModule('schedule')}
+                                  className="text-[11px] font-bold py-1 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1 cursor-pointer transition-all"
+                                >
+                                  <span>Ver Rutina</span>
+                                  <ChevronRight className="w-3 h-3" />
+                                </button>
                               )}
-                            </button>
+                            </div>
                           </div>
-                          <ul className="space-y-1 text-slate-300">
+                          <ul className="space-y-1.5 text-slate-300">
                             {msg.actions.schedule.map((sch, idx) => (
-                              <li key={idx} className="flex items-center gap-2 text-[11px]">
-                                <span className="font-mono text-[#e0a96d] font-bold">{sch.time}</span>
-                                <span>{sch.title}</span>
+                              <li key={idx} className="text-[11px] space-y-0.5">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono text-[#e0a96d] font-bold">{sch.time}</span>
+                                  <strong className="text-slate-100">{sch.title}</strong>
+                                  {Array.isArray(sch.productsToAdd) && sch.productsToAdd.map((pt, pIdx) => (
+                                    <span key={pIdx} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">
+                                      {pt.status === 'to_buy' ? '🛒 Por comprar:' : '✅ Ya lo tengo:'} {pt.name}
+                                    </span>
+                                  ))}
+                                </div>
+                                {sch.desc && <p className="text-[10px] text-slate-400">{sch.desc}</p>}
                               </li>
                             ))}
                           </ul>

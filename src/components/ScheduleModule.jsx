@@ -28,9 +28,13 @@ import {
   Layers,
   CalendarCheck,
   ArrowRight,
-  ShoppingBag
+  ShoppingBag,
+  ShoppingCart,
+  Ban,
+  Lightbulb,
+  Bot
 } from 'lucide-react';
-import { sanitizeScheduleList, sanitizeSelfCareList } from '../utils/sanitizers';
+import { sanitizeScheduleList, sanitizeSelfCareList, extractRoutineProductsFromText, sanitizeRoutineProduct } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
 import { 
   getLocalDateString, 
@@ -53,11 +57,15 @@ export default function ScheduleModule({
   setWaterIntake,
   schedule = [],
   setSchedule,
+  householdItems = [],
+  setHouseholdItems,
   selfCareActivities = [],
   setSelfCareActivities,
   bagEssentials = [],
   setBagEssentials,
-  showToast
+  showToast,
+  setActiveModule,
+  onAskCopilotProduct
 }) {
   // Navigation Tabs: 'daily' | 'selfcare'
   const [activeTab, setActiveTab] = useState('daily');
@@ -69,8 +77,19 @@ export default function ScheduleModule({
   const [newMinute, setNewMinute] = useState('00');
   const [newPeriod, setNewPeriod] = useState('AM');
   const [newDesc, setNewDesc] = useState('');
+  const [newRoutineStatus, setNewRoutineStatus] = useState('active'); // 'active' | 'idea'
+  const [newProductDraft, setNewProductDraft] = useState('');
+  const [newProductDraftStatus, setNewProductDraftStatus] = useState('owned');
+  const [newProductsList, setNewProductsList] = useState([]);
+  const [routineFilter, setRoutineFilter] = useState('all'); // 'all' | 'active' | 'idea' | 'to_buy' | 'never'
+  const [inlineAddProductItemId, setInlineAddProductItemId] = useState(null);
+  const [inlineProductName, setInlineProductName] = useState('');
+  const [inlineProductStatus, setInlineProductStatus] = useState('owned');
+  const [copilotProductInput, setCopilotProductInput] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [editProductDraft, setEditProductDraft] = useState('');
+  const [editProductDraftStatus, setEditProductDraftStatus] = useState('owned');
 
   // Self-Care Calendar state
   const [selfCareFilter, setSelfCareFilter] = useState('all'); // 'all' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | 'custom'
@@ -154,9 +173,269 @@ export default function ScheduleModule({
     return mins < 300 ? mins + 1440 : mins;
   };
 
+  const normalizeProductText = (str) =>
+    String(str || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const findMatchingHouseholdItem = (productName) => {
+    if (!productName || !Array.isArray(householdItems) || householdItems.length === 0) return null;
+    const normProd = normalizeProductText(productName);
+    if (!normProd) return null;
+    const stopWords = new Set(['con', 'para', 'del', 'los', 'las', 'una', 'uno', 'por', 'min', 'uso', 'crema', 'jabon', 'serum', 'suero', 'facial', 'corporal', 'medios', 'puntas', 'disuelto']);
+    const prodTokens = normProd.split(' ').filter(w => w.length >= 3 && !stopWords.has(w));
+
+    for (const hItem of householdItems) {
+      if (!hItem) continue;
+      const normH = normalizeProductText(hItem.name || '');
+      if (!normH) continue;
+      if (normH === normProd || normH.includes(normProd) || normProd.includes(normH)) {
+        return hItem;
+      }
+      if (prodTokens.length > 0) {
+        const hTokens = new Set(normH.split(' ').filter(w => w.length >= 3));
+        const matches = prodTokens.filter(t => hTokens.has(t));
+        if (matches.length >= 2 || (prodTokens.length === 1 && matches.length === 1 && prodTokens[0].length >= 4)) {
+          return hItem;
+        }
+      }
+    }
+    return null;
+  };
+
+  const getEffectiveProductStatus = (prod) => {
+    if (!prod) return 'owned';
+    if (prod.status && ['owned', 'to_buy', 'to_try', 'never'].includes(prod.status) && prod.status !== 'owned') {
+      return prod.status;
+    }
+    const matchedH = findMatchingHouseholdItem(prod.name);
+    if (matchedH && !prod.manualOverride) {
+      if (matchedH.repurchaseVerdict === 'no') return 'never';
+      if (matchedH.repurchaseVerdict === 'need_to_buy' || matchedH.repurchaseVerdict === 'running_low') return 'to_buy';
+      return 'owned';
+    }
+    return prod.status || 'owned';
+  };
+
+  const removeProductMentionFromDesc = (desc = '', productName = '') => {
+    if (!desc || !productName) return desc;
+    let updated = String(desc);
+    const normTarget = normalizeProductText(productName);
+
+    // Special clean patterns for common routine phrases
+    const specialPatterns = [
+      { key: 'perspirex', regex: /\s*\.?\s*perspirex\s*\/?\s*drysol\s*(\([^)]*\))?\.?/gi },
+      { key: 'acondicionador', regex: /\s*,?\s*acondicionador(\s+de\s+medios\s+a\s+puntas)?\s*(\([^)]*\))?/gi },
+      { key: 'shampoo', regex: /\s*,?\s*shampoo\s+de\s+chile\s*\/?\s*romero/gi },
+      { key: 'jabon de arroz', regex: /\s*,?\s*jab[oó]n\s+de\s+arroz/gi },
+      { key: 'cerave pm', regex: /\s*\+?\s*cerave\s+pm\s*\+?/gi },
+      { key: 'limpiador facial cerave', regex: /\s*,?\s*limpiador\s+facial\s+cerave/gi },
+      { key: 'concha nacar', regex: /\s*\+?\s*concha\s+n[aá]car\s*\+?/gi },
+      { key: 'teatrical aclaradora', regex: /\s*\+?\s*teatrical\s+aclaradora\s*\+?/gi },
+      { key: 'retinol', regex: /\s*\+?\s*(s[eé]rum\s+de\s+)?retinol\s*\+?/gi },
+      { key: 'turbante', regex: /\s*,?\s*turbante\s+de\s+microfibra/gi },
+      { key: 'crema de urea', regex: /\s*,?\s*crema\s+de\s+urea(\s+en\s+codos\/talones)?/gi },
+      { key: 'fps 30', regex: /\s*,?\s*crema\s+hidratante\s+con\s+fps\s*30\+?/gi }
+    ];
+
+    let matchedSpecial = false;
+    for (const sp of specialPatterns) {
+      if (normTarget.includes(sp.key)) {
+        const nextStr = updated.replace(sp.regex, '');
+        if (nextStr !== updated) {
+          updated = nextStr;
+          matchedSpecial = true;
+        }
+      }
+    }
+
+    if (!matchedSpecial) {
+      const escaped = productName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const directRegex = new RegExp(`(\\s*[,+•-]\\s*)?${escaped}(\\s*\\([^)]*\\))?`, 'gi');
+      updated = updated.replace(directRegex, '');
+    }
+
+    updated = updated
+      .replace(/^\s*[,+.;-]\s*/g, '')
+      .replace(/\s*,\s*,/g, ',')
+      .replace(/\s*\+\s*\+/g, ' + ')
+      .replace(/\bNoches\s*\+\s*/gi, 'Noches ')
+      .replace(/\s+\./g, '.')
+      .replace(/\.\s*\./g, '.')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    if (updated && !/[.!]$/.test(updated)) {
+      updated += '.';
+    }
+    return updated;
+  };
+
+  const handleToggleRoutineStatus = (scheduleItemId) => {
+    setSchedule(prev =>
+      sanitizeScheduleList(prev).map(item => {
+        if (String(item.id) !== String(scheduleItemId)) return item;
+        const nextStatus = item.routineStatus === 'idea' ? 'active' : 'idea';
+        showToast(
+          'info',
+          nextStatus === 'active' ? '✅ Rutina Activa' : '💡 Guardada como Sugerencia / Idea',
+          nextStatus === 'active'
+            ? `"${item.title}" marcada como activa en tu día a día.`
+            : `"${item.title}" marcada como sugerencia/idea que aún no aplicas.`
+        );
+        return { ...item, routineStatus: nextStatus };
+      })
+    );
+  };
+
+  const handleSetRoutineProductStatus = (scheduleItemId, productId, nextStatus) => {
+    let targetProdName = '';
+    setSchedule(prev =>
+      sanitizeScheduleList(prev).map(item => {
+        if (String(item.id) !== String(scheduleItemId)) return item;
+        const currentProds = Array.isArray(item.products) ? item.products : extractRoutineProductsFromText(item.desc, item.title);
+        const updatedProds = currentProds.map(p => {
+          if (p.id === productId) {
+            targetProdName = p.name;
+            return { ...p, status: nextStatus, manualOverride: true };
+          }
+          return p;
+        });
+        return { ...item, products: updatedProds };
+      })
+    );
+
+    if (targetProdName && setHouseholdItems) {
+      const matchedH = findMatchingHouseholdItem(targetProdName);
+      const verdictMap = { owned: 'yes', to_buy: 'need_to_buy', to_try: 'need_to_buy', never: 'no' };
+      const mappedVerdict = verdictMap[nextStatus] || 'yes';
+
+      if (matchedH) {
+        setHouseholdItems(prev =>
+          (Array.isArray(prev) ? prev : []).map(h =>
+            h && h.id === matchedH.id ? { ...h, repurchaseVerdict: mappedVerdict } : h
+          )
+        );
+      } else if (nextStatus === 'to_buy' || nextStatus === 'to_try') {
+        setHouseholdItems(prev => [
+          ...(Array.isArray(prev) ? prev : []),
+          {
+            id: 'item-' + Date.now(),
+            name: targetProdName,
+            category: 'Skincare',
+            stores: [],
+            pendingStores: [],
+            subproducts: [],
+            favoriteVariety: '',
+            varietyOpinions: {},
+            preferredStore: '',
+            repurchaseVerdict: 'need_to_buy',
+            notes: nextStatus === 'to_try'
+              ? 'Agregado desde Mi Rutina Diaria (Por comprar y probar).'
+              : 'Agregado desde Mi Rutina Diaria (Por comprar).'
+          }
+        ]);
+      }
+    }
+
+    const statusLabels = {
+      owned: '✅ Ya lo tengo en casa',
+      to_buy: '🛒 Por comprar (sincronizado con Insumos)',
+      to_try: '🧪 Por probar / Por comprar y probar',
+      never: '🚫 No volver a usar (puedes quitarlo de la rutina con 🗑️)'
+    };
+    if (targetProdName) {
+      showToast('info', targetProdName, statusLabels[nextStatus] || 'Estado actualizado');
+    }
+  };
+
+  const handleRemoveProductFromRoutine = (scheduleItemId, prod) => {
+    if (!prod) return;
+    setSchedule(prev =>
+      sanitizeScheduleList(prev).map(item => {
+        if (String(item.id) !== String(scheduleItemId)) return item;
+        const currentProds = Array.isArray(item.products) ? item.products : extractRoutineProductsFromText(item.desc, item.title);
+        const updatedProds = currentProds.filter(p => p.id !== prod.id && p.name !== prod.name);
+        const cleanedDesc = removeProductMentionFromDesc(item.desc, prod.name);
+        const prevRemoved = Array.isArray(item.removedProductNames) ? item.removedProductNames : [];
+        const removedKey = String(prod.name || '').toLowerCase().trim();
+        return {
+          ...item,
+          products: updatedProds,
+          removedProductNames: removedKey ? Array.from(new Set([...prevRemoved, removedKey])) : prevRemoved,
+          desc: cleanedDesc
+        };
+      })
+    );
+    showToast('info', 'Producto Eliminado de la Rutina', `Se quitó "${prod.name}" de este paso de tu rutina.`);
+  };
+
+  const handleAddInlineProductToRoutine = (scheduleItemId) => {
+    const cleanName = inlineProductName.trim();
+    if (!cleanName) return;
+
+    setSchedule(prev =>
+      sanitizeScheduleList(prev).map(item => {
+        if (String(item.id) !== String(scheduleItemId)) return item;
+        const currentProds = Array.isArray(item.products) ? item.products : extractRoutineProductsFromText(item.desc, item.title);
+        const newProd = sanitizeRoutineProduct({
+          id: 'rp-' + Date.now(),
+          name: cleanName,
+          status: inlineProductStatus
+        });
+        const normDesc = normalizeProductText(item.desc || '');
+        const normName = normalizeProductText(cleanName);
+        const updatedDesc = normDesc.includes(normName)
+          ? item.desc
+          : (item.desc ? `${item.desc.replace(/\.\s*$/, '')}, ${cleanName}.` : cleanName);
+
+        return {
+          ...item,
+          desc: updatedDesc,
+          products: [...currentProds, newProd].filter(Boolean)
+        };
+      })
+    );
+
+    if (inlineProductStatus === 'to_buy' && setHouseholdItems && !findMatchingHouseholdItem(cleanName)) {
+      setHouseholdItems(prev => [
+        ...(Array.isArray(prev) ? prev : []),
+        {
+          id: 'item-' + Date.now(),
+          name: cleanName,
+          category: 'Skincare',
+          stores: [],
+          pendingStores: [],
+          subproducts: [],
+          favoriteVariety: '',
+          varietyOpinions: {},
+          preferredStore: '',
+          repurchaseVerdict: 'need_to_buy',
+          notes: 'Agregado desde Mi Rutina Diaria.'
+        }
+      ]);
+    }
+
+    showToast('success', 'Producto Agregado al Paso', `Se añadió "${cleanName}" a este bloque de tu rutina.`);
+    setInlineProductName('');
+    setInlineProductStatus('owned');
+    setInlineAddProductItemId(null);
+  };
+
   const executeSaveScheduleActivity = (trimmedTitle) => {
     const timeStr = `${newHour}:${newMinute} ${newPeriod}`;
     const cat = calculateCategory(newHour, newMinute, newPeriod);
+    const extracted = extractRoutineProductsFromText(newDesc, trimmedTitle);
+    const mergedProducts = [...newProductsList];
+    extracted.forEach(ext => {
+      if (!mergedProducts.some(p => normalizeProductText(p.name) === normalizeProductText(ext.name))) {
+        mergedProducts.push(ext);
+      }
+    });
 
     const newItem = {
       id: Date.now(),
@@ -164,12 +443,17 @@ export default function ScheduleModule({
       title: trimmedTitle,
       desc: newDesc,
       category: cat,
-      completed: false
+      completed: false,
+      routineStatus: newRoutineStatus,
+      products: mergedProducts
     };
 
     setSchedule([...schedule, newItem]);
     setNewTitle('');
     setNewDesc('');
+    setNewRoutineStatus('active');
+    setNewProductsList([]);
+    setNewProductDraft('');
     setIsAdding(false);
     setSimilarPrompt(null);
     showToast('success', 'Actividad Añadida', `Se ha programado "${trimmedTitle}"`);
@@ -247,8 +531,12 @@ export default function ScheduleModule({
       ...item, 
       hour: h, 
       minute: m, 
-      period: p 
+      period: p,
+      routineStatus: item.routineStatus || 'active',
+      products: Array.isArray(item.products) ? item.products : extractRoutineProductsFromText(item.desc, item.title)
     });
+    setEditProductDraft('');
+    setEditProductDraftStatus('owned');
   };
 
   const handleSaveEdit = () => {
@@ -260,22 +548,231 @@ export default function ScheduleModule({
 
   // Group by category and sort chronologically (with sanitized safety)
   const safeSchedule = sanitizeScheduleList(schedule);
+
+  const matchesRoutineFilter = (item) => {
+    if (!item) return false;
+    if (routineFilter === 'active') return (item.routineStatus || 'active') === 'active';
+    if (routineFilter === 'idea') return item.routineStatus === 'idea';
+    if (routineFilter === 'to_buy') {
+      const prods = Array.isArray(item.products) ? item.products : [];
+      return prods.some(p => {
+        const st = getEffectiveProductStatus(p);
+        return st === 'to_buy' || st === 'to_try';
+      });
+    }
+    if (routineFilter === 'to_try') {
+      const prods = Array.isArray(item.products) ? item.products : [];
+      return prods.some(p => getEffectiveProductStatus(p) === 'to_try');
+    }
+    if (routineFilter === 'never') {
+      const prods = Array.isArray(item.products) ? item.products : [];
+      return prods.some(p => getEffectiveProductStatus(p) === 'never');
+    }
+    return true;
+  };
+
+  const activeRoutineCount = safeSchedule.filter(i => (i.routineStatus || 'active') === 'active').length;
+  const ideaRoutineCount = safeSchedule.filter(i => i.routineStatus === 'idea').length;
+  const toBuyRoutineCount = safeSchedule.filter(i => (i.products || []).some(p => {
+    const st = getEffectiveProductStatus(p);
+    return st === 'to_buy' || st === 'to_try';
+  })).length;
+  const toTryRoutineCount = safeSchedule.filter(i => (i.products || []).some(p => getEffectiveProductStatus(p) === 'to_try')).length;
+  const neverRoutineCount = safeSchedule.filter(i => (i.products || []).some(p => getEffectiveProductStatus(p) === 'never')).length;
+
+  const filteredDailySchedule = safeSchedule.filter(matchesRoutineFilter);
+
+  const buildFlexibleProductRegexPattern = (name = '') => {
+    return String(name)
+      .trim()
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/['’]/g, "['’]")
+      .replace(/\s+/g, '\\s+');
+  };
+
+  const renderInlineProductBadge = (item, prod, matchedText, key) => {
+    const effStatus = getEffectiveProductStatus(prod);
+    const isOwned = effStatus === 'owned';
+    const isToBuy = effStatus === 'to_buy';
+    const isToTry = effStatus === 'to_try';
+    const isNever = effStatus === 'never';
+
+    const isFilterHighlighted =
+      (routineFilter === 'to_buy' && (isToBuy || isToTry)) ||
+      (routineFilter === 'to_try' && isToTry) ||
+      (routineFilter === 'never' && isNever);
+
+    const statusBadgeMeta = isNever
+      ? { icon: '🚫', label: 'No volver a usar', cls: 'bg-rose-950/60 border-rose-500/50 text-rose-200' }
+      : isToTry
+      ? { icon: '🧪', label: 'Por probar', cls: 'bg-violet-950/60 border-violet-400/50 text-violet-100' }
+      : isToBuy
+      ? { icon: '🛒', label: 'Por comprar', cls: 'bg-amber-950/60 border-amber-400/50 text-amber-100' }
+      : { icon: '✅', label: 'Ya lo tengo', cls: 'bg-emerald-950/45 border-emerald-500/40 text-emerald-100' };
+
+    return (
+      <span
+        key={key}
+        className={`inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 my-0.5 rounded-md border text-[11px] leading-tight align-baseline transition-all ${statusBadgeMeta.cls} ${
+          isFilterHighlighted ? 'ring-2 ring-[#e0a96d] shadow-md scale-[1.02]' : ''
+        }`}
+      >
+        <span className={`font-semibold ${isNever ? 'line-through text-rose-300/85' : ''}`}>
+          {matchedText || prod.name}
+        </span>
+        <span
+          className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1 py-0.2 rounded bg-black/25"
+          title={`Estado actual: ${statusBadgeMeta.icon} ${statusBadgeMeta.label}`}
+        >
+          <span>{statusBadgeMeta.icon}</span>
+        </span>
+        <span className="inline-flex items-center gap-0.5 pl-1 border-l border-white/15">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSetRoutineProductStatus(item.id, prod.id, 'owned');
+            }}
+            title="✅ Ya lo tengo en casa"
+            className={`px-0.5 rounded text-[10px] transition-all cursor-pointer ${
+              isOwned ? 'bg-emerald-500/35 ring-1 ring-emerald-400/60' : 'opacity-40 hover:opacity-100 hover:bg-white/10'
+            }`}
+          >
+            ✅
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSetRoutineProductStatus(item.id, prod.id, 'to_buy');
+            }}
+            title="🛒 Por comprar (sincroniza con Insumos)"
+            className={`px-0.5 rounded text-[10px] transition-all cursor-pointer ${
+              isToBuy ? 'bg-amber-500/35 ring-1 ring-amber-400/60' : 'opacity-40 hover:opacity-100 hover:bg-white/10'
+            }`}
+          >
+            🛒
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSetRoutineProductStatus(item.id, prod.id, 'to_try');
+            }}
+            title="🧪 Por comprar y probar / Por probar"
+            className={`px-0.5 rounded text-[10px] transition-all cursor-pointer ${
+              isToTry ? 'bg-violet-500/35 ring-1 ring-violet-400/60' : 'opacity-40 hover:opacity-100 hover:bg-white/10'
+            }`}
+          >
+            🧪
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSetRoutineProductStatus(item.id, prod.id, 'never');
+            }}
+            title="🚫 No volver a usar / comprar"
+            className={`px-0.5 rounded text-[10px] transition-all cursor-pointer ${
+              isNever ? 'bg-rose-500/40 ring-1 ring-rose-400/60' : 'opacity-40 hover:opacity-100 hover:bg-white/10'
+            }`}
+          >
+            🚫
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRemoveProductFromRoutine(item.id, prod);
+            }}
+            title={`Quitar "${prod.name}" de este paso de la rutina`}
+            className={`ml-0.5 px-1 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-0.5 transition-all cursor-pointer ${
+              isNever
+                ? 'bg-rose-500 text-white hover:bg-rose-400 shadow-sm'
+                : 'text-slate-300/70 hover:text-rose-300 hover:bg-rose-500/20'
+            }`}
+          >
+            <Trash2 className="w-2.5 h-2.5" />
+            {isNever && <span>Quitar</span>}
+          </button>
+        </span>
+      </span>
+    );
+  };
+
+  const renderDescriptionWithInlineProducts = (item) => {
+    const rawDesc = String(item?.desc || '');
+    const itemProducts = Array.isArray(item?.products) ? item.products.filter(p => p && p.name) : [];
+    if (!rawDesc) return { inlineNodes: null, unmatchedProducts: itemProducts };
+    if (itemProducts.length === 0) {
+      return { inlineNodes: rawDesc, unmatchedProducts: [] };
+    }
+
+    // Sort longest product names first so specific products match before shorter substrings
+    const sortedProds = [...itemProducts].sort((a, b) => b.name.length - a.name.length);
+    const patternParts = sortedProds
+      .map(p => buildFlexibleProductRegexPattern(p.name))
+      .filter(Boolean);
+
+    if (patternParts.length === 0) {
+      return { inlineNodes: rawDesc, unmatchedProducts: itemProducts };
+    }
+
+    const combinedRegex = new RegExp(`(${patternParts.join('|')})`, 'gi');
+    const matchedProdIds = new Set();
+    const nodes = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = combinedRegex.exec(rawDesc)) !== null) {
+      const matchStart = match.index;
+      const matchedStr = match[0];
+      if (matchStart > lastIndex) {
+        nodes.push(rawDesc.slice(lastIndex, matchStart));
+      }
+
+      const normMatched = normalizeProductText(matchedStr);
+      const matchedProd =
+        sortedProds.find(p => normalizeProductText(p.name) === normMatched) ||
+        sortedProds.find(p => {
+          const np = normalizeProductText(p.name);
+          return np && (normMatched.includes(np) || np.includes(normMatched));
+        });
+
+      if (matchedProd) {
+        matchedProdIds.add(matchedProd.id);
+        nodes.push(renderInlineProductBadge(item, matchedProd, matchedStr, `${item.id}-inline-${matchStart}`));
+      } else {
+        nodes.push(matchedStr);
+      }
+
+      lastIndex = matchStart + matchedStr.length;
+    }
+
+    if (lastIndex < rawDesc.length) {
+      nodes.push(rawDesc.slice(lastIndex));
+    }
+
+    const unmatchedProducts = itemProducts.filter(p => !matchedProdIds.has(p.id));
+    return { inlineNodes: nodes, unmatchedProducts };
+  };
+
   const dailySections = {
     morning: { 
       label: 'Mañana (05:00 AM - 11:59 AM)', 
-      items: safeSchedule
+      items: filteredDailySchedule
         .filter(i => i && (i.category === 'morning' || i.category === 'hygiene'))
         .sort((a, b) => getMinutesFromMidnight(a.time) - getMinutesFromMidnight(b.time))
     },
     afternoon: { 
       label: 'Tarde (12:00 PM - 06:59 PM)', 
-      items: safeSchedule
+      items: filteredDailySchedule
         .filter(i => i && i.category === 'afternoon')
         .sort((a, b) => getMinutesFromMidnight(a.time) - getMinutesFromMidnight(b.time))
     },
     night: { 
       label: 'Noche (07:00 PM - 04:59 AM)', 
-      items: safeSchedule
+      items: filteredDailySchedule
         .filter(i => i && i.category === 'night')
         .sort((a, b) => getNightSortMinutes(a.time) - getNightSortMinutes(b.time))
     }
@@ -862,19 +1359,157 @@ export default function ScheduleModule({
           </div>
 
           {/* Routine Timeline */}
-          <div className="bg-[#171a24] border border-[#e0a96d]/15 p-6 rounded-xl shadow-lg">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <div className="bg-[#171a24] border border-[#e0a96d]/15 p-6 rounded-xl shadow-lg space-y-5">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <h3 className="text-xl font-bold text-slate-100 font-outfit">Cronograma de Rutina Diaria</h3>
-                <p className="text-xs text-slate-400 mt-1">Completa y gestiona tus rituales diarios programados.</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Distingue entre pasos que <strong>ya aplicas</strong> y <strong>sugerencias/ideas por aplicar</strong>, y controla el estado de cada producto (✅ Ya lo tengo, 🛒 Por comprar, 🚫 No volver a usar).
+                </p>
               </div>
               <button
                 onClick={() => setIsAdding(!isAdding)}
-                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg flex items-center gap-2 cursor-pointer transition-all"
+                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg flex items-center gap-2 cursor-pointer transition-all shrink-0"
               >
                 <Plus className="w-4 h-4" />
-                <span>Añadir Actividad</span>
+                <span>Añadir Actividad / Idea</span>
               </button>
+            </div>
+
+            {/* Copilot IA Quick Product Integration Bar */}
+            <div className="p-3.5 rounded-xl bg-gradient-to-r from-[#0b0c10] via-[#141722] to-[#0b0c10] border border-[#e0a96d]/25 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#e0a96d]/15 border border-[#e0a96d]/30 flex items-center justify-center text-[#e0a96d] shrink-0">
+                  <Bot className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-100 block">
+                    🧴 ¿Compraste un producto nuevo o quieres integrar uno a tu rutina?
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Dile a <strong>Copilot IA</strong> qué compraste y te recomendará a qué hora, en qué paso y orden agregarlo sin chocar con otros activos.
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full lg:w-auto">
+                <input
+                  type="text"
+                  value={copilotProductInput}
+                  onChange={(e) => setCopilotProductInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && copilotProductInput.trim() && onAskCopilotProduct) {
+                      e.preventDefault();
+                      onAskCopilotProduct(`Compré este nuevo producto: "${copilotProductInput.trim()}". ¿Cómo, a qué hora y en qué paso de mi rutina diaria me recomiendas agregarlo?`);
+                      setCopilotProductInput('');
+                    }
+                  }}
+                  placeholder="Ej. Sérum de Vitamina C, Ácido Glicólico, Contorno de ojos..."
+                  className="flex-1 lg:w-64 bg-[#171a24] border border-[#e0a96d]/25 rounded-lg py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:border-[#e0a96d]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const prodText = copilotProductInput.trim();
+                    const promptToSend = prodText
+                      ? `Compré este nuevo producto: "${prodText}". ¿Cómo, a qué hora y en qué paso de mi rutina diaria me recomiendas agregarlo?`
+                      : 'Compré un producto nuevo y quiero que me recomiendes en qué paso y horario de mi rutina diaria agregarlo.';
+                    if (onAskCopilotProduct) {
+                      onAskCopilotProduct(promptToSend);
+                      setCopilotProductInput('');
+                    } else if (setActiveModule) {
+                      setActiveModule('copilot');
+                    }
+                  }}
+                  className="btn-rose-gold text-[11px] font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0 shadow-sm"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Recomendar en Copilot IA</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Bar for Routine Steps & Product States */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-slate-800/80">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setRoutineFilter('all')}
+                  className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                    routineFilter === 'all'
+                      ? 'bg-[#e0a96d]/20 text-[#e0a96d] border-[#e0a96d]/40'
+                      : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  Todas ({safeSchedule.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRoutineFilter('active')}
+                  className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                    routineFilter === 'active'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-emerald-300'
+                  }`}
+                >
+                  <span>✅ Aplicando ({activeRoutineCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRoutineFilter('idea')}
+                  className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                    routineFilter === 'idea'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-amber-300'
+                  }`}
+                >
+                  <span>💡 Sugerencias / Aún no aplico ({ideaRoutineCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRoutineFilter('to_buy')}
+                  className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                    routineFilter === 'to_buy'
+                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                      : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-sky-300'
+                  }`}
+                >
+                  <span>🛒 Con productos por comprar ({toBuyRoutineCount})</span>
+                </button>
+                {toTryRoutineCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setRoutineFilter('to_try')}
+                    className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                      routineFilter === 'to_try'
+                        ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                        : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-violet-300'
+                    }`}
+                  >
+                    <span>🧪 Por probar ({toTryRoutineCount})</span>
+                  </button>
+                )}
+                {neverRoutineCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setRoutineFilter('never')}
+                    className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                      routineFilter === 'never'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                        : 'bg-[#0b0c10] text-rose-400/80 border-rose-500/25 hover:text-rose-300'
+                    }`}
+                  >
+                    <span>🚫 Con productos a quitar ({neverRoutineCount})</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 text-[10px] text-slate-400">
+                <span className="flex items-center gap-1"><span className="text-emerald-400">✅</span> Ya lo tengo</span>
+                <span className="flex items-center gap-1"><span className="text-amber-400">🛒</span> Por comprar</span>
+                <span className="flex items-center gap-1"><span className="text-violet-400">🧪</span> Por probar</span>
+                <span className="flex items-center gap-1"><span className="text-rose-400">🚫</span> No volver a usar</span>
+              </div>
             </div>
 
             {/* Add Form Container */}
@@ -917,12 +1552,12 @@ export default function ScheduleModule({
                     </div>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Título de la Actividad</label>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">Título de la Actividad o Idea</label>
                     <input
                       type="text"
                       value={newTitle}
                       onChange={(e) => setNewTitle(e.target.value)}
-                      placeholder="Ej. Estiramiento matutino"
+                      placeholder="Ej. Estiramiento matutino o Aplicar Tónico de Ácido Glicólico"
                       className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
                       required
                     />
@@ -940,6 +1575,103 @@ export default function ScheduleModule({
                     })()}
                   </div>
                 </div>
+
+                {/* Routine Status Selector (Active vs Idea/Suggestion) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">¿Ya aplicas este paso o es una idea/sugerencia?</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewRoutineStatus('active')}
+                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          newRoutineStatus === 'active'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'bg-[#171a24] text-slate-400 border-slate-800'
+                        }`}
+                      >
+                        <span>✅ Ya lo aplico</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewRoutineStatus('idea')}
+                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          newRoutineStatus === 'idea'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-[#171a24] text-slate-400 border-slate-800'
+                        }`}
+                      >
+                        <span>💡 Sugerencia / Idea por aplicar</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Optional Product Adder */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">Productos que usa este paso (Opcional)</label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={newProductDraft}
+                        onChange={(e) => setNewProductDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newProductDraft.trim()) {
+                            e.preventDefault();
+                            setNewProductsList(prev => [
+                              ...prev,
+                              { id: 'rp-' + Date.now(), name: newProductDraft.trim(), status: newProductDraftStatus, manualOverride: true }
+                            ]);
+                            setNewProductDraft('');
+                          }
+                        }}
+                        placeholder="Ej. Sérum Niacinamida..."
+                        className="flex-1 bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-1.5 px-2.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                      />
+                      <select
+                        value={newProductDraftStatus}
+                        onChange={(e) => setNewProductDraftStatus(e.target.value)}
+                        className="bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-1.5 px-2 text-slate-100 text-[11px] focus:outline-none cursor-pointer"
+                      >
+                        <option value="owned">✅ Lo tengo</option>
+                        <option value="to_buy">🛒 Por comprar</option>
+                        <option value="to_try">🧪 Por probar</option>
+                        <option value="never">🚫 No usar</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newProductDraft.trim()) return;
+                          setNewProductsList(prev => [
+                            ...prev,
+                            { id: 'rp-' + Date.now(), name: newProductDraft.trim(), status: newProductDraftStatus, manualOverride: true }
+                          ]);
+                          setNewProductDraft('');
+                        }}
+                        className="bg-[#e0a96d]/20 hover:bg-[#e0a96d]/30 text-[#e0a96d] border border-[#e0a96d]/30 px-2.5 rounded-lg text-xs font-bold cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                    {newProductsList.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {newProductsList.map((p) => (
+                          <span key={p.id} className="inline-flex items-center gap-1 text-[10px] bg-[#171a24] border border-slate-700 px-2 py-0.5 rounded-full text-slate-200">
+                            <span>{p.status === 'owned' ? '✅' : p.status === 'to_buy' ? '🛒' : '🚫'}</span>
+                            <span>{p.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setNewProductsList(prev => prev.filter(x => x.id !== p.id))}
+                              className="text-slate-400 hover:text-rose-400 ml-0.5 cursor-pointer"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Descripción / Método</label>
                   <textarea
@@ -987,68 +1719,177 @@ export default function ScheduleModule({
                   </h4>
                   
                   {section.items.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic pl-3">No hay actividades registradas para esta fase.</p>
+                    <p className="text-xs text-slate-500 italic pl-3">No hay actividades registradas para este filtro en esta fase.</p>
                   ) : (
-                    <div className="space-y-2">
-                      {section.items.map((item) => (
-                        <div 
-                          key={item.id} 
-                          className={`p-3.5 rounded-lg flex items-start justify-between gap-4 transition-all border ${
-                            item.completed 
-                              ? 'bg-[#0b0c10]/40 border-slate-800/40 opacity-60' 
-                              : 'bg-[#0b0c10] border-[#e0a96d]/10 hover:border-[#e0a96d]/30'
-                          }`}
-                        >
-                          <div className="flex items-start gap-3 flex-1 min-w-0">
-                            {/* Checkbox */}
-                            <button
-                              onClick={() => handleToggleComplete(item.id)}
-                              className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-0.5 transition-all cursor-pointer ${
-                                item.completed 
-                                  ? 'bg-[#e0a96d] border-[#e0a96d] text-[#0b0c10]' 
-                                  : 'border-slate-600 hover:border-[#e0a96d]'
-                              }`}
-                              aria-label={`Marcar ${item.title} como ${item.completed ? 'incompleta' : 'completa'}`}
-                            >
-                              {item.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                            </button>
+                    <div className="space-y-2.5">
+                      {section.items.map((item) => {
+                        const isIdea = item.routineStatus === 'idea';
 
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs font-bold text-[#e0a96d] font-outfit">{item.time}</span>
-                                <h5 className={`text-sm font-semibold text-slate-200 truncate ${item.completed ? 'line-through text-slate-500' : ''}`}>
-                                  {item.title}
-                                </h5>
+                        return (
+                          <div 
+                            key={item.id} 
+                            className={`p-3.5 rounded-xl flex flex-col gap-2.5 transition-all border ${
+                              item.completed 
+                                ? 'bg-[#0b0c10]/40 border-slate-800/40 opacity-60' 
+                                : isIdea
+                                ? 'bg-[#0b0c10]/80 border-amber-500/25 hover:border-amber-500/45'
+                                : 'bg-[#0b0c10] border-[#e0a96d]/10 hover:border-[#e0a96d]/30'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                {/* Checkbox */}
+                                <button
+                                  onClick={() => handleToggleComplete(item.id)}
+                                  className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-0.5 transition-all cursor-pointer ${
+                                    item.completed 
+                                      ? 'bg-[#e0a96d] border-[#e0a96d] text-[#0b0c10]' 
+                                      : 'border-slate-600 hover:border-[#e0a96d]'
+                                  }`}
+                                  aria-label={`Marcar ${item.title} como ${item.completed ? 'incompleta' : 'completa'}`}
+                                >
+                                  {item.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                </button>
+
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-[#e0a96d] font-outfit">{item.time}</span>
+                                    <h5 className={`text-sm font-semibold text-slate-200 ${item.completed ? 'line-through text-slate-500' : ''}`}>
+                                      {item.title}
+                                    </h5>
+
+                                    {/* Routine Active vs Suggestion/Idea Toggle Pill */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleRoutineStatus(item.id)}
+                                      title="Haz clic para alternar entre 'Ya lo aplico' y 'Sugerencia / Idea que aún no aplico'"
+                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-all cursor-pointer flex items-center gap-1 ${
+                                        isIdea
+                                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/35 hover:bg-amber-500/25'
+                                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/20'
+                                      }`}
+                                    >
+                                      {isIdea ? (
+                                        <>
+                                          <Lightbulb className="w-3 h-3" />
+                                          <span>Sugerencia / Aún no aplico</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Check className="w-3 h-3" />
+                                          <span>Aplicando</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  {(() => {
+                                    const { inlineNodes, unmatchedProducts } = renderDescriptionWithInlineProducts(item);
+                                    return (
+                                      <>
+                                        {item.desc && (
+                                          <div className={`text-xs text-slate-300 mt-1.5 whitespace-pre-line leading-7 ${item.completed ? 'text-slate-600' : ''}`}>
+                                            {inlineNodes}
+                                          </div>
+                                        )}
+
+                                        {/* Extra products not literally inside desc + Quick inline button to add a product */}
+                                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                          {unmatchedProducts.map((prod) =>
+                                            renderInlineProductBadge(item, prod, prod.name, `${item.id}-extra-${prod.id}`)
+                                          )}
+
+                                          {inlineAddProductItemId === item.id ? (
+                                            <div className="inline-flex items-center gap-1 bg-[#171a24] border border-[#e0a96d]/40 rounded-lg p-1">
+                                              <input
+                                                type="text"
+                                                value={inlineProductName}
+                                                onChange={(e) => setInlineProductName(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleAddInlineProductToRoutine(item.id);
+                                                  } else if (e.key === 'Escape') {
+                                                    setInlineAddProductItemId(null);
+                                                  }
+                                                }}
+                                                placeholder="Nombre del producto..."
+                                                className="bg-[#0b0c10] border border-slate-700 rounded px-2 py-0.5 text-[11px] text-slate-100 w-36 focus:outline-none focus:border-[#e0a96d]"
+                                                autoFocus
+                                              />
+                                              <select
+                                                value={inlineProductStatus}
+                                                onChange={(e) => setInlineProductStatus(e.target.value)}
+                                                className="bg-[#0b0c10] border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-slate-200 cursor-pointer"
+                                              >
+                                                <option value="owned">✅ Lo tengo</option>
+                                                <option value="to_buy">🛒 Por comprar</option>
+                                                <option value="to_try">🧪 Por probar</option>
+                                                <option value="never">🚫 No usar</option>
+                                              </select>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleAddInlineProductToRoutine(item.id)}
+                                                className="bg-[#e0a96d] text-[#0b0c10] font-bold text-[10px] px-2 py-0.5 rounded cursor-pointer"
+                                              >
+                                                Guardar
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setInlineAddProductItemId(null);
+                                                  setInlineProductName('');
+                                                }}
+                                                className="text-slate-400 hover:text-slate-200 px-1 text-xs cursor-pointer"
+                                              >
+                                                ×
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setInlineAddProductItemId(item.id);
+                                                setInlineProductName('');
+                                                setInlineProductStatus('owned');
+                                              }}
+                                              className="text-[10px] font-semibold text-slate-400 hover:text-[#e0a96d] bg-[#171a24]/60 hover:bg-[#171a24] border border-dashed border-slate-700 hover:border-[#e0a96d]/40 px-2 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                                              title="Agregar un producto o idea a este paso de la rutina"
+                                            >
+                                              <Plus className="w-3 h-3" />
+                                              <span>Producto</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
                               </div>
-                              {item.desc && (
-                                <p className={`text-xs text-slate-400 mt-1 whitespace-pre-line leading-relaxed ${item.completed ? 'text-slate-600' : ''}`}>
-                                  {item.desc}
-                                </p>
-                              )}
+
+                              {/* Action buttons */}
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  onClick={() => handleEditClick(item)}
+                                  className="p-1.5 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all cursor-pointer"
+                                  title="Editar actividad"
+                                  aria-label={`Editar ${item.title}`}
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteItem(item.id, item.title)}
+                                  className="p-1.5 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                                  title="Eliminar actividad"
+                                  aria-label={`Eliminar ${item.title}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                           </div>
-
-                          {/* Action buttons */}
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              onClick={() => handleEditClick(item)}
-                              className="p-1.5 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all cursor-pointer"
-                              title="Editar actividad"
-                              aria-label={`Editar ${item.title}`}
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteItem(item.id, item.title)}
-                              className="p-1.5 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
-                              title="Eliminar actividad"
-                              aria-label={`Eliminar ${item.title}`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1559,6 +2400,35 @@ export default function ScheduleModule({
                   required
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Estado en tu Rutina</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingItem({ ...editingItem, routineStatus: 'active' })}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      (editingItem.routineStatus || 'active') === 'active'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-[#0b0c10] text-slate-400 border-slate-800'
+                    }`}
+                  >
+                    ✅ Aplicando
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingItem({ ...editingItem, routineStatus: 'idea' })}
+                    className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      editingItem.routineStatus === 'idea'
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        : 'bg-[#0b0c10] text-slate-400 border-slate-800'
+                    }`}
+                  >
+                    💡 Sugerencia / Idea
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Descripción / Método</label>
                 <textarea
@@ -1567,6 +2437,78 @@ export default function ScheduleModule({
                   className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] h-24 resize-none"
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Productos de este paso</label>
+                <div className="flex gap-1.5 mb-2">
+                  <input
+                    type="text"
+                    value={editProductDraft}
+                    onChange={(e) => setEditProductDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && editProductDraft.trim()) {
+                        e.preventDefault();
+                        const nextProds = [
+                          ...(Array.isArray(editingItem.products) ? editingItem.products : []),
+                          { id: 'rp-' + Date.now(), name: editProductDraft.trim(), status: editProductDraftStatus, manualOverride: true }
+                        ];
+                        setEditingItem({ ...editingItem, products: nextProds });
+                        setEditProductDraft('');
+                      }
+                    }}
+                    placeholder="Agregar producto..."
+                    className="flex-1 bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-1.5 px-2.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                  />
+                  <select
+                    value={editProductDraftStatus}
+                    onChange={(e) => setEditProductDraftStatus(e.target.value)}
+                    className="bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg py-1.5 px-2 text-slate-100 text-[11px] cursor-pointer"
+                  >
+                    <option value="owned">✅ Lo tengo</option>
+                    <option value="to_buy">🛒 Por comprar</option>
+                    <option value="to_try">🧪 Por probar</option>
+                    <option value="never">🚫 No usar</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!editProductDraft.trim()) return;
+                      const nextProds = [
+                        ...(Array.isArray(editingItem.products) ? editingItem.products : []),
+                        { id: 'rp-' + Date.now(), name: editProductDraft.trim(), status: editProductDraftStatus, manualOverride: true }
+                      ];
+                      setEditingItem({ ...editingItem, products: nextProds });
+                      setEditProductDraft('');
+                    }}
+                    className="bg-[#e0a96d]/20 text-[#e0a96d] border border-[#e0a96d]/30 px-2.5 rounded-lg text-xs font-bold cursor-pointer"
+                  >
+                    +
+                  </button>
+                </div>
+                {Array.isArray(editingItem.products) && editingItem.products.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {editingItem.products.map((prod) => (
+                      <div key={prod.id} className="inline-flex items-center gap-1 bg-[#0b0c10] border border-slate-700 px-2 py-1 rounded-lg text-[11px] text-slate-200">
+                        <span>{prod.status === 'owned' ? '✅' : prod.status === 'to_buy' ? '🛒' : prod.status === 'to_try' ? '🧪' : '🚫'}</span>
+                        <span>{prod.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextProds = editingItem.products.filter(p => p.id !== prod.id);
+                            const nextDesc = removeProductMentionFromDesc(editingItem.desc, prod.name);
+                            setEditingItem({ ...editingItem, products: nextProds, desc: nextDesc });
+                          }}
+                          className="text-slate-400 hover:text-rose-400 ml-1 cursor-pointer"
+                          title="Quitar producto y limpiar de la descripción"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <span className="text-xs text-slate-400 font-semibold block mb-1">Fase Asignada (Auto)</span>
                 <span className="inline-block text-[10px] font-bold px-3 py-1.5 rounded-full bg-[#e0a96d]/10 border border-[#e0a96d]/30 text-[#e0a96d] uppercase tracking-wider">

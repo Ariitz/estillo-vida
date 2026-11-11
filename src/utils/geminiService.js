@@ -1131,8 +1131,137 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido con la siguiente estructura:
 /**
  * Offline / Heuristic fallback for Copilot Routine and Lifestyle Parser
  */
-export const generateFallbackCopilotResponse = (userText = '') => {
+export const generateFallbackCopilotResponse = (userText = '', context = {}) => {
   const lower = userText.toLowerCase();
+  const currentSchedule = Array.isArray(context?.schedule) ? context.schedule : [];
+
+  // 0. New Product Integration into Daily Routine ("compré...", "nuevo producto", "agregar a la rutina", etc.)
+  const isNewProductIntegration =
+    /compr[eé]|adquir[ií]|nuevo\s+producto|agregar.*rutina|integrar.*rutina|c[oó]mo\s+(lo\s+)?(uso|agrego|aplico|meto)|en\s+qu[eé]\s+paso|a\s+qu[eé]\s+hora\s+(lo\s+)?(uso|aplico|tomo)/i.test(userText);
+
+  if (isNewProductIntegration) {
+    // Extract product name from quotes or after key phrases
+    const quotedMatch = userText.match(/[""«]([^""»]+)[""»]/);
+    let cleanProdName = quotedMatch ? quotedMatch[1].trim() : '';
+    if (!cleanProdName) {
+      cleanProdName = userText
+        .replace(/^(hola\s*)?(acabo\s+de\s+comprar|compr[eé](\s+este\s+nuevo\s+producto)?|tengo\s+un\s+nuevo\s+producto|quiero\s+agregar(\s+a\s+mi\s+rutina)?|c[oó]mo\s+agrego)\s*:?\s*/i, '')
+        .split(/[?.!]|y\s+quiero|c[oó]mo\s+lo|en\s+qu[eé]\s+paso|a\s+qu[eé]\s+hora/i)[0]
+        .trim();
+    }
+    if (!cleanProdName || cleanProdName.length < 2) {
+      cleanProdName = 'Nuevo Producto de Cuidado Personal';
+    }
+    cleanProdName = cleanProdName.charAt(0).toUpperCase() + cleanProdName.slice(1);
+
+    const pLow = cleanProdName.toLowerCase();
+    const isAlreadyOwned = !/por\s+comprar|quiero\s+comprar|pienso\s+comprar|idea/i.test(userText);
+    const prodStatus = isAlreadyOwned ? 'owned' : 'to_buy';
+
+    // Determine best routine block, time, order, and precautions
+    let targetTime = '08:15 AM';
+    let targetTitle = 'Secado y cuidado corporal';
+    let targetCategory = 'Skincare';
+    let stepOrderText = 'Después de tu Limpiador facial CeraVe (con el rostro limpio y ligeramente húmedo) y **antes** de tu Crema hidratante con FPS 30+.';
+    let compatibilityText = 'Compatible con tu rutina matutina. Al sellar con FPS 30+ proteges la barrera cutánea durante todo el día.';
+    let updatedDesc = `Turbante de microfibra, aplicar ${cleanProdName} en rostro limpio, crema de urea en codos/talones, sellar con crema hidratante con FPS 30+.`;
+    let selfCareSuggestion = null;
+
+    if (/[aá]cido\s+(glic[oó]lico|salic[ií]lico|l[aá]ctico|mandelico|azelaico)|peeling|exfoliante\s+qu[ií]mico|retinal|tretino[ií]na|adapaleno|noche|nocturn|despigmentante|manchas/i.test(pLow)) {
+      targetTime = '09:30 PM';
+      targetTitle = 'Noche & Skincare rotativo';
+      targetCategory = 'Skincare';
+      stepOrderText = 'En la noche sobre piel completamente limpia y seca, esperando 10 minutos antes de aplicar tu crema hidratante CeraVe PM.';
+      compatibilityText = '⚠️ **Regla de Oro de Alternancia:** NO lo apliques en la misma noche que el **Retinol** para evitar irritación. Úsalo en noches alternas (Ciclo de Skin Cycling: Noche 1 Retinol → Noche 2 ' + cleanProdName + ' → Noche 3 Concha Nácar / Hidratación).';
+      updatedDesc = `Noches A: Retinol + CeraVe PM | Noches B: ${cleanProdName} + CeraVe PM | Noches C: Concha Nácar + Teatrical Aclaradora. Perspirex/Drysol (2x/semana).`;
+      selfCareSuggestion = {
+        title: `Noche de ${cleanProdName} (Alternancia Nocturna)`,
+        frequency: 'custom',
+        daysInterval: 3,
+        category: 'skincare',
+        notes: `Aplicar en noches sin Retinol y sellar con hidratante.`,
+        protocol: 'Cada 3 noches dentro de tu rotación nocturna.'
+      };
+    } else if (/shampoo|champ[uú]|acondicionador|mascarilla\s+capilar|cabello|pelo|cuero\s+cabelludo|jab[oó]n|exfoliante\s+corporal|body\s+wash|limpiador/i.test(pLow)) {
+      targetTime = '07:45 AM';
+      targetTitle = 'Ducha metodológica';
+      targetCategory = 'Higiene';
+      stepOrderText = 'Durante tu ducha matutina, integrándolo junto con tu limpieza capilar/corporal antes del enjuague frío final.';
+      compatibilityText = 'Sinergia ideal con tu shampoo de chile/romero y jabón de arroz.';
+      updatedDesc = `Shampoo de chile/romero, acondicionador de medios a puntas (5 min), ${cleanProdName}, jabón de arroz, limpiador facial CeraVe, enjuague frío.`;
+    } else if (/vitamina\s+(d|b|e|k)|omega|col[aá]geno|biotina|prote[ií]na|creatina|probi[oó]tico|suplemento|c[aá]psula|hierro|zinc| calcio/i.test(pLow) && !/s[eé]rum|suero|crema|facial|t[oó]pico/i.test(pLow)) {
+      targetTime = '08:45 AM';
+      targetTitle = 'Desayuno denso + Suplementación';
+      targetCategory = 'Despensa';
+      stepOrderText = 'Junto con tu primer alimento denso de la mañana y 250 ml de agua para maximizar su biodisponibilidad y absorción intestinal.';
+      compatibilityText = 'Excelente sinergia con tu bloque actual (Multivitamínico, Omega-3, Calcio + D3, Biotina y Colágeno).';
+      updatedDesc = `Multivitamínico, Omega-3, Calcio + D3, Biotina, Colágeno disuelto, ${cleanProdName}.`;
+    } else if (/magnesio|melatonina|ashwagandha|teanina|relajante|dormir|sue[ñn]o/i.test(pLow)) {
+      targetTime = '10:00 PM';
+      targetTitle = 'Citrato de Magnesio & Relajación';
+      targetCategory = 'Despensa';
+      stepOrderText = '30 a 45 minutos antes de dormir, acompañado de medio vaso de agua tibia mientras realizas tu elevación de piernas.';
+      compatibilityText = 'Favorece la relajación neuromuscular y el descanso profundo sin interferir con otros suplementos matutinos.';
+      updatedDesc = `Tomar ${cleanProdName}, elevar piernas a 90° por 10 min y descanso zen.`;
+    }
+
+    // Check if user already has a matching block in her schedule to preserve its exact title/time/desc
+    const existingBlock = currentSchedule.find(s =>
+      s && (s.title?.toLowerCase().includes(targetTitle.toLowerCase().slice(0, 10)) || s.time === targetTime)
+    );
+    if (existingBlock) {
+      targetTime = existingBlock.time || targetTime;
+      targetTitle = existingBlock.title || targetTitle;
+      if (existingBlock.desc && !existingBlock.desc.toLowerCase().includes(pLow)) {
+        updatedDesc = `${existingBlock.desc.replace(/\.\s*$/, '')}, ${cleanProdName}.`;
+      }
+    }
+
+    return {
+      replyText: `### 🧴 Cómo Integrar **${cleanProdName}** a tu Rutina Diaria
+
+He analizado los pasos actuales de tu **Rutina del Día a Día** para ubicar **${cleanProdName}** en el momento de mayor eficacia y sin conflictos de activos:
+
+1. **⏰ Bloque Recomendado en tu Rutina:**
+   - **${targetTime} — ${targetTitle}**
+   - Se marcará automáticamente con el icono **${isAlreadyOwned ? '✅ Ya lo tengo' : '🛒 Por comprar'}** al lado del producto dentro de tu rutina.
+
+2. **🔢 Orden Exacto de Aplicación:**
+   - ${stepOrderText}
+
+3. **🧪 Compatibilidad con tus otros Productos:**
+   - ${compatibilityText}
+
+---
+Haz clic en **"Agregar al Horario"** abajo para integrar **${cleanProdName}** directamente en el paso **"${targetTitle}"** de tu rutina diaria (y en **"Agregar al Comparador"** si quieres tenerlo registrado en tus Insumos).`,
+      actions: {
+        products: [
+          {
+            name: cleanProdName,
+            category: targetCategory,
+            repurchaseVerdict: isAlreadyOwned ? 'yes' : 'need_to_buy',
+            notes: `Integrado en el bloque "${targetTitle}" (${targetTime}).`
+          }
+        ],
+        selfCare: selfCareSuggestion ? [selfCareSuggestion] : [],
+        timers: [],
+        schedule: [
+          {
+            time: targetTime,
+            title: targetTitle,
+            desc: updatedDesc,
+            tag: 'beauty',
+            isRoutine: true,
+            routineStatus: isAlreadyOwned ? 'active' : 'idea',
+            productsToAdd: [
+              { name: cleanProdName, status: prodStatus }
+            ]
+          }
+        ],
+        petGuide: []
+      }
+    };
+  }
 
   // Skincare Matrix (Retinol, Concha Nácar, Máscara LED, Mascarilla de Arroz)
   if (/skincare|retinol|concha n|teatrical|m[aá]scara led|arroz|activo|facial/.test(lower)) {
@@ -1368,24 +1497,34 @@ Haz clic en los botones de abajo para agregar cada elemento a su módulo corresp
  * @param {string} apiKey - Gemini API key
  * @returns {Promise<{ replyText: string, actions: { products: Array, selfCare: Array, timers: Array, schedule: Array, petGuide: Array } }>}
  */
-export const parseRoutineWithCopilot = async (userMessage, history = [], apiKey = '') => {
+export const parseRoutineWithCopilot = async (userMessage, history = [], apiKey = '', context = {}) => {
   if (!apiKey || !apiKey.trim()) {
-    return generateFallbackCopilotResponse(userMessage);
+    return generateFallbackCopilotResponse(userMessage, context);
   }
+
+  const currentScheduleSummary = Array.isArray(context?.schedule) && context.schedule.length > 0
+    ? context.schedule.map(s => `- [${s.time}] ${s.title}: ${s.desc || ''}`).join('\n')
+    : '- [07:45 AM] Ducha metodológica\n- [08:15 AM] Secado y cuidado corporal\n- [08:45 AM] Desayuno denso + Suplementación\n- [09:30 PM] Noche & Skincare rotativo\n- [10:00 PM] Citrato de Magnesio & Relajación';
 
   const prompt = `
 Eres AURA Copilot, el asistente de inteligencia artificial élite de AURA Nexus para Estilo de Vida, Belleza, Skincare, Ergonomía, Productividad, Organización Personal y Cuidado de Mascotas (especialmente Mona, una perrita Pastor Alemán senior de 12 años con displasia de cadera bilateral).
 
-La usuaria te ha enviado el siguiente mensaje o rutina para analizar y estructurar:
+La usuaria te ha enviado el siguiente mensaje, producto nuevo o rutina para analizar y estructurar:
 "${userMessage}"
 
+RUTINA DIARIA ACTUAL DE LA USUARIA (para que sepas qué pasos y productos ya usa y a qué hora):
+${currentScheduleSummary}
+
 Tu tarea es doble:
-1. "replyText": Escribe una respuesta conversacional, empática, elegante y profesional en Markdown (en español). Si habla de Mona o mascotas, ofrece pautas clínicas fundamentadas, dosis seguras, nombres comerciales de primera línea (ej. Cosequin DS, YuMOVE, Help Em Up Harness, Hill's j/d) y empatía con su condición geriátrica.
-2. "actions": Extrae de forma estructurada y precisa todos los elementos accionables que la usuaria necesitará para que la aplicación los agregue a sus respectivos módulos con un solo clic.
+1. "replyText": Escribe una respuesta conversacional, empática, elegante y profesional en Markdown (en español).
+   - Si la usuaria menciona que COMPRÓ UN PRODUCTO NUEVO o quiere saber CÓMO AGREGAR UN PRODUCTO A SU RUTINA: recomiéndale con precisión en qué bloque existente de su rutina diaria (o en qué nuevo horario) debe usarlo, en qué orden exacto aplicarlo respecto a los productos que ya usa en ese paso, y si tiene alguna precaución o alternancia (ej. no mezclar ácidos fuertes en la misma noche que Retinol).
+   - Si habla de Mona o mascotas, ofrece pautas clínicas fundamentadas, dosis seguras y nombres comerciales de primera línea.
+2. "actions": Extrae de forma estructurada todos los elementos accionables para que la aplicación los agregue con un solo clic.
+   - Si está integrando un producto nuevo a un paso existente de su rutina, pon en "actions.schedule" el mismo "title" y "time" de ese bloque existente, el "desc" actualizado incluyendo el nuevo producto en el orden correcto, y en "productsToAdd" incluye [{"name": "Nombre corto del producto", "status": "owned"}] (o "to_buy" si aún no lo compra).
 
 Si el tema involucra a Mona o mascotas (vitaminas, suplementos, arnés, correa, alimentación, cama ortopédica, tapetes, paseos, displasia), DEBES incluir las recomendaciones correspondientes en el arreglo "petGuide".
 
-Para los bloques de "schedule", utiliza SIEMPRE el formato de hora de 12 horas con AM/PM (ej. "10:00 PM", "07:30 AM", "02:00 PM") e incluye SIEMPRE una descripción detallada en el campo "desc" con los pasos, precauciones o alternancias del hábito.
+Para los bloques de "schedule", utiliza SIEMPRE el formato de hora de 12 horas con AM/PM (ej. "09:30 PM", "08:15 AM", "02:00 PM") e incluye SIEMPRE una descripción detallada en el campo "desc" con los pasos, precauciones o alternancias del hábito.
 
 Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
 
@@ -1396,6 +1535,7 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
       {
         "name": "Nombre completo del producto",
         "category": "Skincare" | "Dental" | "Higiene" | "Despensa" | "Limpieza" | "Otros",
+        "repurchaseVerdict": "yes" | "need_to_buy",
         "notes": "Para qué sirve o en qué momento de la rutina se usa"
       }
     ],
@@ -1419,11 +1559,15 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
     ],
     "schedule": [
       {
-        "time": "10:00 PM",
-        "title": "Título del bloque",
-        "desc": "Descripción detallada",
+        "time": "08:15 AM",
+        "title": "Título del bloque (usa el título exacto del bloque existente si se integra a uno de su rutina actual)",
+        "desc": "Descripción detallada integrando el producto",
         "tag": "beauty" | "routine" | "wellness" | "work",
-        "isRoutine": true
+        "isRoutine": true,
+        "routineStatus": "active" | "idea",
+        "productsToAdd": [
+          { "name": "Nombre del producto", "status": "owned" | "to_buy" }
+        ]
       }
     ],
     "petGuide": [
@@ -1490,7 +1634,7 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
   }
 
   // Fallback if AI endpoint failed
-  return generateFallbackCopilotResponse(userMessage);
+  return generateFallbackCopilotResponse(userMessage, context);
 };
 
 // ==========================================

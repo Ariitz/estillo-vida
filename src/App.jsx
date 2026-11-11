@@ -462,6 +462,7 @@ const initialHealthSymptoms = [
 export default function App() {
   // Navigation & UI States
   const [activeModule, setActiveModule] = useState('schedule');
+  const [copilotInitialPrompt, setCopilotInitialPrompt] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -1288,11 +1289,18 @@ export default function App() {
                 setWaterIntake={setWaterIntake}
                 schedule={schedule}
                 setSchedule={setSchedule}
+                householdItems={householdItems}
+                setHouseholdItems={setHouseholdItems}
                 selfCareActivities={selfCareActivities}
                 setSelfCareActivities={setSelfCareActivities}
                 bagEssentials={bagEssentials}
                 setBagEssentials={setBagEssentials}
                 showToast={showToast}
+                setActiveModule={setActiveModule}
+                onAskCopilotProduct={(promptText) => {
+                  setCopilotInitialPrompt(promptText || '');
+                  setActiveModule('copilot');
+                }}
               />
             </ErrorBoundary>
           )}
@@ -1357,6 +1365,8 @@ export default function App() {
                 setPetData={setPetData}
                 showToast={showToast}
                 setActiveModule={setActiveModule}
+                copilotInitialPrompt={copilotInitialPrompt}
+                setCopilotInitialPrompt={setCopilotInitialPrompt}
               />
             </ErrorBoundary>
           )}

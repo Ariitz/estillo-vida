@@ -171,6 +171,144 @@ export const sanitizeSelfCareList = (list) => {
 };
 
 // 3. Schedule Items (Cronograma Diario)
+export const extractRoutineProductsFromText = (desc = '', title = '') => {
+  const text = String(desc || '');
+  if (!text.trim()) return [];
+
+  // Curated patterns ordered from most specific to general so exact spans inside desc are matched
+  const curatedPatterns = [
+    /Pond['’]s\s+Rejuveness\s+FPS\s*30\+?/gi,
+    /Neat\s+3B\s+Face\s+Saver\s+Gel/gi,
+    /Crema\s+Hidratante\s+con\s+FPS(?:\s*30\+?)?/gi,
+    /bloqueador(?:\s+solar)?\s+FPS\s*\d+\+?/gi,
+    /protector(?:\s+solar)?\s+FPS(?:\s*\d+\+?)?/gi,
+    /limpiador\s+facial\s+CeraVe/gi,
+    /limpiador\s+gentil/gi,
+    /limpiador\s+facial/gi,
+    /Agua\s+de\s+Rosas/gi,
+    /bruma\s+de\s+rosas/gi,
+    /S[eé]rum\s+de\s+Cafe[ií]na/gi,
+    /S[eé]rum\s+de\s+Niacinamida(?:\s+\d+%)?/gi,
+    /S[eé]rum\s+de\s+Vitamina\s+C/gi,
+    /S[eé]rum\s+de\s+Retinol/gi,
+    /[AÁ]cido\s+(?:Hialur[oó]nico|Glic[oó]lico|Salic[ií]lico|Azelaico|L[aá]ctico)/gi,
+    /rodillo\s+de\s+jade(?:\s+fr[ií]o)?/gi,
+    /Shampoo\s+de\s+chile\s*\/?\s*romero/gi,
+    /acondicionador\s+de\s+medios\s+a\s+puntas/gi,
+    /jab[oó]n\s+de\s+arroz/gi,
+    /turbante\s+de\s+microfibra/gi,
+    /crema\s+de\s+urea/gi,
+    /Multivitam[ií]nico/gi,
+    /Omega[\s-]*3/gi,
+    /Calcio\s*\+\s*D3|Calcio\s+con\s+D3/gi,
+    /Biotina/gi,
+    /Col[aá]geno(?:\s+disuelto|\s+hidrolizado)?/gi,
+    /papel\s+de\s+arroz(?:\s+matificante)?/gi,
+    /CeraVe\s+PM/gi,
+    /Concha\s+N[aá]car/gi,
+    /Teatrical\s+Aclaradora/gi,
+    /Perspirex\s*\/\s*Drysol|Perspirex|Drysol/gi,
+    /Citrato\s+de\s+Magnesio|magnesio/gi,
+    /raspador\s+lingual(?:\s+de\s+cobre\/acero)?/gi,
+    /hilo\s+dental/gi,
+    /cepillo\s+suave/gi,
+    /M[aá]scara\s+LED(?:\s+roja)?/gi,
+    /Mascarilla(?:\s+Coreana)?\s+de\s+Arroz/gi,
+    /T[eé]\s+verde\s+o\s+negro/gi
+  ];
+
+  // Dynamic pattern for other skincare/supplement/hygiene products mentioned in text
+  const dynamicProductRegex = /\b((?:S[eé]rum|Suero|Crema|Gel|T[oó]nico|[AÁ]cido|Vitamina|Loc[ií]on|Mascarilla|Shampoo|Champ[uú]|Aceite|Bloqueador|Protector\s+solar|Jab[oó]n|Desodorante|Antitranspirante|Bruma|Contorno\s+de\s+ojos|Agua\s+micelar|Exfoliante|B[aá]lsamo|Ampolleta|Parches|Suplemento|C[aá]psulas|Prote[ií]na|Creatina)\s+(?:de\s+|con\s+|para\s+|facial\s+|corporal\s+|hidratante\s+|aclaradora\s+|gentil\s+|solar\s+)*[A-Za-zÁÉÍÓÚáéíóúÑñ0-9+'’/-]+(?:\s+[A-Za-zÁÉÍÓÚáéíóúÑñ0-9+'’/-]+){0,2})/gi;
+
+  const matches = [];
+  const occupiesSpan = (start, end) =>
+    matches.some(m => (start >= m.start && start < m.end) || (end > m.start && end <= m.end) || (start <= m.start && end >= m.end));
+
+  for (const regex of curatedPatterns) {
+    regex.lastIndex = 0;
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      const matchedStr = m[0].trim();
+      const start = m.index;
+      const end = start + m[0].length;
+      if (!occupiesSpan(start, end)) {
+        matches.push({ start, end, name: matchedStr });
+      }
+    }
+  }
+
+  // Also check standalone "Retinol" after "Sérum de Retinol"
+  const retinolRegex = /\bRetinol\b/gi;
+  let rm;
+  while ((rm = retinolRegex.exec(text)) !== null) {
+    const start = rm.index;
+    const end = start + rm[0].length;
+    if (!occupiesSpan(start, end)) {
+      matches.push({ start, end, name: rm[0] });
+    }
+  }
+
+  dynamicProductRegex.lastIndex = 0;
+  let dm;
+  while ((dm = dynamicProductRegex.exec(text)) !== null) {
+    const rawStr = dm[1]
+      .replace(/\s+(si|cuando|para|en|por|durante|con|o|y|antes|despu[eé]s)$/i, '')
+      .trim();
+    if (rawStr.length < 4) continue;
+    const start = dm.index;
+    const end = start + rawStr.length;
+    if (!occupiesSpan(start, end)) {
+      matches.push({ start, end, name: rawStr });
+    }
+  }
+
+  matches.sort((a, b) => a.start - b.start);
+
+  const unique = [];
+  const seen = new Set();
+  for (const item of matches) {
+    const norm = item.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['’]/g, "'");
+    if (!seen.has(norm)) {
+      seen.add(norm);
+      unique.push({
+        id: 'rp-' + norm.replace(/[^a-z0-9]+/g, '-').slice(0, 32),
+        name: item.name,
+        status: 'owned'
+      });
+    }
+  }
+
+  return unique;
+};
+
+export const sanitizeRoutineProduct = (prod, idx = 0) => {
+  if (!prod) return null;
+  if (typeof prod === 'string') {
+    const cleanName = prod.trim();
+    if (!cleanName) return null;
+    return {
+      id: 'rp-' + idx + '-' + cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24),
+      name: cleanName,
+      status: 'owned',
+      manualOverride: false
+    };
+  }
+  if (typeof prod === 'object') {
+    const cleanName = safeString(prod.name || prod.title || '').trim();
+    if (!cleanName) return null;
+    const validStatuses = ['owned', 'to_buy', 'to_try', 'never'];
+    const rawStatus = safeString(prod.status || 'owned').toLowerCase();
+    const status = validStatuses.includes(rawStatus) ? rawStatus : 'owned';
+    return {
+      id: safeString(prod.id || ('rp-' + idx + '-' + cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24))),
+      name: cleanName,
+      status,
+      manualOverride: Boolean(prod.manualOverride)
+    };
+  }
+  return null;
+};
+
 export const sanitizeScheduleItem = (item) => {
   if (!item || typeof item !== 'object') return null;
 
@@ -182,6 +320,33 @@ export const sanitizeScheduleItem = (item) => {
     category = time.includes('AM') ? 'morning' : 'afternoon';
   }
 
+  const validRoutineStatuses = ['active', 'idea'];
+  const rawRoutineStatus = safeString(item.routineStatus || 'active').toLowerCase();
+  const routineStatus = validRoutineStatuses.includes(rawRoutineStatus) ? rawRoutineStatus : 'active';
+
+  const extractedFromDesc = extractRoutineProductsFromText(desc, title);
+  const savedProducts = Array.isArray(item.products)
+    ? item.products.map((p, idx) => sanitizeRoutineProduct(p, idx)).filter(Boolean)
+    : [];
+  const removedNames = new Set(
+    (Array.isArray(item.removedProductNames) ? item.removedProductNames : [])
+      .map(n => safeString(n).toLowerCase().trim())
+  );
+
+  // Merge saved products with any newly detected products in desc so inline highlighting always works
+  const mergedProducts = [...savedProducts];
+  for (const ext of extractedFromDesc) {
+    const extLower = ext.name.toLowerCase().replace(/['’]/g, "'").trim();
+    if (removedNames.has(extLower)) continue;
+    const alreadyExists = mergedProducts.some(mp => {
+      const mpLower = mp.name.toLowerCase().replace(/['’]/g, "'").trim();
+      return mpLower === extLower || mpLower.includes(extLower) || extLower.includes(mpLower);
+    });
+    if (!alreadyExists) {
+      mergedProducts.push(ext);
+    }
+  }
+
   return {
     id: safeString(item.id || 'sch-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
     time: time,
@@ -190,7 +355,10 @@ export const sanitizeScheduleItem = (item) => {
     category: category,
     completed: Boolean(item.completed),
     tag: safeString(item.tag || 'general'),
-    isRoutine: item.isRoutine !== undefined ? Boolean(item.isRoutine) : true
+    isRoutine: item.isRoutine !== undefined ? Boolean(item.isRoutine) : true,
+    routineStatus,
+    products: mergedProducts,
+    removedProductNames: Array.from(removedNames)
   };
 };
 
