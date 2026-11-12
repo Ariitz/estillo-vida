@@ -21,9 +21,10 @@ import {
   Zap,
   Tag,
   AlertTriangle,
+  Camera,
   X
 } from 'lucide-react';
-import { parseRoutineWithCopilot } from '../utils/geminiService';
+import { parseRoutineWithCopilot, compressImage, analyzeProductImage } from '../utils/geminiService';
 import { sanitizeHouseholdItem, sanitizeSelfCareItem, sanitizePetTip, defaultBiomechanicalTips, extractRoutineProductsFromText, sanitizeRoutineProduct } from '../utils/sanitizers';
 import { getLocalDateString } from '../utils/dateUtils';
 
@@ -124,6 +125,7 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
   const [isProcessing, setIsProcessing] = useState(false);
   const [conflictModal, setConflictModal] = useState(null);
   const messagesEndRef = useRef(null);
+  const productPhotoInputRef = useRef(null);
 
   const defaultTimers = [
     { id: 't-led', title: 'Máscara de Luz LED Roja', duration: 15 * 60 },
@@ -133,12 +135,24 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
 
   useEffect(() => {
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('aura-copilot-messages', JSON.stringify(messages));
+      try {
+        localStorage.setItem('aura-copilot-messages', JSON.stringify(messages));
+      } catch (e) {
+        console.warn('Could not save copilot messages to localStorage:', e);
+      }
     }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const quickPrompts = [
+    {
+      label: '⏳ Terssura vs. Nivea Crema Corporal (¿Esperar o alternar?)',
+      text: 'Tengo Terssura crema corporal y tengo una Nivea crema corporal. ¿Cómo las agrego a mi rutina? ¿Me conviene usar las dos al mismo tiempo o esperar a que se termine una, y cuál es mejor para conservar y comprar la próxima vez?'
+    },
+    {
+      label: '🔄 Shampoos: ¿Conviene alternar o esperar a terminar?',
+      text: 'Subí un Shampoo Hidratante / Anticaspa y ya tengo mi Shampoo de Chile y Romero en la ducha. ¿Debo esperar a que se termine o en los shampoos sí conviene alternar? ¿Cuál conservo para comprar la próxima vez?'
+    },
     {
       label: '🧴 Compré un producto nuevo: ¿Cómo lo agrego a mi rutina?',
       text: 'Compré este nuevo producto: "Sérum de Niacinamida 10% + Zinc". ¿Cómo, a qué hora y en qué paso de mi rutina diaria me recomiendas agregarlo?'
@@ -146,18 +160,10 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
     {
       label: '🌸 Rutina de Skincare & Activos No Diarios',
       text: 'Módulo de Skincare y Frecuencias No Diarias:\n\nMatriz interactiva de activos nocturnos para evitar sobreexposición: días de Retinol vs. días de Concha Nácar + Teatrical Aclaradora.\n\nTemporizador y recordatorio para la Máscara LED roja (3 a 4 veces por semana, 10-15 minutos).\n\nRecordatorio de Mascarilla Coreana de Arroz (un día sí, un día no).'
-    },
-    {
-      label: '🛒 Despensa Saludable y Suplementación',
-      text: 'Quiero organizar mis compras saludables: Proteína aislada de suero, Creatina monohidratada, Citrato de magnesio para dormir, Café en grano tostado sam\'s y Avena en hojuelas entera.'
-    },
-    {
-      label: '🦴 Plan Postural para Conducir y Oficina',
-      text: 'Tengo dolor en espalda baja y tobillo al manejar y rigidez en cuello en la laptop. Organízame pausas activas, estiramientos de 5 min y recordatorios posturales.'
     }
   ];
 
-  const handleSendMessage = async (textToSend) => {
+  const handleSendMessage = async (textToSend, imageAttachment = null) => {
     const prompt = (textToSend || inputPrompt).trim();
     if (!prompt || isProcessing) return;
 
@@ -165,7 +171,8 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
       id: 'msg-' + Date.now(),
       sender: 'user',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      text: prompt
+      text: prompt,
+      imagePreview: imageAttachment?.previewUrl || null
     };
 
     setMessages(prev => [...prev, userMsg]);
@@ -173,10 +180,11 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
     setIsProcessing(true);
 
     try {
-      showToast('info', 'AURA Copilot Analizando', 'Analizando tu rutina actual, compatibilidad de activos y horarios...');
+      showToast('info', 'AURA Copilot Analizando', 'Analizando tu rutina actual, traslape de productos y cuál conservar...');
       const response = await parseRoutineWithCopilot(prompt, messages, geminiApiKey, {
         schedule,
-        householdItems
+        householdItems,
+        imageAttachment
       });
 
       const botMsg = {
@@ -186,6 +194,7 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
         text: response.replyText,
         actions: response.actions,
         executedActions: {
+          productComparison: false,
           products: false,
           selfCare: false,
           timers: false,
@@ -194,12 +203,57 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
       };
 
       setMessages(prev => [...prev, botMsg]);
-      showToast('success', 'Plan Generado', 'Se estructuraron las acciones para tus módulos.');
+      showToast('success', 'Análisis Listo', 'Se evaluó cómo integrarlo, si esperar o alternar y cuál volver a comprar.');
     } catch (err) {
       console.error("Copilot error:", err);
       showToast('error', 'Error de Asistente', err.message || 'No se pudo procesar tu mensaje.');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleProductPhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || isProcessing) return;
+    e.target.value = '';
+
+    try {
+      setIsProcessing(true);
+      showToast('info', 'Escaneando Producto con IA', 'Identificando el producto de tu foto y comparándolo con tu rutina e inventario...');
+      const { base64, mimeType } = await compressImage(file, 700, 0.72);
+      const previewUrl = `data:${mimeType};base64,${base64}`;
+
+      let detectedName = newProductQuickInput.trim();
+      let detectedNotes = '';
+
+      if (!detectedName) {
+        try {
+          const visionResult = await analyzeProductImage(base64, mimeType, geminiApiKey);
+          if (visionResult?.name && !visionResult.name.includes('Detectado (Sin Clave')) {
+            detectedName = visionResult.name;
+            detectedNotes = visionResult.notes || '';
+          } else {
+            const cleanFileName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').trim();
+            if (cleanFileName && cleanFileName.length > 2 && !/^(img|dsc|photo|image|whatsapp|screenshot)/i.test(cleanFileName)) {
+              detectedName = cleanFileName;
+            }
+          }
+        } catch (visionErr) {
+          console.warn('Vision product name fallback:', visionErr);
+        }
+      }
+
+      setIsProcessing(false);
+      const productLabel = detectedName || 'Crema Corporal Nivea Nutritiva';
+      const prefix = newProductOwnedState === 'owned' ? 'Subí la foto de este producto que tengo' : 'Subí la foto de este producto por comprar';
+      const extraContext = detectedNotes ? ` (${detectedNotes})` : '';
+      const promptToSend = `${prefix}: "${productLabel}"${extraContext}. ¿Cómo lo agrego a mi rutina diaria? Si ya tengo otro producto con la misma función, dime si debo esperar a que se termine el actual para usar este o si conviene alternarlos, y dime en este momento cuál es mejor para conservar y volver a comprar la próxima vez.`;
+      setNewProductQuickInput('');
+      await handleSendMessage(promptToSend, { base64, mimeType, previewUrl });
+    } catch (err) {
+      setIsProcessing(false);
+      console.error('Error uploading product photo to Copilot:', err);
+      showToast('error', 'Error al leer foto', 'No se pudo procesar la imagen del producto.');
     }
   };
 
@@ -709,6 +763,84 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
     }
   };
 
+  const handleApplyProductComparison = (msgId, comparison, scheduleActions = [], productActions = []) => {
+    if (!comparison) return;
+
+    // 1. Update or add products in householdItems with winner/loser repurchase verdicts
+    const itemsToProcess = [];
+    if (comparison.winnerProduct?.name) {
+      itemsToProcess.push({
+        name: comparison.winnerProduct.name,
+        category: (comparison.categoryLabel || '').toLowerCase().includes('capilar') ? 'Higiene' : 'Skincare',
+        repurchaseVerdict: comparison.winnerProduct.verdict || 'yes',
+        notes: `🏆 Conservar y volver a comprar la próxima vez: ${comparison.winnerProduct.reason || ''}`
+      });
+    }
+    if (comparison.loserProduct?.name) {
+      itemsToProcess.push({
+        name: comparison.loserProduct.name,
+        category: (comparison.categoryLabel || '').toLowerCase().includes('capilar') ? 'Higiene' : 'Skincare',
+        repurchaseVerdict: comparison.loserProduct.verdict || (comparison.strategy === 'alternate' ? 'yes' : 'no'),
+        notes: comparison.strategy === 'wait_until_finished'
+          ? `⏳ Terminar envase sin usar ambos al mismo tiempo. ${comparison.loserProduct.reason || ''}`
+          : `🔄 Alternar en rutina: ${comparison.loserProduct.reason || ''}`
+      });
+    }
+
+    if (itemsToProcess.length > 0 && setHouseholdItems) {
+      setHouseholdItems(prev => {
+        let list = Array.isArray(prev) ? [...prev] : [];
+        itemsToProcess.forEach(prod => {
+          const existing = findItemConflict(prod.name, list, 'name');
+          if (existing) {
+            list = list.map(it => it && it.id === existing.id ? {
+              ...it,
+              repurchaseVerdict: prod.repurchaseVerdict,
+              notes: prod.notes
+            } : it);
+          } else {
+            const sanitized = sanitizeHouseholdItem({
+              id: 'item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+              name: prod.name,
+              category: prod.category,
+              stores: [],
+              preferredStore: '',
+              repurchaseVerdict: prod.repurchaseVerdict,
+              notes: prod.notes
+            });
+            if (sanitized) list.push(sanitized);
+          }
+        });
+        return list;
+      });
+    }
+
+    // 2. Also apply the schedule block update directly (with wait or alternate note)
+    if (Array.isArray(scheduleActions) && scheduleActions.length > 0) {
+      handleAddScheduleBlock(msgId, scheduleActions);
+    }
+
+    setMessages(prev => (Array.isArray(prev) ? prev : []).map(m => m.id === msgId ? {
+      ...m,
+      executedActions: {
+        ...(m.executedActions || {}),
+        productComparison: true,
+        products: true,
+        schedule: true
+      }
+    } : m));
+
+    if (showToast) {
+      showToast(
+        'success',
+        comparison.strategy === 'wait_until_finished' ? 'En Espera + Veredicto Guardado' : 'Alternancia + Veredicto Guardado',
+        comparison.strategy === 'wait_until_finished'
+          ? `Se anotó esperar a terminar el actual y se marcó "${comparison.winnerProduct?.name}" para tu próxima compra.`
+          : `Se configuró la alternancia en tu rutina y tu veredicto de recompra.`
+      );
+    }
+  };
+
   const handleClearChat = () => {
     if (window.confirm("¿Deseas reiniciar la conversación con AURA Copilot?")) {
       if (typeof localStorage !== 'undefined') {
@@ -898,15 +1030,32 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
           </span>
           <div>
             <h3 className="text-xs font-bold text-slate-100">
-              Integrar Nuevo Producto a mi Rutina Diaria
+              Integrar o Comparar Producto en mi Rutina Diaria
             </h3>
             <p className="text-[11px] text-slate-400">
-              Escribe el producto que compraste (o planeas comprar) y Copilot IA te dirá en qué paso, hora y orden aplicarlo.
+              Sube foto o escribe el producto: te diré en qué paso va, si esperar a terminar el actual o alternar (ej. shampoos), y cuál volver a comprar.
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto">
+          <input
+            ref={productPhotoInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleProductPhotoUpload}
+            className="hidden"
+          />
+          <button
+            type="button"
+            disabled={isProcessing}
+            onClick={() => productPhotoInputRef.current?.click()}
+            className="bg-[#0b0c10] hover:bg-slate-800 border border-[#e0a96d]/40 text-[#e0a96d] text-[11px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
+            title="Subir foto de un producto para integrarlo o compararlo con lo que ya tienes"
+          >
+            <Camera className="w-3.5 h-3.5" />
+            <span>📷 Subir Foto</span>
+          </button>
           <input
             type="text"
             value={newProductQuickInput}
@@ -914,20 +1063,20 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
             onKeyDown={(e) => {
               if (e.key === 'Enter' && newProductQuickInput.trim()) {
                 e.preventDefault();
-                const prefix = newProductOwnedState === 'owned' ? 'Compré este nuevo producto' : 'Quiero agregar como idea por comprar este producto';
-                handleSendMessage(`${prefix}: "${newProductQuickInput.trim()}". ¿Cómo, a qué hora y en qué paso de mi rutina diaria me recomiendas agregarlo?`);
+                const prefix = newProductOwnedState === 'owned' ? 'Compré o tengo este producto' : 'Quiero agregar como idea por comprar este producto';
+                handleSendMessage(`${prefix}: "${newProductQuickInput.trim()}". ¿Cómo, a qué hora y en qué paso de mi rutina diaria me recomiendas agregarlo? Si ya tengo otro con la misma función, dime si debo esperar a terminar el actual o si conviene alternarlos, y cuál es mejor para conservar y volver a comprar la próxima vez.`);
                 setNewProductQuickInput('');
               }
             }}
-            placeholder="Ej. Sérum de Vitamina C, Ácido Glicólico, Contorno de ojos..."
-            className="flex-1 lg:w-64 bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:border-[#e0a96d]"
+            placeholder="Ej. Nivea Crema Corporal, Terssura y Nivea, Shampoo..."
+            className="flex-1 lg:w-60 bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl py-1.5 px-3 text-xs text-slate-100 focus:outline-none focus:border-[#e0a96d]"
           />
           <select
             value={newProductOwnedState}
             onChange={(e) => setNewProductOwnedState(e.target.value)}
             className="bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl py-1.5 px-2.5 text-[11px] text-slate-200 cursor-pointer"
           >
-            <option value="owned">✅ Ya lo compré</option>
+            <option value="owned">✅ Ya lo tengo</option>
             <option value="to_buy">🛒 Idea / Por comprar</option>
           </select>
           <button
@@ -935,14 +1084,14 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
             disabled={!newProductQuickInput.trim() || isProcessing}
             onClick={() => {
               if (!newProductQuickInput.trim()) return;
-              const prefix = newProductOwnedState === 'owned' ? 'Compré este nuevo producto' : 'Quiero agregar como idea por comprar este producto';
-              handleSendMessage(`${prefix}: "${newProductQuickInput.trim()}". ¿Cómo, a qué hora y en qué paso de mi rutina diaria me recomiendas agregarlo?`);
+              const prefix = newProductOwnedState === 'owned' ? 'Compré o tengo este producto' : 'Quiero agregar como idea por comprar este producto';
+              handleSendMessage(`${prefix}: "${newProductQuickInput.trim()}". ¿Cómo, a qué hora y en qué paso de mi rutina diaria me recomiendas agregarlo? Si ya tengo otro con la misma función, dime si debo esperar a terminar el actual o si conviene alternarlos, y cuál es mejor para conservar y volver a comprar la próxima vez.`);
               setNewProductQuickInput('');
             }}
             className="btn-rose-gold text-[11px] font-bold py-1.5 px-3.5 rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Recomendar en mi Rutina</span>
+            <span>Evaluar en mi Rutina</span>
           </button>
         </div>
       </div>
@@ -974,6 +1123,7 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
         ) : (
           messages.map((msg) => {
             const isBot = msg.sender === 'copilot';
+            const hasProductComparison = Boolean(msg.actions?.productComparison);
             const hasProducts = msg.actions?.products?.length > 0;
             const hasSelfCare = msg.actions?.selfCare?.length > 0;
             const hasTimers = msg.actions?.timers?.length > 0;
@@ -1008,18 +1158,137 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
                     <span>{msg.timestamp}</span>
                   </div>
 
+                  {/* Image Preview if User uploaded a product photo */}
+                  {msg.imagePreview && (
+                    <div className="pt-1">
+                      <img
+                        src={msg.imagePreview}
+                        alt="Producto subido"
+                        className="w-28 h-28 object-cover rounded-xl border border-[#e0a96d]/40 shadow-md"
+                      />
+                    </div>
+                  )}
+
                   {/* Markdown / Body Text */}
                   <div className="whitespace-pre-wrap leading-relaxed space-y-2 font-normal text-slate-200">
                     {msg.text}
                   </div>
 
                   {/* Action Cards (If extracted by AI) */}
-                  {isBot && (hasProducts || hasSelfCare || hasTimers || hasSchedule) && (
+                  {isBot && (hasProductComparison || hasProducts || hasSelfCare || hasTimers || hasSchedule) && (
                     <div className="pt-3 border-t border-slate-800 space-y-3">
                       <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#e0a96d]">
                         <Sparkles className="w-3.5 h-3.5" />
                         <span>Acciones Inteligentes Listas para Agregar a tus Módulos:</span>
                       </div>
+
+                      {/* 0. Product Overlap Strategy (Wait until finished vs Alternate) & Winner Verdict */}
+                      {hasProductComparison && (() => {
+                        const pc = msg.actions.productComparison;
+                        const isWait = pc.strategy === 'wait_until_finished';
+                        return (
+                          <div className={`bg-[#0b0c10] border p-4 rounded-xl space-y-3 ${
+                            isWait ? 'border-amber-500/40' : 'border-sky-500/40'
+                          }`}>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`text-[11px] font-extrabold px-2.5 py-1 rounded-full border ${
+                                  isWait
+                                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                                    : 'bg-sky-500/15 text-sky-300 border-sky-500/40'
+                                }`}>
+                                  {pc.strategyBadge || (isWait ? '⏳ Esperar a que se termine el actual' : '🔄 Sí conviene alternar')}
+                                </span>
+                                {pc.categoryLabel && (
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                    {pc.categoryLabel}
+                                  </span>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={msg.executedActions?.productComparison}
+                                onClick={() => handleApplyProductComparison(msg.id, pc, msg.actions.schedule, msg.actions.products)}
+                                className={`text-[11px] font-bold py-1.5 px-3.5 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all ${
+                                  msg.executedActions?.productComparison
+                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                    : 'btn-rose-gold shadow-sm'
+                                }`}
+                              >
+                                {msg.executedActions?.productComparison ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Estrategia y Veredicto Guardados</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    <span>
+                                      {isWait
+                                        ? '⏳ Poner en espera + Guardar cuál recomprar'
+                                        : '🔄 Alternar en mi Rutina + Guardar veredicto'}
+                                    </span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {pc.whyStrategy && (
+                              <p className="text-[11px] text-slate-300 leading-relaxed bg-[#171a24]/90 p-2.5 rounded-lg border border-slate-800">
+                                {pc.whyStrategy}
+                              </p>
+                            )}
+
+                            {/* Winner vs Loser for Next Repurchase */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {pc.winnerProduct && (
+                                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
+                                      🏆 Conservar y comprar la próxima vez
+                                    </span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
+                                      ✅ Recomprar
+                                    </span>
+                                  </div>
+                                  <p className="text-xs font-bold text-slate-100">{pc.winnerProduct.name}</p>
+                                  {pc.winnerProduct.reason && (
+                                    <p className="text-[10px] text-slate-300 leading-snug">{pc.winnerProduct.reason}</p>
+                                  )}
+                                </div>
+                              )}
+
+                              {pc.loserProduct && (
+                                <div className={`p-3 rounded-xl border space-y-1 ${
+                                  isWait
+                                    ? 'bg-rose-500/10 border-rose-500/30'
+                                    : 'bg-sky-500/10 border-sky-500/30'
+                                }`}>
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className={`text-[10px] font-extrabold uppercase tracking-wider ${
+                                      isWait ? 'text-amber-300' : 'text-sky-300'
+                                    }`}>
+                                      {isWait ? '⏳ Terminar envase actual / En espera' : '🔄 Producto en Alternancia'}
+                                    </span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                      pc.loserProduct.verdict === 'no'
+                                        ? 'bg-rose-500/20 text-rose-300'
+                                        : 'bg-sky-500/20 text-sky-300'
+                                    }`}>
+                                      {pc.loserProduct.verdict === 'no' ? '🚫 No volver a comprar' : '🔄 Alternar'}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs font-bold text-slate-100">{pc.loserProduct.name}</p>
+                                  {pc.loserProduct.reason && (
+                                    <p className="text-[10px] text-slate-300 leading-snug">{pc.loserProduct.reason}</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* 1. Products to Price Comparator */}
                       {hasProducts && (
@@ -1313,9 +1582,19 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
         }}
         className="glass-panel p-3 rounded-2xl flex items-end gap-3 shrink-0"
       >
+        <button
+          type="button"
+          disabled={isProcessing}
+          onClick={() => productPhotoInputRef.current?.click()}
+          className="bg-[#0b0c10] hover:bg-slate-800 border border-[#e0a96d]/30 text-[#e0a96d] text-xs font-bold py-3 px-3.5 rounded-xl cursor-pointer transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+          title="Subir foto de un producto para que Copilot te diga cómo agregarlo, si esperar o alternar, y cuál volver a comprar"
+        >
+          <Camera className="w-4 h-4" />
+          <span className="hidden md:inline text-[11px]">Foto Producto</span>
+        </button>
         <textarea
           rows="2"
-          placeholder="Escribe o pega cualquier rutina, lista o recomendación médica/estética..."
+          placeholder="Escribe o sube un producto (ej. 'Tengo Terssura crema corporal y Nivea crema corporal' o 'Compré otro shampoo')..."
           value={inputPrompt}
           onChange={(e) => setInputPrompt(e.target.value)}
           onKeyDown={(e) => {

@@ -1443,31 +1443,69 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido con la siguiente estructura:
 export const generateFallbackCopilotResponse = (userText = '', context = {}) => {
   const lower = userText.toLowerCase();
   const currentSchedule = Array.isArray(context?.schedule) ? context.schedule : [];
+  const currentHousehold = Array.isArray(context?.householdItems) ? context.householdItems : [];
 
-  // 0. New Product Integration into Daily Routine ("compré...", "nuevo producto", "agregar a la rutina", etc.)
+  // 0. New Product Integration & Equivalent Product Comparison ("compré...", "subí...", "tengo X y Y", "crema corporal", "shampoo", etc.)
   const isNewProductIntegration =
-    /compr[eé]|adquir[ií]|nuevo\s+producto|agregar.*rutina|integrar.*rutina|c[oó]mo\s+(lo\s+)?(uso|agrego|aplico|meto)|en\s+qu[eé]\s+paso|a\s+qu[eé]\s+hora\s+(lo\s+)?(uso|aplico|tomo)/i.test(userText);
+    /compr[eé]|adquir[ií]|subo|sub[ií]|nuevo\s+producto|agregar.*rutina|integrar.*rutina|c[oó]mo\s+(lo\s+)?(uso|agrego|aplico|meto)|en\s+qu[eé]\s+paso|a\s+qu[eé]\s+hora\s+(lo\s+)?(uso|aplico|tomo)|terssura|nivea|lubriderm|cetaphil|eucerin|garnier|loreal|l'or[eé]al|pantene|head\s*&\s*shoulders|elvive|cerave|pond'?s|neutrogena|la\s+roche|bioderma|isdin|vichi|vichy|the\s+ordinary|crema\s+corporal|shampoo|champ[uú]|limpiador|s[eé]rum|suero|bloqueador|protector\s+solar|t[oó]nico|contorno\s+de\s+ojos/i.test(userText) &&
+    !/mona|perr|mascota|displasia/i.test(lower);
 
   if (isNewProductIntegration) {
-    // Extract product name from quotes or after key phrases
-    const quotedMatch = userText.match(/[""«]([^""»]+)[""»]/);
-    let cleanProdName = quotedMatch ? quotedMatch[1].trim() : '';
+    // Check if the user explicitly mentioned TWO products in her message (e.g. "tengo terssura crema corporal y tengo una nivea crema corporal")
+    const quotedMatches = [...userText.matchAll(/[""«]([^""»]+)[""»]/g)].map(m => m[1].trim()).filter(Boolean);
+    let cleanProdName = quotedMatches[0] || '';
+    let explicitSecondProd = quotedMatches[1] || '';
+
     if (!cleanProdName) {
-      cleanProdName = userText
-        .replace(/^(hola\s*)?(acabo\s+de\s+comprar|compr[eé](\s+este\s+nuevo\s+producto)?|tengo\s+un\s+nuevo\s+producto|quiero\s+agregar(\s+a\s+mi\s+rutina)?|c[oó]mo\s+agrego)\s*:?\s*/i, '')
-        .split(/[?.!]|y\s+quiero|c[oó]mo\s+lo|en\s+qu[eé]\s+paso|a\s+qu[eé]\s+hora/i)[0]
-        .trim();
+      // Check for "tengo X y (tengo) Y" pattern
+      const pairMatch = userText.match(/tengo\s+(?:una?\s+)?([^,.?;]+?)\s+y\s+(?:tengo\s+|compr[eé]\s+)?(?:una?\s+)?([^,.?;]+)/i);
+      if (pairMatch) {
+        explicitSecondProd = pairMatch[1].trim();
+        cleanProdName = pairMatch[2].trim();
+      } else {
+        cleanProdName = userText
+          .replace(/^(hola\s*)?(acabo\s+de\s+comprar|compr[eé](\s+este\s+nuevo\s+producto)?|sub[ií](\s+este\s+producto)?|tengo(\s+un\s+nuevo\s+producto)?|quiero\s+agregar(\s+a\s+mi\s+rutina)?|c[oó]mo\s+agrego)\s*:?\s*/i, '')
+          .split(/[?.!]|y\s+quiero|c[oó]mo\s+lo|en\s+qu[eé]\s+paso|a\s+qu[eé]\s+hora/i)[0]
+          .trim();
+      }
     }
+
     if (!cleanProdName || cleanProdName.length < 2) {
       cleanProdName = 'Nuevo Producto de Cuidado Personal';
     }
     cleanProdName = cleanProdName.charAt(0).toUpperCase() + cleanProdName.slice(1);
+    if (explicitSecondProd) {
+      explicitSecondProd = explicitSecondProd.charAt(0).toUpperCase() + explicitSecondProd.slice(1);
+    }
 
-    const pLow = cleanProdName.toLowerCase();
+    const pLow = `${cleanProdName} ${explicitSecondProd} ${userText}`.toLowerCase();
     const isAlreadyOwned = !/por\s+comprar|quiero\s+comprar|pienso\s+comprar|idea/i.test(userText);
     const prodStatus = isAlreadyOwned ? 'owned' : 'to_buy';
 
-    // Determine best routine block, time, order, and precautions
+    // Collect all existing products from schedule and householdItems to detect functional overlap
+    const allExistingProducts = [];
+    currentHousehold.forEach(h => {
+      if (h && h.name && h.repurchaseVerdict !== 'no') {
+        allExistingProducts.push({ name: h.name, category: h.category || 'Skincare', source: 'Insumos' });
+      }
+    });
+    currentSchedule.forEach(s => {
+      if (s && Array.isArray(s.products)) {
+        s.products.forEach(p => {
+          if (p && p.name && p.status !== 'never' && !allExistingProducts.some(ep => ep.name.toLowerCase() === p.name.toLowerCase())) {
+            allExistingProducts.push({ name: p.name, category: 'Rutina', source: s.title });
+          }
+        });
+      }
+    });
+
+    const findExistingByRegex = (regex) => {
+      if (explicitSecondProd) return explicitSecondProd;
+      const found = allExistingProducts.find(ep => regex.test(ep.name.toLowerCase()) && ep.name.toLowerCase() !== cleanProdName.toLowerCase());
+      return found ? found.name : null;
+    };
+
+    // Determine functional category, routine block, overlap strategy (wait_until_finished vs alternate vs direct_add), and winner verdict
     let targetTime = '08:15 AM';
     let targetTitle = 'Secado y cuidado corporal';
     let targetCategory = 'Skincare';
@@ -1475,13 +1513,108 @@ export const generateFallbackCopilotResponse = (userText = '', context = {}) => 
     let compatibilityText = 'Compatible con tu rutina matutina. Al sellar con FPS 30+ proteges la barrera cutánea durante todo el día.';
     let updatedDesc = `Turbante de microfibra, aplicar ${cleanProdName} en rostro limpio, crema de urea en codos/talones, sellar con crema hidratante con FPS 30+.`;
     let selfCareSuggestion = null;
+    let productComparison = null;
 
-    if (/[aá]cido\s+(glic[oó]lico|salic[ií]lico|l[aá]ctico|mandelico|azelaico)|peeling|exfoliante\s+qu[ií]mico|retinal|tretino[ií]na|adapaleno|noche|nocturn|despigmentante|manchas/i.test(pLow)) {
+    // 1. CREMA CORPORAL / LOCIÓN CORPORAL (Ej. Terssura vs Nivea, Lubriderm, Urea, etc.)
+    if (/crema\s+corporal|loci[oó]n\s+corporal|body\s+lotion|terssura|nivea.*corporal|lubriderm|cuerpo|codos|talones/i.test(pLow)) {
+      targetTime = '08:15 AM';
+      targetTitle = 'Secado y cuidado corporal';
+      targetCategory = 'Higiene';
+      stepOrderText = 'Inmediatamente al salir de la ducha (en los primeros 3 minutos con la piel ligeramente húmeda) para atrapar el agua transepidérmica.';
+
+      const existingBodyCream =
+        explicitSecondProd ||
+        findExistingByRegex(/terssura|nivea|lubriderm|crema\s+corporal|crema\s+de\s+urea|urea/i) ||
+        'Crema Corporal actual (ej. Terssura / Crema de Urea)';
+
+      const hasTerssura = /terssura/i.test(pLow) || /terssura/i.test(existingBodyCream);
+      const hasNivea = /nivea/i.test(pLow) || /nivea/i.test(existingBodyCream);
+
+      const currentProdLabel = explicitSecondProd || existingBodyCream;
+      const winnerName = hasTerssura
+        ? (cleanProdName.toLowerCase().includes('terssura') ? cleanProdName : currentProdLabel)
+        : currentProdLabel;
+      const runnerUpName = winnerName === cleanProdName ? currentProdLabel : cleanProdName;
+
+      compatibilityText = `⏳ **Estrategia de Insumo Suplementario (NO usar las dos al mismo tiempo):** Ya cuentas con **${currentProdLabel}**. Aplicar dos cremas corporales básicas al mismo tiempo **no te da ningún beneficio real adicional** (la piel tiene un límite de absorción de emolientes y tener ambos botes abiertos solo oxida la fórmula y ocupa espacio). **Espera a que se termine primero la que ya tienes en uso** y después comienza la otra.`;
+
+      productComparison = {
+        strategy: 'wait_until_finished',
+        strategyBadge: '⏳ Esperar a que se termine el actual',
+        currentProduct: currentProdLabel,
+        newProduct: cleanProdName,
+        whyStrategy:
+          `Usar "${currentProdLabel}" y "${cleanProdName}" al mismo tiempo no aporta un beneficio real extra porque ambas cumplen la función de humectación/oclusión corporal diaria. Lo óptimo es terminar por completo un envase antes de abrir o usar el siguiente (salvo que uses una específica de Urea concentrada únicamente en codos/talones y la otra en el resto del cuerpo).`,
+        comparisonAnalysis: hasTerssura && hasNivea
+          ? `• **Terssura Crema Corporal:** Fórmula de enfoque dermatológico con agentes humectantes y emolientes reparadores de la barrera cutánea; repara resequedad profunda y descamación sin dejar película pesada ni grasosa.\n• **Nivea Crema Corporal:** Fórmula comercial clásica con glicerina/emolientes oclusivos; cumple bien para hidratación básica diaria, pero tiene menor poder de renovación epidérmica que Terssura.`
+          : `• **${currentProdLabel}:** Cumple tu hidratación corporal base actual.\n• **${cleanProdName}:** Cumple la misma función humectante/emoliente corporal, por lo que funciona como relevo cuando se agote tu envase actual.`,
+        winnerProduct: winnerName,
+        loserProduct: runnerUpName,
+        repurchaseRecommendation: hasTerssura
+          ? `🏆 **Para conservar y volver a comprar la próxima vez: ${winnerName}.** Cuando se te terminen ambas, quédate únicamente con **${winnerName}** como tu titular de recompra por su superioridad dermatológica en reparación de barrera, y marca **${runnerUpName}** como "No volver a comprar" una vez que te acabes el envase.`
+          : `🏆 **Recomendación para la próxima compra:** Termina primero **${currentProdLabel}** y luego usa **${cleanProdName}**. Evalúa cuál deja tu piel más flexible a las 8 horas sin sensación grasa y conserva solo esa como titular para tu próxima compra.`
+      };
+
+      updatedDesc = `Turbante de microfibra, aplicar ${currentProdLabel} en cuerpo (⏳ al terminarse, pasar a usar ${cleanProdName}), crema hidratante con FPS 30+.`;
+    }
+    // 2. SHAMPOOS (Sí se recomienda alternar)
+    else if (/shampoo|champ[uú]/i.test(pLow)) {
+      targetTime = '07:45 AM';
+      targetTitle = 'Ducha metodológica';
+      targetCategory = 'Higiene';
+      const existingShampoo =
+        explicitSecondProd ||
+        findExistingByRegex(/shampoo|champ[uú]/i) ||
+        'Shampoo de chile/romero';
+
+      stepOrderText = 'En la ducha matutina, masajeando únicamente el cuero cabelludo con las yemas de los dedos durante 60 segundos antes de pasar al acondicionador de medios a puntas.';
+      compatibilityText = `🔄 **¡En Shampoos SÍ es excelente alternar!** A diferencia de las cremas corporales básicas, **alternar ${existingShampoo} con ${cleanProdName}** (un lavado sí y un lavado no, o 2 veces por semana) evita la saturación de residuos en el cuero cabelludo, previene el acostumbramiento folicular y equilibra limpieza profunda con nutrición de la hebra.`;
+
+      productComparison = {
+        strategy: 'alternate',
+        strategyBadge: '🔄 Sí conviene alternar entre lavados',
+        currentProduct: existingShampoo,
+        newProduct: cleanProdName,
+        whyStrategy:
+          'En tricología capilar sí se recomienda alternar dos shampoos con funciones complementarias (por ejemplo, uno estimulante/purificante como Chile y Romero con uno hidratante, reparador o dermatológico) para no resecar la fibra ni saturar el folículo.',
+        comparisonAnalysis:
+          `• **${existingShampoo}:** Estimula la microcirculación del folículo piloso y controla el exceso de sebo en la raíz.\n• **${cleanProdName}:** Aporta balance complementario a la fibra capilar para que el cabello no pierda suavidad ni brillo.`,
+        winnerProduct: existingShampoo,
+        loserProduct: cleanProdName,
+        repurchaseRecommendation:
+          `🏆 **Estrategia de Conservación y Recompra:** Conserva **ambos en rotación activa** (ej. Lunes/Miércoles/Viernes usa **${existingShampoo}** y Martes/Jueves/Fin de semana usa **${cleanProdName}**). Como titular indispensable de raíz mantén **${existingShampoo}**.`
+      };
+
+      updatedDesc = `Alternar ${existingShampoo} y ${cleanProdName} entre lavados, acondicionador de medios a puntas (5 min), jabón de arroz, limpiador facial CeraVe, enjuague frío.`;
+    }
+    // 3. ACTIVOS NOCTURNOS / EXFOLIANTES / SUEROS DE NOCHE (Alternar en noches distintas - Skin Cycling)
+    else if (/[aá]cido\s+(glic[oó]lico|salic[ií]lico|l[aá]ctico|mandelico|azelaico)|peeling|exfoliante\s+qu[ií]mico|retinal|retinol|tretino[ií]na|adapaleno|noche|nocturn|despigmentante|manchas|concha\s+n[aá]car|teatrical/i.test(pLow)) {
       targetTime = '09:30 PM';
       targetTitle = 'Noche & Skincare rotativo';
       targetCategory = 'Skincare';
-      stepOrderText = 'En la noche sobre piel completamente limpia y seca, esperando 10 minutos antes de aplicar tu crema hidratante CeraVe PM.';
-      compatibilityText = '⚠️ **Regla de Oro de Alternancia:** NO lo apliques en la misma noche que el **Retinol** para evitar irritación. Úsalo en noches alternas (Ciclo de Skin Cycling: Noche 1 Retinol → Noche 2 ' + cleanProdName + ' → Noche 3 Concha Nácar / Hidratación).';
+      const existingNightActive =
+        explicitSecondProd ||
+        findExistingByRegex(/retinol|concha\s+n[aá]car|teatrical|cerave\s+pm/i) ||
+        'Retinol / Concha Nácar';
+
+      stepOrderText = 'En la noche sobre piel completamente limpia y seca, esperando 10 minutos antes de sellar con tu hidratante CeraVe PM.';
+      compatibilityText = `🔄 **Regla de Oro de Alternancia Nocturna (Skin Cycling):** NO los apliques en la misma noche encima uno del otro para evitar irritar la barrera cutánea. **Altérnalos por noches** (Noche A: Retinol → Noche B: ${cleanProdName} → Noche C: Concha Nácar / Hidratación reparadora).`;
+
+      productComparison = {
+        strategy: 'alternate',
+        strategyBadge: '🔄 Alternar en noches distintas (Skin Cycling)',
+        currentProduct: existingNightActive,
+        newProduct: cleanProdName,
+        whyStrategy:
+          'Los activos de renovación celular nocturna no deben encimarse en la misma noche porque sobreexfolian e inflaman la piel, pero alternados en noches distintas multiplican sus resultados.',
+        comparisonAnalysis:
+          `• **${existingNightActive}:** Estimula la síntesis de colágeno y renovación celular profunda.\n• **${cleanProdName}:** Complementa la uniformidad de tono y textura en las noches de descanso de retinol.`,
+        winnerProduct: existingNightActive,
+        loserProduct: cleanProdName,
+        repurchaseRecommendation:
+          `🏆 **Cuál conservar y recomprar:** El **Retinol** + **CeraVe PM** son el estándar de oro dermatológico que siempre debes conservar y recomprar; mantén **${cleanProdName}** en noches alternas y evalúa al terminar el envase si te dio mejor luminosidad que tu activo secundario actual.`
+      };
+
       updatedDesc = `Noches A: Retinol + CeraVe PM | Noches B: ${cleanProdName} + CeraVe PM | Noches C: Concha Nácar + Teatrical Aclaradora. Perspirex/Drysol (2x/semana).`;
       selfCareSuggestion = {
         title: `Noche de ${cleanProdName} (Alternancia Nocturna)`,
@@ -1491,27 +1624,63 @@ export const generateFallbackCopilotResponse = (userText = '', context = {}) => 
         notes: `Aplicar en noches sin Retinol y sellar con hidratante.`,
         protocol: 'Cada 3 noches dentro de tu rotación nocturna.'
       };
-    } else if (/shampoo|champ[uú]|acondicionador|mascarilla\s+capilar|cabello|pelo|cuero\s+cabelludo|jab[oó]n|exfoliante\s+corporal|body\s+wash|limpiador/i.test(pLow)) {
-      targetTime = '07:45 AM';
-      targetTitle = 'Ducha metodológica';
-      targetCategory = 'Higiene';
-      stepOrderText = 'Durante tu ducha matutina, integrándolo junto con tu limpieza capilar/corporal antes del enjuague frío final.';
-      compatibilityText = 'Sinergia ideal con tu shampoo de chile/romero y jabón de arroz.';
-      updatedDesc = `Shampoo de chile/romero, acondicionador de medios a puntas (5 min), ${cleanProdName}, jabón de arroz, limpiador facial CeraVe, enjuague frío.`;
-    } else if (/vitamina\s+(d|b|e|k)|omega|col[aá]geno|biotina|prote[ií]na|creatina|probi[oó]tico|suplemento|c[aá]psula|hierro|zinc| calcio/i.test(pLow) && !/s[eé]rum|suero|crema|facial|t[oó]pico/i.test(pLow)) {
+    }
+    // 4. LIMPIADOR FACIAL / JABÓN FACIAL / CREMA FACIAL DÍA / BLOQUEADOR (Sustitutos: esperar a terminar)
+    else if (/limpiador\s+facial|gel\s+limpiador|espuma\s+facial|agua\s+micelar|crema\s+hidratante|bloqueador|protector\s+solar|fps|pond'?s/i.test(pLow)) {
+      const isCleanser = /limpiador|gel\s+limpiador|espuma|micelar/i.test(pLow);
+      targetTime = '06:30 AM';
+      targetTitle = isCleanser ? 'Skin care mañana / Ducha' : 'Skin care mañana';
+      targetCategory = 'Skincare';
+      const existingFacial =
+        explicitSecondProd ||
+        (isCleanser
+          ? findExistingByRegex(/limpiador|cerave|jab[oó]n\s+de\s+arroz/i) || 'Limpiador Facial CeraVe'
+          : findExistingByRegex(/pond'?s|rejuveness|fps|hidratante|bloqueador/i) || 'Crema Hidratante con FPS (Pond’s Rejuveness FPS 30)');
+
+      stepOrderText = isCleanser
+        ? 'Como primer paso de tu rutina facial matutina y nocturna sobre piel húmeda, masajeando 40 segundos antes de enjuagar con agua fresca.'
+        : 'Como último paso de sellado en tu rutina de mañana después del Agua de Rosas y el Sérum de Cafeína.';
+      compatibilityText = `⏳ **Producto Sustituto (Espera a terminar el actual):** Ya tienes **${existingFacial}** cumpliendo esta misma función en tu rutina. Usar dos ${isCleanser ? 'limpiadores faciales del mismo tipo' : 'cremas hidratantes/protectores del mismo paso'} al mismo tiempo no te da mayor beneficio; **espera a que se termine el envase actual** para abrir y usar **${cleanProdName}**.`;
+
+      productComparison = {
+        strategy: 'wait_until_finished',
+        strategyBadge: '⏳ Esperar a que se termine el actual',
+        currentProduct: existingFacial,
+        newProduct: cleanProdName,
+        whyStrategy:
+          `Tener dos productos abiertos para el mismo paso de ${isCleanser ? 'limpieza facial' : 'hidratación/protección solar'} no multiplica el efecto y reduce la vida útil de los filtros/activos una vez abiertos.`,
+        comparisonAnalysis:
+          `• **${existingFacial}:** Tu producto titular actual en este paso.\n• **${cleanProdName}:** Cumple el mismo rol funcional; úsalo de relevo en cuanto se acabe el primero para comparar cuál le sienta mejor a tu piel.`,
+        winnerProduct: existingFacial,
+        loserProduct: cleanProdName,
+        repurchaseRecommendation:
+          `🏆 **Cuál conservar y comprar la próxima vez:** Termina primero **${existingFacial}** (que ya está probado en tu barrera cutánea con ceramidas/FPS) y cuando pases a **${cleanProdName}** quédate solo con el que controle mejor el brillo sin resecar.`
+      };
+
+      updatedDesc = `Usar ${existingFacial} (⏳ en espera al terminarse: ${cleanProdName}).`;
+    }
+    // 5. SUPLEMENTOS ORALES
+    else if (/vitamina\s+(d|b|e|k)|omega|col[aá]geno|biotina|prote[ií]na|creatina|probi[oó]tico|suplemento|c[aá]psula|hierro|zinc|calcio/i.test(pLow) && !/s[eé]rum|suero|crema|facial|t[oó]pico/i.test(pLow)) {
       targetTime = '08:45 AM';
       targetTitle = 'Desayuno denso + Suplementación';
       targetCategory = 'Despensa';
+      const existingSupp = findExistingByRegex(/multivitam|omega|calcio|biotina|col[aá]geno/i);
       stepOrderText = 'Junto con tu primer alimento denso de la mañana y 250 ml de agua para maximizar su biodisponibilidad y absorción intestinal.';
-      compatibilityText = 'Excelente sinergia con tu bloque actual (Multivitamínico, Omega-3, Calcio + D3, Biotina y Colágeno).';
+      compatibilityText = 'Si aporta el mismo micronutriente que otro suplemento que ya tomas (ej. otro Multivitamínico o Biotina repetida), **espera a terminar el frasco actual** para no duplicar dosis diarias; si es un activo distinto, puedes sumarlo en este bloque.';
       updatedDesc = `Multivitamínico, Omega-3, Calcio + D3, Biotina, Colágeno disuelto, ${cleanProdName}.`;
-    } else if (/magnesio|melatonina|ashwagandha|teanina|relajante|dormir|sue[ñn]o/i.test(pLow)) {
-      targetTime = '10:00 PM';
-      targetTitle = 'Citrato de Magnesio & Relajación';
-      targetCategory = 'Despensa';
-      stepOrderText = '30 a 45 minutos antes de dormir, acompañado de medio vaso de agua tibia mientras realizas tu elevación de piernas.';
-      compatibilityText = 'Favorece la relajación neuromuscular y el descanso profundo sin interferir con otros suplementos matutinos.';
-      updatedDesc = `Tomar ${cleanProdName}, elevar piernas a 90° por 10 min y descanso zen.`;
+      if (existingSupp) {
+        productComparison = {
+          strategy: 'wait_until_finished',
+          strategyBadge: '⏳ Si repite ingrediente, espera a terminar el frasco actual',
+          currentProduct: existingSupp,
+          newProduct: cleanProdName,
+          whyStrategy: 'En suplementación oral, tomar dos marcas del mismo nutriente al mismo tiempo puede causar hipervitaminosis o simplemente desecharse por vía renal sin beneficio extra.',
+          comparisonAnalysis: `• **${existingSupp}:** Base actual de tu bloque de las 08:45 AM.\n• **${cleanProdName}:** Revisa en la tabla nutrimental si duplica vitaminas; si es el mismo activo, guárdalo cerrado hasta acabar el frasco actual.`,
+          winnerProduct: cleanProdName,
+          loserProduct: existingSupp,
+          repurchaseRecommendation: `🏆 **Para la próxima compra:** Conserva el que tenga mayor concentración de principio activo puro por cápsula y menor cantidad de excipientes/azúcares.`
+        };
+      }
     }
 
     // Check if user already has a matching block in her schedule to preserve its exact title/time/desc
@@ -1521,35 +1690,61 @@ export const generateFallbackCopilotResponse = (userText = '', context = {}) => 
     if (existingBlock) {
       targetTime = existingBlock.time || targetTime;
       targetTitle = existingBlock.title || targetTitle;
-      if (existingBlock.desc && !existingBlock.desc.toLowerCase().includes(pLow)) {
-        updatedDesc = `${existingBlock.desc.replace(/\.\s*$/, '')}, ${cleanProdName}.`;
+      if (existingBlock.desc && !existingBlock.desc.toLowerCase().includes(cleanProdName.toLowerCase())) {
+        if (productComparison?.strategy === 'wait_until_finished') {
+          updatedDesc = `${existingBlock.desc.replace(/\.\s*$/, '')} (⏳ Al terminar ${productComparison.currentProduct}, usar ${cleanProdName}).`;
+        } else if (productComparison?.strategy === 'alternate') {
+          updatedDesc = `${existingBlock.desc.replace(/\.\s*$/, '')} (🔄 Alternar con ${cleanProdName}).`;
+        } else {
+          updatedDesc = `${existingBlock.desc.replace(/\.\s*$/, '')}, ${cleanProdName}.`;
+        }
       }
     }
 
-    return {
-      replyText: `### 🧴 Cómo Integrar **${cleanProdName}** a tu Rutina Diaria
+    const comparisonMarkdown = productComparison
+      ? `
+4. **⚖️ ¿Usar al mismo tiempo, Esperar o Alternar? (${productComparison.strategyBadge}):**
+   - ${productComparison.whyStrategy}
 
-He analizado los pasos actuales de tu **Rutina del Día a Día** para ubicar **${cleanProdName}** en el momento de mayor eficacia y sin conflictos de activos:
+5. **🔬 Comparativa Directa (${productComparison.currentProduct} vs. ${productComparison.newProduct}):**
+${productComparison.comparisonAnalysis}
+
+6. **🏆 Veredicto: ¿Cuál conservar y volver a comprar la próxima vez?**
+   - ${productComparison.repurchaseRecommendation}`
+      : '';
+
+    return {
+      replyText: `### 🧴 Cómo Integrar **${cleanProdName}** a tu Rutina y Estrategia con tus otros Productos
+
+He analizado tu **Rutina del Día a Día** y tu inventario de **Insumos** para darte la estrategia exacta:
 
 1. **⏰ Bloque Recomendado en tu Rutina:**
    - **${targetTime} — ${targetTitle}**
-   - Se marcará automáticamente con el icono **${isAlreadyOwned ? '✅ Ya lo tengo' : '🛒 Por comprar'}** al lado del producto dentro de tu rutina.
+   - Estado del producto: **${isAlreadyOwned ? '✅ Ya lo tengo' : '🛒 Por comprar'}**.
 
 2. **🔢 Orden Exacto de Aplicación:**
    - ${stepOrderText}
 
-3. **🧪 Compatibilidad con tus otros Productos:**
-   - ${compatibilityText}
+3. **🧪 Compatibilidad y Relación con tus Productos Actuales:**
+   - ${compatibilityText}${comparisonMarkdown}
 
 ---
-Haz clic en **"Agregar al Horario"** abajo para integrar **${cleanProdName}** directamente en el paso **"${targetTitle}"** de tu rutina diaria (y en **"Agregar al Comparador"** si quieres tenerlo registrado en tus Insumos).`,
+Usa los botones de acción aquí abajo para **aplicar esta estrategia en tu Rutina** y **actualizar cuál conservar/recomprar en tus Insumos**.`,
       actions: {
+        productComparison,
         products: [
           {
             name: cleanProdName,
             category: targetCategory,
-            repurchaseVerdict: isAlreadyOwned ? 'yes' : 'need_to_buy',
-            notes: `Integrado en el bloque "${targetTitle}" (${targetTime}).`
+            repurchaseVerdict:
+              productComparison?.strategy === 'wait_until_finished' && productComparison?.winnerProduct !== cleanProdName
+                ? 'buy_later'
+                : isAlreadyOwned
+                ? 'yes'
+                : 'need_to_buy',
+            notes: productComparison
+              ? `${productComparison.strategyBadge}. ${productComparison.repurchaseRecommendation.replace(/\*\*/g, '')}`
+              : `Integrado en el bloque "${targetTitle}" (${targetTime}).`
           }
         ],
         selfCare: selfCareSuggestion ? [selfCareSuggestion] : [],
@@ -1561,9 +1756,20 @@ Haz clic en **"Agregar al Horario"** abajo para integrar **${cleanProdName}** di
             desc: updatedDesc,
             tag: 'beauty',
             isRoutine: true,
-            routineStatus: isAlreadyOwned ? 'active' : 'idea',
+            routineStatus:
+              productComparison?.strategy === 'wait_until_finished'
+                ? 'idea'
+                : isAlreadyOwned
+                ? 'active'
+                : 'idea',
             productsToAdd: [
-              { name: cleanProdName, status: prodStatus }
+              {
+                name: cleanProdName,
+                status:
+                  productComparison?.strategy === 'wait_until_finished'
+                    ? 'to_try'
+                    : prodStatus
+              }
             ]
           }
         ],
@@ -1807,45 +2013,83 @@ Haz clic en los botones de abajo para agregar cada elemento a su módulo corresp
  * @returns {Promise<{ replyText: string, actions: { products: Array, selfCare: Array, timers: Array, schedule: Array, petGuide: Array } }>}
  */
 export const parseRoutineWithCopilot = async (userMessage, history = [], apiKey = '', context = {}) => {
+  const fallbackResult = generateFallbackCopilotResponse(userMessage, context);
   if (!apiKey || !apiKey.trim()) {
-    return generateFallbackCopilotResponse(userMessage, context);
+    return fallbackResult;
   }
 
   const currentScheduleSummary = Array.isArray(context?.schedule) && context.schedule.length > 0
     ? context.schedule.map(s => `- [${s.time}] ${s.title}: ${s.desc || ''}`).join('\n')
     : '- [07:45 AM] Ducha metodológica\n- [08:15 AM] Secado y cuidado corporal\n- [08:45 AM] Desayuno denso + Suplementación\n- [09:30 PM] Noche & Skincare rotativo\n- [10:00 PM] Citrato de Magnesio & Relajación';
 
-  const prompt = `
-Eres AURA Copilot, el asistente de inteligencia artificial élite de AURA Nexus para Estilo de Vida, Belleza, Skincare, Ergonomía, Productividad, Organización Personal y Cuidado de Mascotas (especialmente Mona, una perrita Pastor Alemán senior de 12 años con displasia de cadera bilateral).
+  const currentHouseholdSummary = Array.isArray(context?.householdItems) && context.householdItems.length > 0
+    ? context.householdItems
+        .slice(0, 40)
+        .map(h => `- ${h.name} (${h.category || 'General'} | Estado: ${h.repurchaseVerdict || 'yes'})`)
+        .join('\n')
+    : '- Crema Corporal Terssura\n- Shampoo de Chile / Romero\n- Agua de Rosas\n- Sérum de Cafeína\n- Pond’s Rejuveness FPS 30\n- Crema Concha Nácar Teatrical';
 
-La usuaria te ha enviado el siguiente mensaje, producto nuevo o rutina para analizar y estructurar:
+  const prompt = `
+Eres AURA Copilot, el asistente de inteligencia artificial élite de AURA Nexus para Estilo de Vida, Belleza, Skincare, Tricología, Ergonomía, Productividad, Organización Personal y Cuidado de Mascotas (especialmente Mona, una perrita Pastor Alemán senior de 12 años con displasia de cadera bilateral).
+
+La usuaria te ha enviado el siguiente mensaje, foto de producto, producto nuevo o rutina para analizar y estructurar:
 "${userMessage}"
 
 RUTINA DIARIA ACTUAL DE LA USUARIA (para que sepas qué pasos y productos ya usa y a qué hora):
 ${currentScheduleSummary}
 
+INVENTARIO / PRODUCTOS ACTUALES DE LA USUARIA:
+${currentHouseholdSummary}
+
 Tu tarea es doble:
 1. "replyText": Escribe una respuesta conversacional, empática, elegante y profesional en Markdown (en español).
-   - Si la usuaria menciona que COMPRÓ UN PRODUCTO NUEVO o quiere saber CÓMO AGREGAR UN PRODUCTO A SU RUTINA: recomiéndale con precisión en qué bloque existente de su rutina diaria (o en qué nuevo horario) debe usarlo, en qué orden exacto aplicarlo respecto a los productos que ya usa en ese paso, y si tiene alguna precaución o alternancia (ej. no mezclar ácidos fuertes en la misma noche que Retinol).
+   - Si la usuaria sube o menciona UN PRODUCTO NUEVO o DOS PRODUCTOS SIMILARES/SUPLEMENTARIOS (ej. Terssura crema corporal y Nivea crema corporal, o dos shampoos, dos limpiadores, dos cremas hidratantes):
+     a) **Cómo agregarlo a su rutina**: Dinos con precisión en qué bloque existente de su rutina diaria (hora y título del paso) y en qué orden exacto aplicarlo.
+     b) **Evaluación de Traslape (¿Esperar a terminar el actual o Alternar?)**:
+        - **CASO A ("wait_until_finished" - ⏳ Esperar a que se termine el actual)**: Si el producto cumple la misma función diaria que otro que ya tiene abierto (ej. tener crema corporal Terssura y crema corporal Nivea, dos limpiadores faciales diarios, dos bloqueadores diarios, dos pastas dentales) y usar los dos al mismo tiempo NO le da ningún beneficio real extra, dile explícitamente: **"⏳ Espera a que se termine [Producto A] antes de empezar [Producto B]"** para evitar oxidación de activos, desperdicio y saturación.
+        - **CASO B ("alternate" - 🔄 Sí conviene alternar)**: Si alternar ambos productos SÍ tiene un beneficio dermatológico o tricológico real (por ejemplo, en los **Shampoos** se recomienda alternar un shampoo estimulante como Chile/Romero con uno hidratante/reparador o anticaspa para evitar acostumbramiento del cuero cabelludo; o en **Activos Nocturnos / Skin Cycling** alternar Retinol en Noche A con Concha Nácar / Exfoliante en Noche B), explícale por qué sí conviene alternarlos y qué días usar cada uno.
+     c) **Veredicto Comparativo Inmediato (¿Cuál conservar y volver a comprar la próxima vez?)**:
+        - En ese mismo momento, compara ambos productos (fórmula, ingredientes clave, textura y beneficio real) y dile claramente **cuál de los dos es mejor para conservar como titular y volver a comprar la próxima vez** ("winnerProduct") y cuál terminar y no volver a comprar ("loserProduct"), o si vale la pena recomprar ambos por su sinergia al alternar.
    - Si habla de Mona o mascotas, ofrece pautas clínicas fundamentadas, dosis seguras y nombres comerciales de primera línea.
+
 2. "actions": Extrae de forma estructurada todos los elementos accionables para que la aplicación los agregue con un solo clic.
-   - Si está integrando un producto nuevo a un paso existente de su rutina, pon en "actions.schedule" el mismo "title" y "time" de ese bloque existente, el "desc" actualizado incluyendo el nuevo producto en el orden correcto, y en "productsToAdd" incluye [{"name": "Nombre corto del producto", "status": "owned"}] (o "to_buy" si aún no lo compra).
+   - Si detectaste que el producto compite o se alterna con otro producto (ya sea que la usuaria mencionó dos productos como Terssura vs Nivea, o que el producto nuevo cumple la misma función que uno de su Rutina/Inventario como shampoo, crema corporal, limpiador, crema facial, etc.), DEBES incluir el objeto "productComparison" dentro de "actions". Si no compite con ninguno, pon "productComparison": null.
 
-Si el tema involucra a Mona o mascotas (vitaminas, suplementos, arnés, correa, alimentación, cama ortopédica, tapetes, paseos, displasia), DEBES incluir las recomendaciones correspondientes en el arreglo "petGuide".
-
-Para los bloques de "schedule", utiliza SIEMPRE el formato de hora de 12 horas con AM/PM (ej. "09:30 PM", "08:15 AM", "02:00 PM") e incluye SIEMPRE una descripción detallada en el campo "desc" con los pasos, precauciones o alternancias del hábito.
+Para los bloques de "schedule", utiliza SIEMPRE el formato de hora de 12 horas con AM/PM (ej. "09:30 PM", "08:15 AM", "02:00 PM") e incluye SIEMPRE una descripción detallada en el campo "desc" con los pasos, precauciones, si queda en espera hasta terminar el actual, o el esquema de alternancia.
 
 Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
 
 {
-  "replyText": "Respuesta en markdown con explicaciones claras, pasos y recomendaciones...",
+  "replyText": "Respuesta en markdown con explicaciones claras, cómo integrarlo a la rutina, si esperar a terminar el actual o alternar, y cuál es mejor para conservar y comprar la próxima vez...",
   "actions": {
+    "productComparison": {
+      "strategy": "wait_until_finished" | "alternate",
+      "strategyBadge": "⏳ Esperar a que se termine el actual" | "🔄 Sí conviene alternar",
+      "categoryLabel": "Hidratación Corporal" | "Cuidado Capilar (Shampoo)" | "Limpieza Facial" | "Activos Nocturnos",
+      "currentProduct": "Nombre del producto actual / 1",
+      "newProduct": "Nombre del producto suplementario / 2",
+      "targetRoutineTime": "08:15 AM",
+      "targetRoutineTitle": "Secado y cuidado corporal",
+      "whyStrategy": "Explicación clara de por qué esperar a que se termine el actual sin usar ambos a la vez, o por qué sí conviene alternarlos",
+      "comparisonAnalysis": "Comparativa directa de fórmulas, ingredientes y beneficios entre ambos productos",
+      "winnerProduct": {
+        "name": "Nombre del producto ganador para conservar y volver a comprar",
+        "verdict": "yes",
+        "reason": "Por qué este producto es superior para conservar y recomprar la próxima vez"
+      },
+      "loserProduct": {
+        "name": "Nombre del otro producto",
+        "verdict": "no" | "yes",
+        "reason": "Por qué terminar este envase y no volver a comprarlo (o conservar en rotación si es alternancia)"
+      },
+      "repurchaseRecommendation": "Resumen directo de cuál comprar la próxima vez"
+    },
     "products": [
       {
         "name": "Nombre completo del producto",
         "category": "Skincare" | "Dental" | "Higiene" | "Despensa" | "Limpieza" | "Otros",
-        "repurchaseVerdict": "yes" | "need_to_buy",
-        "notes": "Para qué sirve o en qué momento de la rutina se usa"
+        "repurchaseVerdict": "yes" | "need_to_buy" | "no",
+        "notes": "Para qué sirve, si queda en espera o cuál conservar para próxima compra"
       }
     ],
     "selfCare": [
@@ -1870,18 +2114,18 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
       {
         "time": "08:15 AM",
         "title": "Título del bloque (usa el título exacto del bloque existente si se integra a uno de su rutina actual)",
-        "desc": "Descripción detallada integrando el producto",
+        "desc": "Descripción detallada integrando el producto (indicando si queda ⏳ en espera hasta terminar el actual o 🔄 alternando)",
         "tag": "beauty" | "routine" | "wellness" | "work",
         "isRoutine": true,
         "routineStatus": "active" | "idea",
         "productsToAdd": [
-          { "name": "Nombre del producto", "status": "owned" | "to_buy" }
+          { "name": "Nombre del producto", "status": "owned" | "to_buy" | "avoid" }
         ]
       }
     ],
     "petGuide": [
       {
-        "title": "Nombre de la recomendación (ej. 'Condroprotectores Glucosamina & MSM', 'Arnés de Soporte Pélvico', 'Alimento Articular Senior')",
+        "title": "Nombre de la recomendación",
         "category": "vitamins" | "gear" | "nutrition" | "biomechanics" | "care",
         "icon": "💊" | "🦽" | "🥩" | "🦴" | "🐾",
         "content": "Detalles completos, marcas recomendadas, dosis o instrucciones de uso para Mona"
@@ -1896,10 +2140,23 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
   for (const model of models) {
     try {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const requestParts = [{ text: prompt }];
+      if (context?.imageAttachment?.base64) {
+        const cleanBase64 = context.imageAttachment.base64.includes('base64,')
+          ? context.imageAttachment.base64.split('base64,')[1]
+          : context.imageAttachment.base64;
+        requestParts.push({
+          inline_data: {
+            mime_type: context.imageAttachment.mimeType || 'image/jpeg',
+            data: cleanBase64
+          }
+        });
+      }
+
       const payload = {
         contents: [
           {
-            parts: [{ text: prompt }]
+            parts: requestParts
           }
         ],
         generationConfig: {
@@ -1929,6 +2186,7 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
         return {
           replyText: parsed.replyText,
           actions: {
+            productComparison: parsed.actions?.productComparison || fallbackResult.actions?.productComparison || null,
             products: Array.isArray(parsed.actions?.products) ? parsed.actions.products : [],
             selfCare: Array.isArray(parsed.actions?.selfCare) ? parsed.actions.selfCare : [],
             timers: Array.isArray(parsed.actions?.timers) ? parsed.actions.timers : [],
@@ -1943,7 +2201,7 @@ Responde EXCLUSIVAMENTE con un JSON válido con esta estructura exacta:
   }
 
   // Fallback if AI endpoint failed
-  return generateFallbackCopilotResponse(userMessage, context);
+  return fallbackResult;
 };
 
 // ==========================================
