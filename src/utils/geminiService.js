@@ -333,6 +333,315 @@ Reglas estrictas de categoría:
   throw lastError || new Error('No se pudo procesar la imagen con Gemini.');
 };
 
+const inferCategoryFromElementText = (text = '') => {
+  const lower = String(text).toLowerCase();
+  if (/pantalon|pantalón|jeans|mezclilla|short|falda|cargo|legging|pants|bermuda|jogger/.test(lower)) {
+    return 'bottoms';
+  }
+  if (/chamarra|sudadera|hoodie|blazer|abrigo|sueter|suéter|cardigan|saco|chaleco|chaqueta|gabardina|kimono/.test(lower)) {
+    return 'outerwear';
+  }
+  if (/zapato|tenis|bota|botin|botín|mocas|sandalia|tac[oó]n|sneaker|calzado|loafer/.test(lower)) {
+    return 'footwear';
+  }
+  if (/gorro|gorra|cintur[oó]n|lente|gafa|mochila|bolsa|bolso|joya|bufanda|reloj|collar|anillo|arete|scrunchie|diadema/.test(lower)) {
+    return 'accessories';
+  }
+  return 'tops';
+};
+
+/**
+ * Smart local fallback for full-outfit photo evaluation and element separation
+ * when Gemini API key is not configured or offline.
+ */
+export const generateFallbackOutfitPhotoAnalysis = ({
+  outfitName = '',
+  occasion = 'Smart Casual / Salida',
+  userNotes = '',
+  bodyTypeProfile = 'Curvy / Reloj de arena'
+} = {}) => {
+  const rawNotes = String(userNotes || outfitName || '').trim();
+  const parsedPieces = [];
+
+  if (rawNotes) {
+    const chunks = rawNotes
+      .split(/\+|,|;|\by\b|\bcon\b/i)
+      .map(s => s.trim())
+      .filter(s => s.length >= 3);
+
+    chunks.forEach((chunk, idx) => {
+      const cat = inferCategoryFromElementText(chunk);
+      parsedPieces.push({
+        id: `el-fb-${Date.now()}-${idx}`,
+        name: chunk.charAt(0).toUpperCase() + chunk.slice(1),
+        category: cat,
+        color: 'Tono coordinado',
+        tags: ['outfit favorito', cat],
+        roleInOutfit: 'Pieza clave identificada en la descripción de tu look.',
+        includeInSave: true
+      });
+    });
+  }
+
+  if (parsedPieces.length === 0) {
+    parsedPieces.push(
+      {
+        id: `el-fb-${Date.now()}-1`,
+        name: 'Prenda Superior (Top / Blusa del Outfit)',
+        category: 'tops',
+        color: 'Neutro / Coordinado',
+        tags: ['top', 'favorito', 'versátil'],
+        roleInOutfit: 'Ilumina el rostro y enmarca la parte superior del torso.',
+        includeInSave: true
+      },
+      {
+        id: `el-fb-${Date.now()}-2`,
+        name: 'Prenda Inferior (Pantalón / Falda Tiro Alto)',
+        category: 'bottoms',
+        color: 'Oscuro / Estructurado',
+        tags: ['tiro alto', 'alarga piernas', 'base'],
+        roleInOutfit: 'Define la cintura visualmente y alarga la línea de las piernas.',
+        includeInSave: true
+      },
+      {
+        id: `el-fb-${Date.now()}-3`,
+        name: 'Tercera Pieza (Blazer / Chamarra / Capa)',
+        category: 'outerwear',
+        color: 'Acento / Neutro',
+        tags: ['tercera pieza', 'estructura'],
+        roleInOutfit: 'Aporta líneas verticales que estilizan el torso.',
+        includeInSave: true
+      },
+      {
+        id: `el-fb-${Date.now()}-4`,
+        name: 'Calzado del Look (Tenis / Botines)',
+        category: 'footwear',
+        color: 'Coordinado',
+        tags: ['calzado', 'confort'],
+        roleInOutfit: 'Cierra la proporción visual del outfit con comodidad.',
+        includeInSave: true
+      }
+    );
+  }
+
+  return {
+    outfitName: outfitName.trim() || 'Look Favorito Estilizado',
+    occasion: occasion || 'Smart Casual / Salida',
+    feedback: {
+      overallScore: 9.0,
+      verdict: 'favorite_worthy',
+      verdictTitle: '💖 ¡Gran combinación! Merece guardarse en tus Outfits Favoritos',
+      overallFeedback:
+        'El conjunto tiene una lectura visual armónica y equilibrada. La combinación de volúmenes entre la parte superior e inferior proyecta un estilo intencional, pulcro y moderno.',
+      bodyTypeFeedback: `Para tu perfil corporal (${bodyTypeProfile}), este conjunto funciona muy bien porque marca la cintura y mantiene líneas verticales limpias sin recargar volumen.`,
+      colorAndProportionAnalysis:
+        'Buena regla de tercios (1/3 arriba y 2/3 abajo con tiro alto o fajado parcial). Los tonos contrastan con suavidad y dirigen la atención al rostro y la silueta.',
+      stylingTips: [
+        'Usa un fajado francés (al frente) para enfatizar la transición de la cintura.',
+        'Si llevas tercera pieza (blazer, chamarra o camisa abierta), remangar ligeramente los antebrazos estiliza aún más la figura.'
+      ]
+    },
+    detectedElements: parsedPieces
+  };
+};
+
+/**
+ * Analyzes a photo of a complete outfit using Google Gemini Vision:
+ * 1. Gives detailed personal stylist feedback on the full look & body type harmony.
+ * 2. Separates every visible clothing item / accessory into individual wardrobe elements.
+ */
+export const analyzeOutfitImage = async (base64Data, mimeType, apiKey, options = {}) => {
+  const bodyTypeProfile =
+    options?.bodyTypeProfile ||
+    'Curvy / Reloj de arena (definir cintura, estilizar cadera y busto sin agregar volumen)';
+  const userNotes = options?.userNotes || '';
+  const existingWardrobe = Array.isArray(options?.existingWardrobe) ? options.existingWardrobe : [];
+
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error('Configura tu Gemini API Key para analizar la foto del outfit con IA visual.');
+  }
+
+  const wardrobeSummary = existingWardrobe
+    .slice(0, 60)
+    .map(g => `- ID: "${g.id}" | Nombre: "${g.name}" | Categoría: ${g.category} | Color: ${g.color}`)
+    .join('\n');
+
+  const prompt = `
+Eres un asesor de imagen personal de élite y estilista para AURA Nexus.
+La usuaria ha subido una FOTO DE UN OUTFIT COMPLETO que le gustó (puesto frente al espejo, en foto personal o flat-lay).
+
+CONTEXTO DE LA USUARIA:
+- Tipo de cuerpo y objetivos de silueta: "${bodyTypeProfile}"
+- Notas o contexto que escribió la usuaria sobre este outfit: "${userNotes || 'Sin notas adicionales'}"
+
+PRENDAS QUE YA EXISTEN EN SU ARMARIO ACTUAL (por si reconoces alguna en la foto):
+${wardrobeSummary || '(Armario vacío por ahora)'}
+
+TU TAREA TIENE 2 PARTES FUNDAMENTALES:
+1. RETROALIMENTAR EL OUTFIT COMPLETO ("feedback"):
+   - Evalúa cómo se le ve el conjunto completo: armonía de colores, proporción (regla de tercios, cintura, largo de piernas), texturas y qué proyecta.
+   - Evalúa cómo le favorece según su tipo de cuerpo.
+   - Dale una calificación del 1 al 10 ("overallScore") y un veredicto ("verdict": "favorite_worthy" si se ve increíble y vale la pena guardarlo en Favoritos, "good_with_tweaks" si es buena base con pequeños ajustes, o "rethink" si no le favorece).
+   - Dale consejos concretos de estilismo ("stylingTips") para elevar aún más el look.
+
+2. SEPARAR CADA ELEMENTO DEL OUTFIT ("detectedElements"):
+   - Desglosa CADA prenda, calzado y accesorio visible que compone el outfit en elementos individuales separados (ej. Top/Blusa, Pantalón/Falda, Blazer/Chamarra/Sudadera, Calzado/Botas/Tenis, Accesorios como bolso, lentes, cinturón, collar, etc.).
+   - Para cada elemento indica su nombre descriptivo y estilizado, su categoría exacta ("tops" | "bottoms" | "outerwear" | "footwear" | "accessories"), su color, de 2 a 4 etiquetas ("tags"), qué aporta dentro de este outfit ("roleInOutfit"), y si coincide claramente con una prenda ya existente de la lista de su armario incluye su ID en "matchedGarmentId" (o null si es una prenda nueva).
+
+Responde EXCLUSIVAMENTE con un objeto JSON válido (sin markdown ni texto extra) con esta estructura exacta:
+{
+  "outfitName": "Nombre atractivo para guardar este outfit (ej. 'Look Smart Casual con Blazer Negro', 'Outfit Urbano de Fin de Semana')",
+  "occasion": "Ocasión ideal para este look (ej. 'Salida Casual / Café', 'Oficina / Junta Creativa', 'Cena Social')",
+  "feedback": {
+    "overallScore": 9.2,
+    "verdict": "favorite_worthy" | "good_with_tweaks" | "rethink",
+    "verdictTitle": "Título entusiasta y claro (ej. '💖 ¡Look de 10! Estiliza tu cintura y alarga tu silueta')",
+    "overallFeedback": "Análisis detallado de cómo luce el outfit en conjunto, equilibrio visual, texturas y presencia.",
+    "bodyTypeFeedback": "Por qué esta combinación de cortes favorece su tipo de cuerpo y silueta.",
+    "colorAndProportionAnalysis": "Evaluación de la paleta cromática, contrastes y proporción superior vs inferior.",
+    "stylingTips": [
+      "Consejo práctico #1 para pulir o elevar este outfit",
+      "Consejo práctico #2 (accesorios, fajado, calzado o tercera pieza)"
+    ]
+  },
+  "detectedElements": [
+    {
+      "name": "Nombre específico de la prenda #1 (ej. 'Blazer Estructurado Negro')",
+      "category": "tops" | "bottoms" | "outerwear" | "footwear" | "accessories",
+      "color": "Color específico en español",
+      "tags": ["tag1", "tag2", "tag3"],
+      "roleInOutfit": "Breve explicación de cómo funciona esta pieza dentro del outfit",
+      "matchedGarmentId": null
+    }
+  ]
+}
+`;
+
+  const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
+  let lastError = null;
+
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const payload = {
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: mimeType || 'image/jpeg',
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.25
+        }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        const errMsg = errJson.error?.message || response.statusText;
+        if (response.status === 400 && errMsg.toLowerCase().includes('api key')) {
+          throw new Error('La API Key ingresada no es válida en Google AI Studio. Verifica tu clave.');
+        }
+        if (response.status === 429 || errMsg.includes('RESOURCE_EXHAUSTED')) {
+          throw new Error('Límite de cuota temporal alcanzado en Gemini. Intenta en unos momentos.');
+        }
+        throw new Error(`[${model}] Error de Gemini: ${errMsg}`);
+      }
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) {
+        throw new Error('Gemini no devolvió texto de respuesta para el outfit.');
+      }
+
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleaned = jsonMatch[0];
+      }
+      const parsed = JSON.parse(cleaned);
+
+      const fallback = generateFallbackOutfitPhotoAnalysis({
+        outfitName: parsed.outfitName,
+        occasion: parsed.occasion,
+        userNotes,
+        bodyTypeProfile
+      });
+
+      const validCategories = ['tops', 'bottoms', 'outerwear', 'footwear', 'accessories'];
+      const validVerdicts = ['favorite_worthy', 'good_with_tweaks', 'rethink'];
+      const rawFb = parsed.feedback && typeof parsed.feedback === 'object' ? parsed.feedback : {};
+
+      const feedback = {
+        overallScore:
+          typeof rawFb.overallScore === 'number'
+            ? Math.min(10, Math.max(1, Number(rawFb.overallScore.toFixed(1))))
+            : fallback.feedback.overallScore,
+        verdict: validVerdicts.includes(rawFb.verdict) ? rawFb.verdict : 'favorite_worthy',
+        verdictTitle: rawFb.verdictTitle || fallback.feedback.verdictTitle,
+        overallFeedback: rawFb.overallFeedback || fallback.feedback.overallFeedback,
+        bodyTypeFeedback: rawFb.bodyTypeFeedback || fallback.feedback.bodyTypeFeedback,
+        colorAndProportionAnalysis:
+          rawFb.colorAndProportionAnalysis || fallback.feedback.colorAndProportionAnalysis,
+        stylingTips:
+          Array.isArray(rawFb.stylingTips) && rawFb.stylingTips.length > 0
+            ? rawFb.stylingTips
+            : fallback.feedback.stylingTips
+      };
+
+      const rawElements = Array.isArray(parsed.detectedElements) ? parsed.detectedElements : [];
+      const detectedElements =
+        rawElements.length > 0
+          ? rawElements.map((el, idx) => {
+              const rawCat = String(el?.category || '').toLowerCase().trim();
+              const category = validCategories.includes(rawCat)
+                ? rawCat
+                : inferCategoryFromElementText(`${el?.name || ''} ${(el?.tags || []).join(' ')}`);
+
+              return {
+                id: `el-ai-${Date.now()}-${idx}`,
+                name: el?.name || `Prenda #${idx + 1}`,
+                category,
+                color: el?.color || 'Coordinado',
+                tags: Array.isArray(el?.tags) && el.tags.length > 0 ? el.tags : ['outfit favorito'],
+                roleInOutfit: el?.roleInOutfit || 'Parte integral de la combinación.',
+                matchedGarmentId: el?.matchedGarmentId || null,
+                includeInSave: true
+              };
+            })
+          : fallback.detectedElements;
+
+      return {
+        outfitName: parsed.outfitName || fallback.outfitName,
+        occasion: parsed.occasion || fallback.occasion,
+        feedback,
+        detectedElements
+      };
+    } catch (err) {
+      console.warn(`Attempt with ${model} failed in analyzeOutfitImage:`, err.message);
+      lastError = err;
+      if (err.message.includes('API Key ingresada no es válida')) {
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error('No se pudo analizar la foto del outfit con Gemini.');
+};
+
 /**
  * Algorithmic stylist fallback that creates a harmonious outfit from clean garments
  * based on occasion keywords and garment categories when Gemini is offline or without API Key.

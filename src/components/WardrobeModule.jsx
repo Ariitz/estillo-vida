@@ -27,7 +27,14 @@ import {
   Calendar,
   Layers
 } from 'lucide-react';
-import { compressImage, analyzeClothingImage, generateFallbackClothingFitFeedback, recommendOutfitForOccasion } from '../utils/geminiService';
+import {
+  compressImage,
+  analyzeClothingImage,
+  generateFallbackClothingFitFeedback,
+  analyzeOutfitImage,
+  generateFallbackOutfitPhotoAnalysis,
+  recommendOutfitForOccasion
+} from '../utils/geminiService';
 import { sanitizeWardrobeList, sanitizeCustomOutfitList } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
 import SimilarityDialogModal from './SimilarityDialogModal';
@@ -117,6 +124,17 @@ export default function WardrobeModule({
   const [isAddingOutfit, setIsAddingOutfit] = useState(false);
   const [outfitName, setOutfitName] = useState('');
   const [selectedGarments, setSelectedGarments] = useState([]);
+  const [outfitFilter, setOutfitFilter] = useState('all'); // 'all' | 'favorites'
+
+  // Outfit Photo Evaluator & Element Separator state
+  const [isEvaluatingOutfitPhoto, setIsEvaluatingOutfitPhoto] = useState(true);
+  const [outfitPhotoImage, setOutfitPhotoImage] = useState('');
+  const [outfitPhotoNotes, setOutfitPhotoNotes] = useState('');
+  const [isAnalyzingOutfitPhoto, setIsAnalyzingOutfitPhoto] = useState(false);
+  const [outfitPhotoAnalysis, setOutfitPhotoAnalysis] = useState(null);
+  const [newElementDraftName, setNewElementDraftName] = useState('');
+  const [newElementDraftCategory, setNewElementDraftCategory] = useState('tops');
+  const [newElementDraftColor, setNewElementDraftColor] = useState('');
 
   // AI Stylist by Occasion states
   const [selectedOccasionPreset, setSelectedOccasionPreset] = useState('Junta de Trabajo / Ejecutiva');
@@ -511,10 +529,260 @@ export default function WardrobeModule({
     const newOutfit = {
       id: Date.now().toString(),
       name: recommendedOutfit.outfitName || 'Outfit Recomendado',
-      garmentIds: Array.isArray(recommendedOutfit.selectedGarmentIds) ? [...recommendedOutfit.selectedGarmentIds] : []
+      occasion: customOccasion.trim() || selectedOccasionPreset || 'Casual',
+      garmentIds: Array.isArray(recommendedOutfit.selectedGarmentIds) ? [...recommendedOutfit.selectedGarmentIds] : [],
+      isFavorite: true,
+      notes: recommendedOutfit.styleRationale || ''
     };
     setCustomOutfits(prev => [...(Array.isArray(prev) ? prev : []), newOutfit]);
-    showToast('success', 'Outfit Guardado', `"${recommendedOutfit.outfitName}" se guardó en tus combinaciones.`);
+    showToast('success', '❤️ Outfit Favorito Guardado', `"${recommendedOutfit.outfitName}" se guardó en tus Outfits Favoritos.`);
+  };
+
+  const handleToggleFavoriteOutfit = (outfitId) => {
+    setCustomOutfits(prev =>
+      (Array.isArray(prev) ? prev : []).map(o => {
+        if (o && o.id === outfitId) {
+          const nextFav = !o.isFavorite;
+          showToast(
+            'info',
+            nextFav ? '❤️ Añadido a Favoritos' : 'Quitado de Favoritos',
+            `"${o.name}" ${nextFav ? 'se marcó como outfit favorito.' : 'ya no está en favoritos.'}`
+          );
+          return { ...o, isFavorite: nextFav };
+        }
+        return o;
+      })
+    );
+  };
+
+  // Helper to match a separated outfit element with existing wardrobe items
+  const findMatchingExistingGarment = (elName, explicitId) => {
+    if (explicitId) {
+      const exact = safeWardrobe.find(g => g && String(g.id) === String(explicitId));
+      if (exact) return exact;
+    }
+    if (!elName) return null;
+    return findSimilarity(elName, safeWardrobe, 'name');
+  };
+
+  const enrichDetectedElementsWithWardrobeMatch = (elements = []) => {
+    return (Array.isArray(elements) ? elements : []).map((el, idx) => {
+      const matched = findMatchingExistingGarment(el.name, el.matchedGarmentId);
+      return {
+        ...el,
+        id: el.id || `el-${Date.now()}-${idx}`,
+        includeInSave: el.includeInSave !== false,
+        matchedGarmentId: matched ? matched.id : null,
+        linkMode: matched ? 'existing' : 'create_new'
+      };
+    });
+  };
+
+  const runOutfitPhotoAnalysis = async (base64, mimeType) => {
+    setIsAnalyzingOutfitPhoto(true);
+    try {
+      const result = await analyzeOutfitImage(base64, mimeType, geminiApiKey, {
+        bodyTypeProfile,
+        userNotes: outfitPhotoNotes,
+        existingWardrobe: safeWardrobe
+      });
+      setOutfitPhotoAnalysis({
+        ...result,
+        detectedElements: enrichDetectedElementsWithWardrobeMatch(result.detectedElements)
+      });
+      showToast(
+        'success',
+        '👗 Outfit Analizado y Separado',
+        `Se detectaron ${result.detectedElements?.length || 0} elementos y tu retroalimentación está lista.`
+      );
+    } catch (err) {
+      console.warn('Outfit photo analysis fallback:', err.message);
+      const fallback = generateFallbackOutfitPhotoAnalysis({
+        outfitName: '',
+        occasion: 'Smart Casual / Favorito',
+        userNotes: outfitPhotoNotes,
+        bodyTypeProfile
+      });
+      setOutfitPhotoAnalysis({
+        ...fallback,
+        detectedElements: enrichDetectedElementsWithWardrobeMatch(fallback.detectedElements)
+      });
+      showToast(
+        'info',
+        'Retroalimentación de Outfit Lista',
+        'Revisa la evaluación de tu look y las prendas separadas (puedes editarlas antes de guardar).'
+      );
+    } finally {
+      setIsAnalyzingOutfitPhoto(false);
+    }
+  };
+
+  const handleOutfitPhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      showToast('info', 'Procesando Foto de Outfit', 'Analizando el look completo y separando cada prenda...');
+      const { dataUrl, base64, mimeType } = await compressImage(file);
+      setOutfitPhotoImage(dataUrl);
+      await runOutfitPhotoAnalysis(base64, mimeType);
+    } catch (err) {
+      console.error('Error uploading outfit photo:', err);
+      showToast('error', 'Error de Imagen', err.message);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleReanalyzeOutfitPhoto = async () => {
+    if (!outfitPhotoImage) {
+      const fallback = generateFallbackOutfitPhotoAnalysis({
+        outfitName: outfitPhotoAnalysis?.outfitName || '',
+        occasion: outfitPhotoAnalysis?.occasion || 'Smart Casual / Favorito',
+        userNotes: outfitPhotoNotes,
+        bodyTypeProfile
+      });
+      setOutfitPhotoAnalysis({
+        ...fallback,
+        detectedElements: enrichDetectedElementsWithWardrobeMatch(fallback.detectedElements)
+      });
+      showToast('success', 'Análisis Actualizado', 'Se actualizaron la retroalimentación y los elementos separados.');
+      return;
+    }
+    const base64 = outfitPhotoImage.split(',')[1];
+    const mimeType = outfitPhotoImage.split(';')[0].replace('data:', '') || 'image/jpeg';
+    await runOutfitPhotoAnalysis(base64, mimeType);
+  };
+
+  const handleUpdateDetectedElement = (elId, patch) => {
+    if (!outfitPhotoAnalysis) return;
+    setOutfitPhotoAnalysis(prev => {
+      if (!prev) return prev;
+      const updatedElements = (prev.detectedElements || []).map(el => {
+        if (el.id !== elId) return el;
+        const nextEl = { ...el, ...patch };
+        if (patch.name !== undefined) {
+          const matched = findMatchingExistingGarment(patch.name, null);
+          nextEl.matchedGarmentId = matched ? matched.id : null;
+          if (!matched && nextEl.linkMode === 'existing') {
+            nextEl.linkMode = 'create_new';
+          }
+        }
+        return nextEl;
+      });
+      return { ...prev, detectedElements: updatedElements };
+    });
+  };
+
+  const handleAddManualDetectedElement = () => {
+    const cleanName = newElementDraftName.trim();
+    if (!cleanName || !outfitPhotoAnalysis) return;
+    const matched = findMatchingExistingGarment(cleanName, null);
+    const newEl = {
+      id: `el-manual-${Date.now()}`,
+      name: cleanName,
+      category: newElementDraftCategory,
+      color: newElementDraftColor.trim() || 'Coordinado',
+      tags: ['outfit favorito'],
+      roleInOutfit: 'Elemento agregado a la combinación.',
+      includeInSave: true,
+      matchedGarmentId: matched ? matched.id : null,
+      linkMode: matched ? 'existing' : 'create_new'
+    };
+    setOutfitPhotoAnalysis(prev => ({
+      ...prev,
+      detectedElements: [...(prev?.detectedElements || []), newEl]
+    }));
+    setNewElementDraftName('');
+    setNewElementDraftColor('');
+  };
+
+  const handleSaveAnalyzedOutfitAsFavorite = () => {
+    if (!outfitPhotoAnalysis) return;
+
+    const elementsToProcess = (outfitPhotoAnalysis.detectedElements || []).filter(
+      el => el.includeInSave && String(el.name || '').trim()
+    );
+
+    if (elementsToProcess.length === 0) {
+      showToast('warning', 'Selecciona al menos una prenda', 'Marca al menos un elemento del outfit para guardarlo.');
+      return;
+    }
+
+    const newGarmentsToCreate = [];
+    const finalGarmentIds = [];
+
+    elementsToProcess.forEach((el, idx) => {
+      const existingMatch =
+        el.linkMode === 'existing' && el.matchedGarmentId
+          ? safeWardrobe.find(g => g && String(g.id) === String(el.matchedGarmentId))
+          : null;
+
+      if (existingMatch) {
+        if (!finalGarmentIds.includes(existingMatch.id)) {
+          finalGarmentIds.push(existingMatch.id);
+        }
+      } else {
+        const newGarmentId = `w-outfit-${Date.now()}-${idx}`;
+        const baseFit = generateFallbackClothingFitFeedback({
+          name: el.name.trim(),
+          category: el.category || 'tops',
+          color: el.color || 'Coordinado',
+          tags: Array.isArray(el.tags) ? el.tags : ['outfit favorito'],
+          isWornOnBody: true,
+          bodyTypeProfile
+        });
+
+        newGarmentsToCreate.push({
+          id: newGarmentId,
+          name: el.name.trim(),
+          category: el.category || 'tops',
+          isClean: true,
+          color: el.color || 'Coordinado',
+          tags: Array.isArray(el.tags) && el.tags.length > 0 ? el.tags : ['outfit favorito'],
+          image: null,
+          fitFeedback: {
+            ...baseFit,
+            keepVerdict: 'keep',
+            verdictTitle: '✅ Pieza de Outfit Favorito',
+            overallFitScore: outfitPhotoAnalysis.feedback?.overallScore || 9.0,
+            howItLooks: el.roleInOutfit || baseFit.howItLooks
+          }
+        });
+        finalGarmentIds.push(newGarmentId);
+      }
+    });
+
+    if (newGarmentsToCreate.length > 0) {
+      setWardrobe(prev => [...(Array.isArray(prev) ? prev : []), ...newGarmentsToCreate]);
+    }
+
+    const finalOutfitName = String(outfitPhotoAnalysis.outfitName || 'Look Favorito').trim();
+    const newFavoriteOutfit = {
+      id: `outfit-fav-${Date.now()}`,
+      name: finalOutfitName,
+      occasion: outfitPhotoAnalysis.occasion || 'Favorito',
+      garmentIds: finalGarmentIds,
+      isFavorite: true,
+      image: outfitPhotoImage || null,
+      feedback: outfitPhotoAnalysis.feedback || null,
+      notes: outfitPhotoAnalysis.feedback?.overallFeedback || outfitPhotoNotes || '',
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+
+    setCustomOutfits(prev => [newFavoriteOutfit, ...(Array.isArray(prev) ? prev : [])]);
+    setOutfitFilter('favorites');
+
+    // Reset analyzer form
+    setOutfitPhotoImage('');
+    setOutfitPhotoNotes('');
+    setOutfitPhotoAnalysis(null);
+
+    showToast(
+      'success',
+      '❤️ ¡Guardado en Favoritos y Separado!',
+      `Se guardó "${finalOutfitName}" en Favoritos (${newGarmentsToCreate.length} prenda(s) nueva(s) agregada(s) a Mi Armario y ${finalGarmentIds.length - newGarmentsToCreate.length} vinculada(s)).`
+    );
   };
 
   const handleWearOutfit = () => {
@@ -618,7 +886,13 @@ export default function WardrobeModule({
           }`}
         >
           <span>👗</span>
-          <span>Mis Outfits & Sugerencias</span>
+          <span>Mis Outfits & Favoritos</span>
+          {safeCustomOutfits.filter(o => o.isFavorite).length > 0 && (
+            <span className="text-[10px] bg-rose-500/15 text-rose-300 border border-rose-500/30 px-2 py-0.2 rounded-full font-mono flex items-center gap-1">
+              <Heart className="w-2.5 h-2.5 fill-rose-400 text-rose-400" />
+              <span>{safeCustomOutfits.filter(o => o.isFavorite).length}</span>
+            </span>
+          )}
         </button>
       </div>
 
@@ -649,6 +923,18 @@ export default function WardrobeModule({
               >
                 <Plus className="w-4 h-4" />
                 <span>Registrar Prenda</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('outfits');
+                  setIsEvaluatingOutfitPhoto(true);
+                }}
+                className="w-full bg-[#171a24] hover:bg-[#e0a96d]/15 border border-[#e0a96d]/35 text-[#e0a96d] text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Evaluar Foto de Outfit Completo</span>
               </button>
 
               <button
@@ -1533,9 +1819,452 @@ export default function WardrobeModule({
         </div>
       )}
 
-      {/* View: OUTFIT SUGGESTER / CREATOR */}
+      {/* View: OUTFIT SUGGESTER / CREATOR / PHOTO EVALUATOR */}
       {activeTab === 'outfits' && (
         <div className="space-y-8">
+
+          {/* ========================================================== */}
+          {/* AI OUTFIT PHOTO EVALUATOR & ELEMENT SEPARATOR STUDIO */}
+          {/* ========================================================== */}
+          <div className="bg-[#171a24] border border-[#e0a96d]/25 p-5 sm:p-6 rounded-2xl shadow-xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#e0a96d]/15 border border-[#e0a96d]/30 flex items-center justify-center shrink-0">
+                  <Camera className="w-5 h-5 text-[#e0a96d]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base sm:text-lg font-extrabold text-slate-100 font-outfit">
+                      Evaluar Foto de un Outfit & Separar cada Prenda
+                    </h3>
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                      <Heart className="w-3 h-3 fill-rose-400 text-rose-400" />
+                      <span>Favoritos + Desglose IA</span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Sube una foto de un outfit que te gustó para recibir retroalimentación de imagen. Si nos gusta cómo se te ve, guárdalo en tus <strong>Outfits Favoritos</strong> y separaremos cada elemento automáticamente en tu armario.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsEvaluatingOutfitPhoto(!isEvaluatingOutfitPhoto)}
+                className="text-xs font-bold text-[#e0a96d] hover:underline self-start sm:self-center shrink-0 cursor-pointer"
+              >
+                {isEvaluatingOutfitPhoto ? 'Ocultar panel' : 'Abrir evaluador'}
+              </button>
+            </div>
+
+            {isEvaluatingOutfitPhoto && (
+              <div className="space-y-5 animate-fade-in">
+                {/* Upload + Optional Notes Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+                  <div className="lg:col-span-6 bg-[#0b0c10] border border-[#e0a96d]/20 rounded-xl p-4 flex flex-col justify-center">
+                    {outfitPhotoImage ? (
+                      <div className="flex flex-col sm:flex-row items-center gap-4">
+                        <div className="relative w-32 h-36 rounded-xl overflow-hidden border border-[#e0a96d]/35 bg-slate-900 shrink-0 shadow-md">
+                          <img src={outfitPhotoImage} alt="Outfit subido" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOutfitPhotoImage('');
+                              setOutfitPhotoAnalysis(null);
+                            }}
+                            className="absolute top-1.5 right-1.5 bg-rose-500/85 hover:bg-rose-600 text-white p-1 rounded-full cursor-pointer"
+                            title="Quitar foto"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <div className="flex-1 space-y-2 text-center sm:text-left">
+                          {isAnalyzingOutfitPhoto ? (
+                            <div className="space-y-1">
+                              <span className="flex items-center justify-center sm:justify-start gap-2 text-xs font-bold text-[#e0a96d] animate-pulse">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>Analizando tu outfit y separando cada elemento...</span>
+                              </span>
+                              <p className="text-[11px] text-slate-400">
+                                Evaluando proporción, armonía de color, silueta y detectando cada prenda.
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="text-xs font-bold text-emerald-400 flex items-center justify-center sm:justify-start gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Foto de outfit lista</span>
+                              </span>
+                              <p className="text-[11px] text-slate-400">
+                                Puedes re-analizar si agregaste notas o cambiar la fotografía.
+                              </p>
+                              <div className="flex flex-wrap gap-2 justify-center sm:justify-start pt-1">
+                                <button
+                                  type="button"
+                                  onClick={handleReanalyzeOutfitPhoto}
+                                  disabled={isAnalyzingOutfitPhoto}
+                                  className="bg-[#e0a96d]/15 hover:bg-[#e0a96d]/25 border border-[#e0a96d]/35 text-[#e0a96d] text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  <span>Re-evaluar Outfit</span>
+                                </button>
+                                <label className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1.5 cursor-pointer">
+                                  <Camera className="w-3.5 h-3.5" />
+                                  <span>Cambiar foto</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    onChange={handleOutfitPhotoUpload}
+                                    className="hidden"
+                                  />
+                                </label>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col sm:flex-row items-center justify-center gap-4 p-5 border-2 border-dashed border-[#e0a96d]/30 hover:border-[#e0a96d] hover:bg-[#e0a96d]/5 rounded-xl cursor-pointer transition-all group">
+                        <div className="p-3.5 bg-[#e0a96d]/10 text-[#e0a96d] rounded-full group-hover:scale-110 transition-transform">
+                          <Camera className="w-6 h-6" />
+                        </div>
+                        <div className="text-center sm:text-left">
+                          <span className="text-xs font-bold text-slate-100 block">
+                            Subir foto con el outfit que te gustó
+                          </span>
+                          <span className="text-[11px] text-slate-400 block mt-0.5">
+                            La IA te dará retroalimentación de cómo se te ve y separará cada prenda (top, pantalón, tercera pieza, calzado y accesorios).
+                          </span>
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleOutfitPhotoUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  <div className="lg:col-span-6 bg-[#0b0c10] border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">
+                        Notas o prendas del outfit (Opcional — ayuda a precisar o evaluar sin foto)
+                      </label>
+                      <textarea
+                        value={outfitPhotoNotes}
+                        onChange={(e) => setOutfitPhotoNotes(e.target.value)}
+                        placeholder="Ej. Blazer negro estructurado + blusa blanca en V + pantalón cargo tiro alto + botines negros para salida de viernes..."
+                        className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] h-20 resize-none"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-400">
+                        Perfil activo: <strong className="text-[#e0a96d]">{bodyTypeProfile.split('(')[0]}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleReanalyzeOutfitPhoto}
+                        disabled={isAnalyzingOutfitPhoto}
+                        className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 cursor-pointer shadow"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>{outfitPhotoAnalysis ? 'Actualizar Evaluación' : 'Evaluar y Separar Elementos'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ANALYSIS RESULT: 1) STYLIST FEEDBACK & 2) SEPARATED ELEMENTS */}
+                {outfitPhotoAnalysis && (
+                  <div className="bg-[#0b0c10] border border-[#e0a96d]/35 rounded-2xl p-5 space-y-6 animate-fade-in">
+                    {/* Outfit Name, Occasion & Overall Verdict Header */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] uppercase font-bold text-[#e0a96d] mb-1">
+                            Nombre del Outfit
+                          </label>
+                          <input
+                            type="text"
+                            value={outfitPhotoAnalysis.outfitName || ''}
+                            onChange={(e) =>
+                              setOutfitPhotoAnalysis(prev => ({ ...prev, outfitName: e.target.value }))
+                            }
+                            className="w-full bg-[#171a24] border border-[#e0a96d]/30 rounded-lg py-1.5 px-3 text-xs font-bold text-slate-100 focus:outline-none focus:border-[#e0a96d]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                            Ocasión / Estilo Ideal
+                          </label>
+                          <input
+                            type="text"
+                            value={outfitPhotoAnalysis.occasion || ''}
+                            onChange={(e) =>
+                              setOutfitPhotoAnalysis(prev => ({ ...prev, occasion: e.target.value }))
+                            }
+                            className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-1.5 px-3 text-xs text-slate-200 focus:outline-none focus:border-[#e0a96d]"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-start md:self-end shrink-0">
+                        <span className="px-3 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/35 text-rose-200 text-xs font-extrabold flex items-center gap-1.5">
+                          <Heart className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
+                          <span>Score: {outfitPhotoAnalysis.feedback?.overallScore || 9.0}/10</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 1. Retroalimentación del Outfit Completo */}
+                    {outfitPhotoAnalysis.feedback && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">🪞</span>
+                          <h4 className="text-xs sm:text-sm font-extrabold text-[#e0a96d] font-outfit">
+                            {outfitPhotoAnalysis.feedback.verdictTitle}
+                          </h4>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="bg-[#171a24] p-3.5 rounded-xl border border-slate-800 space-y-1">
+                            <span className="text-[10px] font-bold text-[#e0a96d] uppercase tracking-wider block">
+                              ✨ ¿Cómo se te ve el outfit en conjunto?
+                            </span>
+                            <p className="text-[11px] text-slate-300 leading-relaxed">
+                              {outfitPhotoAnalysis.feedback.overallFeedback}
+                            </p>
+                          </div>
+
+                          <div className="bg-[#171a24] p-3.5 rounded-xl border border-slate-800 space-y-1">
+                            <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider block">
+                              ⏳ Armonía con tu Tipo de Cuerpo
+                            </span>
+                            <p className="text-[11px] text-slate-300 leading-relaxed">
+                              {outfitPhotoAnalysis.feedback.bodyTypeFeedback}
+                            </p>
+                          </div>
+
+                          <div className="bg-[#171a24] p-3.5 rounded-xl border border-slate-800 space-y-1">
+                            <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider block">
+                              🎨 Color y Proporción Visual
+                            </span>
+                            <p className="text-[11px] text-slate-300 leading-relaxed">
+                              {outfitPhotoAnalysis.feedback.colorAndProportionAnalysis}
+                            </p>
+                          </div>
+                        </div>
+
+                        {outfitPhotoAnalysis.feedback.stylingTips?.length > 0 && (
+                          <div className="bg-[#171a24]/90 px-3.5 py-2.5 rounded-xl border border-[#e0a96d]/20 text-[11px] text-slate-300">
+                            <strong className="text-[#e0a96d]">💡 Tips para elevar aún más este look: </strong>
+                            <span>{outfitPhotoAnalysis.feedback.stylingTips.join(' • ')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 2. Elementos Separados del Outfit */}
+                    <div className="space-y-3 pt-2 border-t border-slate-800">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <h5 className="text-xs sm:text-sm font-bold text-slate-100 font-outfit flex items-center gap-1.5">
+                            <Layers className="w-4 h-4 text-[#e0a96d]" />
+                            <span>
+                              Elementos Separados del Outfit ({(outfitPhotoAnalysis.detectedElements || []).filter(e => e.includeInSave).length})
+                            </span>
+                          </h5>
+                          <p className="text-[11px] text-slate-400">
+                            Cada prenda se separa individualmente: si ya existe en tu armario se vincula, y si es nueva se agrega a <strong>Mi Armario</strong> al guardar en Favoritos.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {(outfitPhotoAnalysis.detectedElements || []).map((el) => {
+                          const existingGarment = el.matchedGarmentId
+                            ? safeWardrobe.find(g => g && String(g.id) === String(el.matchedGarmentId))
+                            : null;
+
+                          return (
+                            <div
+                              key={el.id}
+                              className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${
+                                el.includeInSave
+                                  ? 'bg-[#171a24] border-[#e0a96d]/30'
+                                  : 'bg-[#171a24]/40 border-slate-800 opacity-55'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(el.includeInSave)}
+                                    onChange={(e) =>
+                                      handleUpdateDetectedElement(el.id, { includeInSave: e.target.checked })
+                                    }
+                                    className="accent-[#e0a96d] w-4 h-4 rounded cursor-pointer shrink-0"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={el.name}
+                                    onChange={(e) => handleUpdateDetectedElement(el.id, { name: e.target.value })}
+                                    className="bg-[#0b0c10] border border-slate-700 focus:border-[#e0a96d] rounded-lg px-2.5 py-1 text-xs font-bold text-slate-100 w-full focus:outline-none"
+                                  />
+                                </label>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setOutfitPhotoAnalysis(prev => ({
+                                      ...prev,
+                                      detectedElements: (prev?.detectedElements || []).filter(x => x.id !== el.id)
+                                    }))
+                                  }
+                                  className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer"
+                                  title="Quitar este elemento"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block mb-0.5">Categoría</span>
+                                  <select
+                                    value={el.category || 'tops'}
+                                    onChange={(e) =>
+                                      handleUpdateDetectedElement(el.id, { category: e.target.value })
+                                    }
+                                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-200 focus:outline-none"
+                                  >
+                                    {Object.entries(categories).map(([catKey, catLabel]) => (
+                                      <option key={catKey} value={catKey}>
+                                        {catLabel.split(' / ')[0]}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block mb-0.5">Color</span>
+                                  <input
+                                    type="text"
+                                    value={el.color || ''}
+                                    onChange={(e) => handleUpdateDetectedElement(el.id, { color: e.target.value })}
+                                    className="w-full bg-[#0b0c10] border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-200 focus:outline-none"
+                                  />
+                                </div>
+                              </div>
+
+                              {el.roleInOutfit && (
+                                <p className="text-[10px] text-slate-400 italic">
+                                  ✨ {el.roleInOutfit}
+                                </p>
+                              )}
+
+                              {/* Link to existing garment vs create new garment */}
+                              <div className="pt-1 flex items-center justify-between gap-2 border-t border-slate-800/80">
+                                {existingGarment ? (
+                                  <div className="flex flex-wrap items-center justify-between gap-1.5 w-full">
+                                    <span className="text-[10px] text-emerald-400 font-semibold truncate">
+                                      🔗 Coincide en tu armario: "{existingGarment.name}"
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateDetectedElement(el.id, {
+                                          linkMode: el.linkMode === 'existing' ? 'create_new' : 'existing'
+                                        })
+                                      }
+                                      className="text-[10px] px-2 py-0.5 rounded bg-[#0b0c10] border border-slate-700 text-slate-300 hover:border-[#e0a96d] cursor-pointer shrink-0"
+                                    >
+                                      {el.linkMode === 'existing' ? 'Usando existente (Cambiar a nueva)' : 'Crear como nueva (Cambiar a existente)'}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-[#e0a96d] font-semibold">
+                                    ✨ Se guardará como prenda separada en Mi Armario
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Quick manual element adder */}
+                      <div className="flex flex-wrap items-center gap-2 pt-2">
+                        <input
+                          type="text"
+                          value={newElementDraftName}
+                          onChange={(e) => setNewElementDraftName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newElementDraftName.trim()) {
+                              e.preventDefault();
+                              handleAddManualDetectedElement();
+                            }
+                          }}
+                          placeholder="¿Faltó separar alguna pieza o accesorio? Escríbela aquí..."
+                          className="flex-1 min-w-[200px] bg-[#171a24] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-[#e0a96d]"
+                        />
+                        <select
+                          value={newElementDraftCategory}
+                          onChange={(e) => setNewElementDraftCategory(e.target.value)}
+                          className="bg-[#171a24] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200"
+                        >
+                          {Object.entries(categories).map(([k, v]) => (
+                            <option key={k} value={k}>{v.split(' / ')[0]}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={newElementDraftColor}
+                          onChange={(e) => setNewElementDraftColor(e.target.value)}
+                          placeholder="Color"
+                          className="w-28 bg-[#171a24] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddManualDetectedElement}
+                          className="bg-[#171a24] hover:bg-slate-800 border border-[#e0a96d]/35 text-[#e0a96d] text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Añadir pieza</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Save as Favorite Outfit + Separate Elements CTA */}
+                    <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOutfitPhotoAnalysis(null);
+                          setOutfitPhotoImage('');
+                        }}
+                        className="border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold py-2.5 px-4 rounded-xl cursor-pointer"
+                      >
+                        Descartar evaluación
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveAnalyzedOutfitAsFavorite}
+                        className="btn-rose-gold text-xs sm:text-sm font-extrabold py-3 px-6 rounded-xl flex items-center gap-2 cursor-pointer shadow-lg transition-all"
+                      >
+                        <Heart className="w-4 h-4 fill-[#0b0c10] text-[#0b0c10]" />
+                        <span>¡Nos gusta! Guardar en Favoritos y Separar Prendas en Mi Armario</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           
           {/* Predefined Looks Section */}
           <div className="bg-[#171a24] border border-[#e0a96d]/15 p-6 rounded-xl shadow-lg">
@@ -1595,20 +2324,49 @@ export default function WardrobeModule({
             </div>
           </div>
 
-          {/* Custom Outfits Section */}
+          {/* Custom Outfits & Favorites Section */}
           <div className="bg-[#171a24] border border-[#e0a96d]/15 p-6 rounded-xl shadow-lg">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
-                <h3 className="text-lg font-bold text-slate-100 font-outfit">Mis Combinaciones Personalizadas</h3>
-                <p className="text-xs text-slate-400 mt-1">Crea tus propios conjuntos organizados y dale seguimiento a su limpieza.</p>
+                <h3 className="text-lg font-bold text-slate-100 font-outfit flex items-center gap-2">
+                  <span>Mis Outfits Guardados & Favoritos</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Consulta tus outfits favoritos con sus prendas separadas y dale seguimiento a qué piezas están limpias.
+                </p>
               </div>
-              <button
-                onClick={() => setIsAddingOutfit(!isAddingOutfit)}
-                className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg flex items-center gap-2 cursor-pointer transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Diseñar Outfit</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOutfitFilter('all')}
+                  className={`text-xs font-bold py-1.5 px-3.5 rounded-lg border cursor-pointer transition-all ${
+                    outfitFilter === 'all'
+                      ? 'bg-[#e0a96d]/20 text-[#e0a96d] border-[#e0a96d]/40'
+                      : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  Todos ({safeCustomOutfits.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOutfitFilter('favorites')}
+                  className={`text-xs font-bold py-1.5 px-3.5 rounded-lg border cursor-pointer transition-all flex items-center gap-1.5 ${
+                    outfitFilter === 'favorites'
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      : 'bg-[#0b0c10] text-slate-400 border-slate-800 hover:text-rose-300'
+                  }`}
+                >
+                  <Heart className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
+                  <span>Favoritos ({safeCustomOutfits.filter(o => o.isFavorite).length})</span>
+                </button>
+                <button
+                  onClick={() => setIsAddingOutfit(!isAddingOutfit)}
+                  className="btn-rose-gold text-xs font-bold py-2 px-4 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Diseñar Manualmente</span>
+                </button>
+              </div>
             </div>
 
             {/* Custom Outfit Builder Form */}
@@ -1688,39 +2446,99 @@ export default function WardrobeModule({
 
             {/* Custom Outfits Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {safeCustomOutfits.length === 0 ? (
-                <div className="col-span-full bg-[#0b0c10]/40 p-8 text-center rounded-xl border border-slate-800/80">
-                  <p className="text-slate-500 text-xs italic">Aún no has diseñado combinaciones personalizadas.</p>
-                </div>
-              ) : (
-                safeCustomOutfits.map(outfit => {
+              {(() => {
+                const visibleOutfits = safeCustomOutfits.filter(o =>
+                  outfitFilter === 'favorites' ? Boolean(o?.isFavorite) : true
+                );
+
+                if (visibleOutfits.length === 0) {
+                  return (
+                    <div className="col-span-full bg-[#0b0c10]/40 p-8 text-center rounded-xl border border-slate-800/80">
+                      <p className="text-slate-500 text-xs italic">
+                        {outfitFilter === 'favorites'
+                          ? 'Aún no tienes outfits marcados con ❤️ Favorito. Sube una foto arriba o marca el corazón en cualquiera de tus outfits.'
+                          : 'Aún no has diseñado combinaciones personalizadas.'}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return visibleOutfits.map(outfit => {
                   if (!outfit) return null;
-                  // Find all garments mapped
                   const gList = (Array.isArray(outfit.garmentIds) ? outfit.garmentIds : [])
                     .map(id => safeWardrobe.find(w => w && w.id === id))
                     .filter(Boolean);
                   const anyDirty = gList.some(g => !g.isClean);
-                  
+
                   return (
-                    <div key={outfit.id} className="bg-[#0b0c10] border border-[#e0a96d]/10 p-5 rounded-xl flex flex-col justify-between space-y-4">
+                    <div
+                      key={outfit.id}
+                      className={`bg-[#0b0c10] border p-5 rounded-xl flex flex-col justify-between space-y-4 transition-all ${
+                        outfit.isFavorite ? 'border-rose-500/35 shadow-lg shadow-rose-950/10' : 'border-[#e0a96d]/10'
+                      }`}
+                    >
                       <div>
-                        <div className="flex justify-between items-start gap-4">
-                          <h4 className="font-bold text-sm text-[#e0a96d] font-outfit">{outfit.name}</h4>
-                          <button
-                            onClick={() => handleDeleteOutfit(outfit.id, outfit.name)}
-                            className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
-                            aria-label={`Eliminar outfit ${outfit.name}`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                        {outfit.image && (
+                          <div className="w-full h-44 rounded-xl overflow-hidden mb-3 bg-slate-900 border border-[#e0a96d]/20 relative">
+                            <img src={outfit.image} alt={outfit.name} className="w-full h-full object-cover" />
+                            {outfit.feedback?.overallScore && (
+                              <span className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-sm text-[#e0a96d] border border-[#e0a96d]/35 text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+                                ✨ Score IA: {outfit.feedback.overallScore}/10
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex justify-between items-start gap-2">
+                          <div>
+                            <h4 className="font-bold text-sm text-[#e0a96d] font-outfit">{outfit.name}</h4>
+                            {outfit.occasion && (
+                              <span className="text-[10px] text-slate-400 block mt-0.5">{outfit.occasion}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFavoriteOutfit(outfit.id)}
+                              title={outfit.isFavorite ? 'Quitar de Favoritos' : 'Guardar en Favoritos'}
+                              className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                                outfit.isFavorite
+                                  ? 'bg-rose-500/15 border-rose-500/35 text-rose-400'
+                                  : 'bg-[#171a24] border-slate-800 text-slate-500 hover:text-rose-400'
+                              }`}
+                            >
+                              <Heart className={`w-3.5 h-3.5 ${outfit.isFavorite ? 'fill-rose-400 text-rose-400' : ''}`} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteOutfit(outfit.id, outfit.name)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                              aria-label={`Eliminar outfit ${outfit.name}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        
-                        <div className="mt-4 space-y-1.5">
+
+                        {outfit.feedback?.overallFeedback && (
+                          <p className="text-[11px] text-slate-300 bg-[#171a24]/80 border border-slate-800 rounded-lg p-2.5 mt-2.5 leading-relaxed line-clamp-3">
+                            🪞 {outfit.feedback.overallFeedback}
+                          </p>
+                        )}
+
+                        <div className="mt-3 space-y-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                            Elementos separados ({gList.length}):
+                          </span>
                           {gList.map(g => (
-                            <div key={g.id} className="flex items-center justify-between text-xs p-1 px-2 rounded bg-[#171a24]/50">
-                              <span className="text-slate-300 truncate max-w-[70%]">{g.name}</span>
-                              <span className={`text-[9px] font-bold ${g.isClean ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                {g.isClean ? 'Limpia' : '🧼 Tintor'}
+                            <div key={g.id} className="flex items-center justify-between text-xs p-1.5 px-2.5 rounded-lg bg-[#171a24]/60 border border-slate-800/70">
+                              <div className="min-w-0 pr-2">
+                                <span className="text-slate-200 font-medium truncate block">{g.name}</span>
+                                <span className="text-[9px] text-slate-400">
+                                  {categories[g.category]?.split(' / ')[0] || g.category} • {g.color}
+                                </span>
+                              </div>
+                              <span className={`text-[9px] font-bold shrink-0 ${g.isClean ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {g.isClean ? '✓ Limpia' : '🧼 Sucia'}
                               </span>
                             </div>
                           ))}
@@ -1730,19 +2548,19 @@ export default function WardrobeModule({
                       <div className="pt-2 border-t border-slate-900 flex items-center justify-between">
                         {anyDirty ? (
                           <span className="text-[10px] font-bold text-rose-400 flex items-center gap-1">
-                            <AlertTriangle className="w-3.5 h-3.5" /> Outfit Sucio
+                            <AlertTriangle className="w-3.5 h-3.5" /> Piezas en lavandería
                           </span>
                         ) : (
                           <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                            <Check className="w-3.5 h-3.5" /> Todo Limpio
+                            <Check className="w-3.5 h-3.5" /> Todo Limpio para Usar
                           </span>
                         )}
                         <span className="text-[9px] text-slate-500">{gList.length} Prendas</span>
                       </div>
                     </div>
                   );
-                })
-              )}
+                });
+              })()}
             </div>
           </div>
 

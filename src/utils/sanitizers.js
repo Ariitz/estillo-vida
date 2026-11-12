@@ -489,6 +489,26 @@ export const sanitizeWardrobeList = (list) => {
 };
 
 // 7. Custom Outfits
+export const sanitizeOutfitFeedback = (fb) => {
+  if (!fb || typeof fb !== 'object') return null;
+
+  const validVerdicts = ['favorite_worthy', 'good_with_tweaks', 'rethink'];
+  const rawVerdict = safeString(fb.verdict || 'favorite_worthy').toLowerCase();
+  const verdict = validVerdicts.includes(rawVerdict) ? rawVerdict : 'favorite_worthy';
+
+  return {
+    overallScore: Math.min(10, Math.max(1, safeNumber(fb.overallScore, 9))),
+    verdict,
+    verdictTitle: safeString(fb.verdictTitle || 'Look equilibrado y favorecedor'),
+    overallFeedback: safeString(fb.overallFeedback || ''),
+    bodyTypeFeedback: safeString(fb.bodyTypeFeedback || ''),
+    colorAndProportionAnalysis: safeString(fb.colorAndProportionAnalysis || ''),
+    stylingTips: Array.isArray(fb.stylingTips)
+      ? fb.stylingTips.map(t => safeString(t)).filter(Boolean)
+      : []
+  };
+};
+
 export const sanitizeCustomOutfit = (o) => {
   if (!o || typeof o !== 'object') return null;
 
@@ -502,7 +522,11 @@ export const sanitizeCustomOutfit = (o) => {
     occasion: safeString(o.occasion || 'Casual'),
     garmentIds,
     items: garmentIds,
-    notes: safeString(o.notes || '')
+    notes: safeString(o.notes || ''),
+    isFavorite: o.isFavorite !== undefined ? Boolean(o.isFavorite) : false,
+    image: o.image ? safeString(o.image) : null,
+    feedback: o.feedback ? sanitizeOutfitFeedback(o.feedback) : null,
+    createdAt: safeString(o.createdAt || '')
   };
 };
 
