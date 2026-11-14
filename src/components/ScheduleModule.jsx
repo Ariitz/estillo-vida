@@ -233,7 +233,9 @@ export default function ScheduleModule({
       { key: 'shampoo', regex: /\s*,?\s*shampoo\s+de\s+chile\s*\/?\s*romero/gi },
       { key: 'jabon de arroz', regex: /\s*,?\s*jab[oó]n\s+de\s+arroz/gi },
       { key: 'cerave pm', regex: /\s*\+?\s*cerave\s+pm\s*\+?/gi },
-      { key: 'limpiador facial cerave', regex: /\s*,?\s*limpiador\s+facial\s+cerave/gi },
+      { key: 'limpiador facial cerave', regex: /\s*,?\s*(?:el\s+)?limpiador\s+(?:facial\s+)?(?:de\s+)?cerave/gi },
+      { key: 'limpiador de cerave', regex: /\s*,?\s*(?:el\s+)?limpiador\s+(?:facial\s+)?(?:de\s+)?cerave/gi },
+      { key: 'faja moldeadora', regex: /\s*,?\s*(?:tu\s+)?faja\s+moldeadora(?:\s+con\s+tirantes)?(?:\s+y\s+)?/gi },
       { key: 'concha nacar', regex: /\s*\+?\s*concha\s+n[aá]car\s*\+?/gi },
       { key: 'teatrical aclaradora', regex: /\s*\+?\s*teatrical\s+aclaradora\s*\+?/gi },
       { key: 'retinol', regex: /\s*\+?\s*(s[eé]rum\s+de\s+)?retinol\s*\+?/gi },
@@ -583,8 +585,14 @@ export default function ScheduleModule({
   const filteredDailySchedule = safeSchedule.filter(matchesRoutineFilter);
 
   const buildFlexibleProductRegexPattern = (name = '') => {
-    return String(name)
-      .trim()
+    const clean = String(name).trim();
+    if (/^limpiador\s+(?:facial\s+)?(?:de\s+)?cerave$/i.test(clean)) {
+      return 'limpiador\\s+(?:facial\\s+)?(?:de\\s+)?CeraVe';
+    }
+    if (/^faja\s+moldeadora(?:\s+con\s+tirantes)?$/i.test(clean)) {
+      return 'faja\\s+moldeadora(?:\\s+con\\s+tirantes)?';
+    }
+    return clean
       .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       .replace(/['’]/g, "['’]")
       .replace(/\s+/g, '\\s+');
@@ -736,7 +744,11 @@ export default function ScheduleModule({
         sortedProds.find(p => normalizeProductText(p.name) === normMatched) ||
         sortedProds.find(p => {
           const np = normalizeProductText(p.name);
-          return np && (normMatched.includes(np) || np.includes(normMatched));
+          if (!np) return false;
+          if (normMatched.includes(np) || np.includes(normMatched)) return true;
+          if (np.includes('limpiador') && np.includes('cerave') && normMatched.includes('limpiador') && normMatched.includes('cerave')) return true;
+          if (np.includes('faja moldeadora') && normMatched.includes('faja moldeadora')) return true;
+          return false;
         });
 
       if (matchedProd) {

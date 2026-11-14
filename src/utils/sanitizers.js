@@ -182,9 +182,10 @@ export const extractRoutineProductsFromText = (desc = '', title = '') => {
     /Crema\s+Hidratante\s+con\s+FPS(?:\s*30\+?)?/gi,
     /bloqueador(?:\s+solar)?\s+FPS\s*\d+\+?/gi,
     /protector(?:\s+solar)?\s+FPS(?:\s*\d+\+?)?/gi,
-    /limpiador\s+facial\s+CeraVe/gi,
+    /limpiador\s+(?:facial\s+)?(?:de\s+)?CeraVe/gi,
     /limpiador\s+gentil/gi,
     /limpiador\s+facial/gi,
+    /faja\s+moldeadora(?:\s+con\s+tirantes|\s+colombiana|\s+de\s+compresi[oó]n)?/gi,
     /Agua\s+de\s+Rosas/gi,
     /bruma\s+de\s+rosas/gi,
     /S[eé]rum\s+de\s+Cafe[ií]na/gi,
@@ -217,8 +218,8 @@ export const extractRoutineProductsFromText = (desc = '', title = '') => {
     /T[eé]\s+verde\s+o\s+negro/gi
   ];
 
-  // Dynamic pattern for other skincare/supplement/hygiene products mentioned in text
-  const dynamicProductRegex = /\b((?:S[eé]rum|Suero|Crema|Gel|T[oó]nico|[AÁ]cido|Vitamina|Loc[ií]on|Mascarilla|Shampoo|Champ[uú]|Aceite|Bloqueador|Protector\s+solar|Jab[oó]n|Desodorante|Antitranspirante|Bruma|Contorno\s+de\s+ojos|Agua\s+micelar|Exfoliante|B[aá]lsamo|Ampolleta|Parches|Suplemento|C[aá]psulas|Prote[ií]na|Creatina)\s+(?:de\s+|con\s+|para\s+|facial\s+|corporal\s+|hidratante\s+|aclaradora\s+|gentil\s+|solar\s+)*[A-Za-zÁÉÍÓÚáéíóúÑñ0-9+'’/-]+(?:\s+[A-Za-zÁÉÍÓÚáéíóúÑñ0-9+'’/-]+){0,2})/gi;
+  // Dynamic pattern for other skincare/supplement/hygiene/shapewear products mentioned in text
+  const dynamicProductRegex = /\b((?:Limpiador|Faja(?:\s+moldeadora)?|S[eé]rum|Suero|Crema|Gel|T[oó]nico|[AÁ]cido|Vitamina|Loc[ií]on|Mascarilla|Shampoo|Champ[uú]|Aceite|Bloqueador|Protector\s+solar|Jab[oó]n|Desodorante|Antitranspirante|Bruma|Contorno\s+de\s+ojos|Agua\s+micelar|Exfoliante|B[aá]lsamo|Ampolleta|Parches|Suplemento|C[aá]psulas|Prote[ií]na|Creatina)\s+(?:de\s+|con\s+|para\s+|facial\s+|corporal\s+|hidratante\s+|aclaradora\s+|gentil\s+|solar\s+|moldeadora\s+)*[A-Za-zÁÉÍÓÚáéíóúÑñ0-9+'’/-]+(?:\s+[A-Za-zÁÉÍÓÚáéíóúÑñ0-9+'’/-]+){0,2})/gi;
 
   const matches = [];
   const occupiesSpan = (start, end) =>
@@ -264,16 +265,27 @@ export const extractRoutineProductsFromText = (desc = '', title = '') => {
 
   matches.sort((a, b) => a.start - b.start);
 
+  const isDefaultToBuyProduct = (prodName = '') =>
+    /faja\s+moldeadora|neat\s+3b/i.test(prodName);
+
+  const isDefaultToTryProduct = (prodName = '') =>
+    /s[eé]rum\s+de\s+cafe[ií]na|limpiador\s+gentil/i.test(prodName);
+
   const unique = [];
   const seen = new Set();
   for (const item of matches) {
     const norm = item.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/['’]/g, "'");
     if (!seen.has(norm)) {
       seen.add(norm);
+      const defaultStatus = isDefaultToBuyProduct(item.name)
+        ? 'to_buy'
+        : isDefaultToTryProduct(item.name)
+        ? 'to_try'
+        : 'owned';
       unique.push({
         id: 'rp-' + norm.replace(/[^a-z0-9]+/g, '-').slice(0, 32),
         name: item.name,
-        status: 'owned'
+        status: defaultStatus
       });
     }
   }
@@ -298,7 +310,10 @@ export const sanitizeRoutineProduct = (prod, idx = 0) => {
     if (!cleanName) return null;
     const validStatuses = ['owned', 'to_buy', 'to_try', 'never'];
     const rawStatus = safeString(prod.status || 'owned').toLowerCase();
-    const status = validStatuses.includes(rawStatus) ? rawStatus : 'owned';
+    let status = validStatuses.includes(rawStatus) ? rawStatus : 'owned';
+    if (!prod.manualOverride && status === 'owned' && /faja\s+moldeadora/i.test(cleanName)) {
+      status = 'to_buy';
+    }
     return {
       id: safeString(prod.id || ('rp-' + idx + '-' + cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24))),
       name: cleanName,
@@ -450,6 +465,13 @@ export const sanitizeWardrobeFitFeedback = (fb) => {
   const rawVerdict = safeString(fb.keepVerdict || 'keep').toLowerCase();
   const keepVerdict = validVerdicts.includes(rawVerdict) ? rawVerdict : 'keep';
 
+  const rawBraGuide = fb.underwearAndBraGuide && typeof fb.underwearAndBraGuide === 'object'
+    ? fb.underwearAndBraGuide
+    : {};
+  const rawHairGuide = fb.hairstyleGuide && typeof fb.hairstyleGuide === 'object'
+    ? fb.hairstyleGuide
+    : {};
+
   return {
     isWornOnBody: Boolean(fb.isWornOnBody),
     keepVerdict,
@@ -460,7 +482,29 @@ export const sanitizeWardrobeFitFeedback = (fb) => {
     keepOrDiscardReason: safeString(fb.keepOrDiscardReason || ''),
     stylingImprovements: Array.isArray(fb.stylingImprovements)
       ? fb.stylingImprovements.map(s => safeString(s)).filter(Boolean)
-      : []
+      : [],
+    whatToAvoid: Array.isArray(fb.whatToAvoid)
+      ? fb.whatToAvoid.map(s => safeString(s)).filter(Boolean)
+      : [],
+    underwearAndBraGuide: {
+      recommendedBra: safeString(rawBraGuide.recommendedBra || ''),
+      braToAvoid: safeString(rawBraGuide.braToAvoid || ''),
+      ownedMatches: Array.isArray(rawBraGuide.ownedMatches)
+        ? rawBraGuide.ownedMatches.map(s => safeString(s)).filter(Boolean)
+        : [],
+      suggestedBuyIfMissing: safeString(rawBraGuide.suggestedBuyIfMissing || '')
+    },
+    hairstyleGuide: {
+      recommendedHairstyle: safeString(rawHairGuide.recommendedHairstyle || ''),
+      hairstyleToAvoid: safeString(rawHairGuide.hairstyleToAvoid || ''),
+      hairAccessoriesTip: safeString(rawHairGuide.hairAccessoriesTip || '')
+    },
+    wardrobeCombinations: {
+      fromOwnedWardrobe: Array.isArray(fb.wardrobeCombinations?.fromOwnedWardrobe)
+        ? fb.wardrobeCombinations.fromOwnedWardrobe.map(s => safeString(s)).filter(Boolean)
+        : [],
+      suggestedPurchaseToPair: safeString(fb.wardrobeCombinations?.suggestedPurchaseToPair || '')
+    }
   };
 };
 
@@ -503,8 +547,13 @@ export const sanitizeOutfitFeedback = (fb) => {
     overallFeedback: safeString(fb.overallFeedback || ''),
     bodyTypeFeedback: safeString(fb.bodyTypeFeedback || ''),
     colorAndProportionAnalysis: safeString(fb.colorAndProportionAnalysis || ''),
+    underwearAndBraTip: safeString(fb.underwearAndBraTip || ''),
+    hairstyleRecommendation: safeString(fb.hairstyleRecommendation || ''),
     stylingTips: Array.isArray(fb.stylingTips)
       ? fb.stylingTips.map(t => safeString(t)).filter(Boolean)
+      : [],
+    whatToAvoid: Array.isArray(fb.whatToAvoid)
+      ? fb.whatToAvoid.map(t => safeString(t)).filter(Boolean)
       : []
   };
 };

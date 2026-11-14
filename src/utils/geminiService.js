@@ -66,24 +66,170 @@ export const generateFallbackClothingFitFeedback = ({
   color = '',
   tags = [],
   bodyType = 'Equilibrado / Curvy',
+  bodyTypeProfile = '',
   fitGoals = 'Definir cintura, alargar silueta y proyectar estilo con confort',
-  isWornPhoto = true
+  isWornPhoto = true,
+  isWornOnBody = undefined,
+  existingWardrobe = []
 } = {}) => {
+  const effectiveBodyType = bodyTypeProfile || bodyType || 'Equilibrado / Curvy';
+  const wornFlag = isWornOnBody !== undefined ? Boolean(isWornOnBody) : Boolean(isWornPhoto);
   const fullText = `${name} ${category} ${color} ${(Array.isArray(tags) ? tags : [tags]).join(' ')}`.toLowerCase();
+
   const isOversize = /oversize|holgad|ancha|ancho|baggy|sudadera|hoodie|floj/.test(fullText);
   const isStructured = /blazer|saco|estructurad|tiro alto|corte recto|pinza|cintura/.test(fullText);
   const isCompressionOrSlim = /legging|compresion|ajustad|slim|skinny|faja/.test(fullText);
   const isWornOut = /viej|desgastad|rot|manchad|bolitas|pilling|deformad/.test(fullText);
 
+  // Specific blouse / t-shirt / neckline / fabric detection for Bra & Underwear guidance
+  const isBlouseOrTop = category === 'tops' || /blusa|playera|camisa|top|crop|camiseta|vestido|sueter|cardigan/.test(fullText);
+  const isVNeckOrWrap = /escote\s*v|cuello\s*v|\bv\b|cruzad|wrap|escotad|profund|pico/.test(fullText);
+  const isStraplessOrThinStrap = /tirante|strapless|hombros?\s*descubiert|halter|espalda|off\s*shoulder|asimetric|asimétric/.test(fullText);
+  const isSheerOrLightColor = /blanc|beige|crema|hueso| marfil|clar|translucid|transparent|encaje|seda|sat[eé]n|gasa|lino|delgad|fina/.test(fullText);
+  const isBlouse = /blusa|camisa|seda|sat[eé]n|vestir|formal/.test(fullText);
+  const isTightOrTshirt = /playera|camiseta|rib|acanalad|ajustad|algodon|algodón|lisa|basica|básica/.test(fullText);
+
+  // Inspect user's existing wardrobe to recommend pieces she ALREADY owns
+  const safeOwned = Array.isArray(existingWardrobe) ? existingWardrobe.filter(Boolean) : [];
+  const ownedBottoms = safeOwned.filter(g => g.category === 'bottoms');
+  const ownedTops = safeOwned.filter(g => g.category === 'tops' && g.name !== name);
+  const ownedOuterwear = safeOwned.filter(g => g.category === 'outerwear' && g.name !== name);
+  const ownedFootwear = safeOwned.filter(g => g.category === 'footwear');
+  const ownedIntimates = safeOwned.filter(g =>
+    g.category === 'intimates' ||
+    /bra|brasier|brazier|bralette|seamless|strapless|pezonera|top interior|ropa interior/i.test(`${g.name || ''} ${(g.tags || []).join(' ')}`)
+  );
+
+  // Build combinations from what she already has in her closet
+  const fromOwnedWardrobe = [];
+  if (category === 'tops' || isBlouseOrTop) {
+    const b1 = ownedBottoms[0]?.name || 'Pantalón de Tiro Alto (de tu armario)';
+    const o1 = ownedOuterwear[0]?.name || 'Blazer Estructurado';
+    const f1 = ownedFootwear[0]?.name || 'Tenis Blancos Limpios';
+    fromOwnedWardrobe.push(`Úsala con tu "${b1}" fajada ligeramente al frente + "${f1}" para alargar tus piernas.`);
+    if (ownedOuterwear.length > 0) {
+      fromOwnedWardrobe.push(`Para un look más pulcro o de oficina, llévala debajo de tu "${o1}" abierto creando líneas verticales.`);
+    }
+    if (ownedBottoms.length > 1) {
+      fromOwnedWardrobe.push(`Opción alternativa con lo que ya tienes: combínala con "${ownedBottoms[1].name}" cuidando equilibrar volúmenes.`);
+    }
+  } else if (category === 'bottoms') {
+    const t1 = ownedTops[0]?.name || 'Blusa o Playera ajustada/fajada';
+    const o1 = ownedOuterwear[0]?.name || 'Blazer o Tercera Pieza';
+    const f1 = ownedFootwear[0]?.name || 'Botas o Tenis limpios';
+    fromOwnedWardrobe.push(`Combínalo con tu "${t1}" y tus "${f1}" para definir la cintura.`);
+    if (ownedOuterwear.length > 0) {
+      fromOwnedWardrobe.push(`Suma tu "${o1}" abierto encima para estilizar el torso.`);
+    }
+  } else if (category === 'outerwear') {
+    const t1 = ownedTops[0]?.name || 'Playera o Blusa base';
+    const b1 = ownedBottoms[0]?.name || 'Pantalón Tiro Alto';
+    fromOwnedWardrobe.push(`Llévalo abierto sobre tu "${t1}" y tu "${b1}" para crear un bloque vertical estilizador.`);
+  } else {
+    const t1 = ownedTops[0]?.name;
+    const b1 = ownedBottoms[0]?.name;
+    if (t1 && b1) {
+      fromOwnedWardrobe.push(`Combina excelente con tu "${t1}" y tu "${b1}".`);
+    }
+  }
+
+  let suggestedPurchaseToPair = 'Un pantalón de tiro alto de corte recto en tono neutro o una blusa de escote en V estructurada (para usar con bra corte Plunge color piel, nunca con bra deportivo).';
+  if (category === 'bottoms' || category === 'outerwear') {
+    suggestedPurchaseToPair = 'Si compras una blusa con escote en V o cruzada para combinar con esta prenda, recuerda usarla con un Bra corte Plunge (puente bajo en V) y NUNCA con brasier deportivo para no aplanar el busto ni asomar tirantes.';
+  } else if (isBlouse) {
+    suggestedPurchaseToPair = 'Un pantalón de vestir de tiro alto corte recto/wide-leg y un Bra Plunge sin costuras color Nude (piel) para que la caída de la blusa luzca impecable.';
+  }
+
+  // Build tailored Bra & Underwear guide
+  let recommendedBra = 'Brasier T-Shirt sin costuras (copa lisa preformada) en tono Nude / Piel (exacto a tu tono de piel) con buen soporte lateral y banda firme en la espalda.';
+  let braToAvoid = '🚫 Evita usar brasieres deportivos (sports bras) con blusas o playeras de calle (aplanan y ensanchan el busto quitándole forma a la prenda), así como bras de encaje rugoso que se marcan a través de la tela o bras con elástico flojo.';
+  let suggestedBuyIfMissing = 'Bra T-Shirt Invisible (corte láser / sin costuras) en tono Nude/Piel + un Bra corte Plunge (en V profundo) para tus blusas escotadas.';
+
+  if (isVNeckOrWrap) {
+    recommendedBra = '👙 Bra corte Plunge (puente central bajo en forma de V) en tono Nude/Piel con copa lisa que centre y levante el busto, + cinta doble cara textil (Fashion Tape) si el escote se abre al inclinarte.';
+    braToAvoid = '🚫 NO uses Brasier Deportivo (Sports Bra), ni bras de copa completa/balconette de puente alto: el bra deportivo aplana el pecho, ensancha el torso y tanto el puente como los tirantes anchos se asoman en el vértice del escote en V arruinando la elegancia de la blusa.';
+    suggestedBuyIfMissing = 'Comprar un Bra Plunge Invisible color Nude (puente bajo en V sin costuras) y cinta adhesiva doble cara para ropa (Fashion Tape).';
+  } else if (isStraplessOrThinStrap) {
+    recommendedBra = '👙 Bra Strapless con banda ancha siliconada antideslizante (o copas adhesivas / pezoneras de silicón de grado médico si la espalda es descubierta).';
+    braToAvoid = '🚫 NO uses brasier deportivo ni bras con tirantes normales visibles, y evita los tirantes de plástico "transparentes" (brillan con la luz, se encajan en el hombro y restan pulcritud al look).';
+    suggestedBuyIfMissing = 'Comprar un Bra Strapless de soporte firme en tono Nude con varilla lateral y pezoneras de silicón mate.';
+  } else if (isBlouse && isSheerOrLightColor) {
+    recommendedBra = '👙 Brasier liso sin costuras (Seamless / T-Shirt Bra) en color NUDE / PIEL (del mismo tono de tu piel, no blanco) o un bralette liso tono piel.';
+    braToAvoid = '🚫 NO uses brasier BLANCO debajo de blusas blancas o claras (el blanco rebota la luz y se marca de inmediato contra tu piel), NO uses bras deportivos que aplastan la caída fluida de la blusa, ni encaje con relieve.';
+    suggestedBuyIfMissing = 'Comprar un Bra Seamless color Nude/Caramelo (tono exacto de tu piel) de copa lisa invisible.';
+  } else if (isBlouse) {
+    recommendedBra = '👙 Brasier de copa lisa preformada o media copa (Demi / Plunge suave) con buen soporte de arco que mantenga el busto en su punto medio para que la blusa tenga caída limpia y defina tu cintura.';
+    braToAvoid = '🚫 NO uses brasier deportivo (sports bra) con blusas: aplana el busto, hace que la blusa cuelgue sin forma en el pecho y los tirantes anchos se asoman por el cuello. Tampoco uses bras con costuras gruesas o encaje abultado.';
+    suggestedBuyIfMissing = 'Bra Plunge / T-Shirt liso en color Nude y otro en Negro de tirantes discretos.';
+  } else if (isTightOrTshirt) {
+    recommendedBra = '👙 T-Shirt Bra sin costuras (copa lisa invisible) y de espalda ancha/corte láser (alisadora) para que no marque bordes ni divida la espalda bajo el algodón.';
+    braToAvoid = '🚫 Evita brasieres de encaje texturizado (se marcan todos los relieves en las playeras), bras deportivos que unifican el busto (efecto "uniboob") o bandas traseras muy estrechas que marquen pliegues en la espalda.';
+    suggestedBuyIfMissing = 'T-Shirt Bra Seamless de espalda ancha sin elásticos marcados en tono Nude.';
+  } else if (category === 'bottoms') {
+    recommendedBra = '🩲 Ropa interior corte láser sin costuras (Seamless) en tono Nude/Piel (tipo hiphugger, bikini invisible o tanga suave según tu comodidad). Para la blusa que lleves arriba: usa Bra Plunge si es escote en V (nunca bra deportivo).';
+    braToAvoid = '🚫 Evita ropa interior con elásticos gruesos o costuras marcadas que corten la cadera o se transparenten, y evita combinar este pantalón con blusas llevando bra deportivo.';
+    suggestedBuyIfMissing = 'Paquete de ropa interior corte láser invisible (Seamless) en tonos piel/nude.';
+  }
+
+  // Match against any bras/intimates the user has in her wardrobe
+  const ownedBraMatches = [];
+  ownedIntimates.forEach(item => {
+    const iName = (item.name || '').toLowerCase();
+    const isSport = /deportiv|sport|gym|top deportivo/.test(iName);
+    if (isSport && (isBlouse || isVNeckOrWrap || isStraplessOrThinStrap)) {
+      braToAvoid = `🚫 Evita usar tu "${item.name}" con esta prenda: al ser deportivo aplana el busto y se asoma en el cuello/escote. ${braToAvoid}`;
+    } else if (!isSport) {
+      ownedBraMatches.push(`De tu armario puedes usar: "${item.name}" (${item.color || 'Neutro'})`);
+    }
+  });
+
+  // Build tailored Hairstyle Guide according to neckline, collar, and garment style
+  const isHighNeckOrHoodie = /cuello\s*alto|tortuga|hoodie|sudadera|capucha|gorro|cerrad|chamarra/.test(fullText);
+  let recommendedHairstyle = '💇‍♀️ Semirecogido pulido (Half-up half-down) con ondas suaves o cabello suelto detrás de una oreja para despejar el rostro y mostrar la línea de los hombros.';
+  let hairstyleToAvoid = '🚫 Evita llevar todo el cabello pesado hacia adelante tapando el cuello y los hombros, ya que resta proporción vertical al torso.';
+  let hairAccessoriesTip = 'Usa tu Scrunchie de Satén o una pinza metálica minimalista para no maltratar ni quebrar la fibra capilar.';
+
+  if (isVNeckOrWrap) {
+    recommendedHairstyle = '💇‍♀️ Ondas suaves con raya en medio o lateral llevando un lado detrás de la oreja, o un semirecogido alto (Half-up) que deje libres las clavículas para acompañar la línea en V del escote.';
+    hairstyleToAvoid = '🚫 Evita cubrir ambos lados del pecho con todo el cabello suelto al frente, porque escondes el efecto estilizador en V que alarga el cuello.';
+    hairAccessoriesTip = 'Aretes medianos o largos discretos y ondas sueltas enmarcando el rostro.';
+  } else if (isHighNeckOrHoodie) {
+    recommendedHairstyle = '💇‍♀️ Coleta alta pulida (Sleek High Ponytail), chongo alto/medio relajado (Messy Bun) con mechones frontales ("face-framing") o trenza elevada para estilizar el cuello.';
+    hairstyleToAvoid = '🚫 Evita llevar el cabello completamente suelto sobre la capucha/gorro de la sudadera o cuello alto: acorta visualmente el cuello y genera frizz por la fricción con la tela.';
+    hairAccessoriesTip = 'Sujeta con tu Scrunchie de Satén para evitar frizz y marcas en el cabello.';
+  } else if (isStraplessOrThinStrap) {
+    recommendedHairstyle = '💇‍♀️ Recogido bajo elegante (Low Bun) con mechones sueltos al frente o coleta alta con ondas para lucir la línea de hombros y clavículas.';
+    hairstyleToAvoid = '🚫 Evita cabello pesado y sin forma cubriendo los hombros por completo.';
+    hairAccessoriesTip = 'Broche perlado o pinza dorada/plateada acorde a tus accesorios.';
+  } else if (isStructured || isBlouse) {
+    recommendedHairstyle = '💇‍♀️ Blowout con volumen suave (puntas ligeramente hacia adentro), lacio pulido detrás de los hombros o chongo bajo ejecutivo (Low Sleek Bun).';
+    hairstyleToAvoid = '🚫 Evita peinados desaliñados o con exceso de volumen lateral que compitan con las solapas del blazer o el cuello de la camisa/blusa.';
+    hairAccessoriesTip = 'Diadema fina, pasadores discretos o scrunchie de satén.';
+  } else if (isTightOrTshirt) {
+    recommendedHairstyle = '💇‍♀️ Media coleta alta (Ariana style / Geek Chic), ondas naturales sueltas o coleta dinámica con dona de satén.';
+    hairstyleToAvoid = '🚫 Si la playera tiene cuello redondo cerrado o estampado alto en el pecho, evita tapar el diseño y cerrar el cuello con todo el cabello al frente.';
+    hairAccessoriesTip = 'Scrunchie de satén o lentes de pasta para complementar el look Geek Chic.';
+  }
+
   let keepVerdict = 'keep';
   let verdictTitle = '✅ ¡Consérvala! Favorece tu silueta y estilo';
   let overallFitScore = 8.5;
   let howItLooks = 'La prenda proyecta buena caída y estructura visual. El tono armoniza bien y aporta versatilidad para armar combinaciones limpias.';
-  let bodyTypeMatch = `Para tu tipo de cuerpo (${bodyType}), esta prenda ayuda a mantener proporciones armónicas cuando se equilibra el volumen superior e inferior.`;
+  let bodyTypeMatch = `Para tu tipo de cuerpo (${effectiveBodyType}), esta prenda ayuda a mantener proporciones armónicas cuando se equilibra el volumen superior e inferior y se lleva con el soporte interior correcto.`;
   let keepOrDiscardReason = 'Vale la pena conservarla en tu armario activo porque mantiene buena forma, color y combina fácilmente con tus básicos.';
   let stylingImprovements = [
+    'Úsala con el brasier adecuado (copa lisa o corte Plunge en V) para que el busto quede a la altura correcta y se vea más despejada tu cintura.',
     'Aplica la regla de tercios (1/3 arriba, 2/3 abajo) usando tiro alto o fajado frontal ligero para alargar visualmente las piernas.',
-    'Remanga ligeramente las mangas o deja visibles muñecas/clavículas para estilizar el torso.'
+    'Remanga ligeramente las mangas o despeja cuello/clavículas para estilizar el torso.'
+  ];
+  let whatToAvoid = [
+    isBlouse || isVNeckOrWrap
+      ? '🚫 Evita usarla con brasier deportivo (sports bra): aplana el pecho, ensancha el torso y los tirantes gruesos arruinan el escote.'
+      : '🚫 Evita usar ropa interior con costuras gruesas, encaje abultado o bandas que marquen pliegues bajo la tela.',
+    '🚫 Evita llevarla totalmente suelta sobre pantalones que también sean muy anchos a la cadera (esconde tu cintura y resta estatura visual).',
+    isSheerOrLightColor
+      ? '🚫 Evita usar brasier color blanco debajo (se nota más que el color piel; usa siempre tono Nude exacto a tu piel).'
+      : '🚫 Evita recargar el cuello con collares gruesos si la prenda ya tiene diseño o cuello cerrado.'
   ];
 
   if (isWornOut) {
@@ -94,29 +240,34 @@ export const generateFallbackClothingFitFeedback = ({
     bodyTypeMatch = 'Cuando una tela pierde tensión en hombros, cuello o cintura, deja de enmarcar tu silueta y añade volumen sin forma.';
     keepOrDiscardReason = 'Deberías descartarla o reemplazarla: una prenda deformada o desgastada baja la calidad visual de todo tu outfit.';
     stylingImprovements = [
-      'Sustitúyela por una versión de tela más densa (algodón pesado o punto estructurado) que mantenga su caída.'
+      'Sustitúyela por una versión de tela con mejor caída (o una blusa de escote en V estructurada usada con bra corte Plunge).'
     ];
   } else if (isOversize) {
     keepVerdict = 'tailor_or_style';
-    verdictTitle = '✨ Consérvala usando contraste de silueta (para no ocultar tu forma)';
+    verdictTitle = '✨ Consérvala usando contraste de silueta y buen soporte interior';
     overallFitScore = 7.8;
-    howItLooks = 'El corte holgado/oversize se ve moderno y cómodo, pero si se lleva totalmente suelto con pantalones anchos puede acortar visualmente tu estatura o esconder tu cintura.';
-    bodyTypeMatch = `En siluetas ${bodyType}, el volumen amplio funciona excelente siempre que marques un punto de cintura o lo equilibres con una prenda inferior más definida.`;
-    keepOrDiscardReason = 'Consérvala si la tela y el cuello están en buen estado, pero evita usarla sin dar estructura al resto del conjunto.';
+    howItLooks = 'El corte holgado/oversize se ve moderno y cómodo, pero si se lleva totalmente suelto o con un bra sin soporte que baje el busto, puede acortar el torso y esconder tu cintura.';
+    bodyTypeMatch = `En siluetas ${effectiveBodyType}, el volumen amplio funciona excelente siempre que el busto tenga buen soporte (sin usar bra deportivo que lo aplane) y marques la cintura.`;
+    keepOrDiscardReason = 'Consérvala si la tela y el cuello están en buen estado, pero úsala siempre aplicando fajado parcial y el bra correcto.';
     stylingImprovements = [
       'Haz un "french tuck" (fajado ligero solo al frente) en un pantalón de tiro alto para marcar la cintura de inmediato.',
-      'Combínala con leggings de compresión o pantalón recto estructurado para equilibrar el volumen superior.',
-      'Si es sudadera o chamarra, dobla ligeramente el puño para estilizar los brazos.'
+      'Usa un T-shirt bra con buen levante: cuando el busto sube 2 cm, el corte holgado cae libremente y te ves mucho más estilizada.',
+      'Combínala con leggings de compresión o pantalón recto estructurado de tu armario para equilibrar el volumen superior.'
+    ];
+    whatToAvoid = [
+      '🚫 Evita usarla con brasier deportivo flojo: en prendas holgadas, si el pecho no tiene definición se crea un efecto "tienda de campaña" que suma volumen.',
+      '🚫 Evita dejarla completamente suelta encima de pantalones baggy o de tiro bajo.',
+      '🚫 Evita mangas caídas que tapen por completo las manos; remanga dejando ver las muñecas.'
     ];
   } else if (isStructured) {
     keepVerdict = 'keep';
     verdictTitle = '✅ ¡Pieza Clave! Estiliza y define tu tipo de cuerpo';
     overallFitScore = 9.2;
     howItLooks = 'Excelente estructura en líneas verticales. Enmarca los hombros y alarga el torso, creando una silueta pulcra, estilizada y segura.';
-    bodyTypeMatch = `Ideal para tu tipo de cuerpo (${bodyType}): las costuras definidas y el corte estructurado afinan la cintura y dan soporte visual sin marcar zonas indeseadas.`;
-    keepOrDiscardReason = 'Definitivamente consérvala: es una prenda comodín de alto impacto que eleva cualquier playera o básico.';
+    bodyTypeMatch = `Ideal para tu tipo de cuerpo (${effectiveBodyType}): las costuras definidas y el corte estructurado afinan la cintura y dan soporte visual sin marcar zonas indeseadas.`;
+    keepOrDiscardReason = 'Definitivamente consérvala: es una prenda comodín de alto impacto que eleva cualquier playera o blusa.';
     stylingImprovements = [
-      'Úsala abierta sobre un top monocromático para crear dos líneas verticales que estilizan el torso al instante.',
+      'Úsala abierta sobre una blusa de escote en V o top monocromático (con bra corte Plunge, nunca bra deportivo) para crear líneas verticales que estilizan el torso.',
       'Asegúrate de que el hombro asiente exactamente en el hueso acromion para un calce de sastrería.'
     ];
   } else if (isCompressionOrSlim) {
@@ -124,88 +275,145 @@ export const generateFallbackClothingFitFeedback = ({
     verdictTitle = '✅ Consérvala — Define la silueta y da soporte';
     overallFitScore = 8.6;
     howItLooks = 'Se ajusta con firmeza moldeando la silueta de forma limpia. Excelente base para combinar con prendas superiores estructuradas o ligeramente holgadas.';
-    bodyTypeMatch = `Favorece tu tipo de cuerpo (${bodyType}) al estilizar la línea de las piernas y dar soporte en la zona media.`;
+    bodyTypeMatch = `Favorece tu tipo de cuerpo (${effectiveBodyType}) al estilizar la línea de las piernas y dar soporte en la zona media.`;
     keepOrDiscardReason = 'Consérvala mientras conserve su elasticidad y opacidad original (si se transparenta al estirar, es momento de renovarla).';
     stylingImprovements = [
-      'Combina con un blazer estructurado, camisa abierta o sudadera con caída a la cadera para un balance de volúmenes impecable.'
+      'Úsala con ropa interior corte láser sin costuras (seamless) en tono piel para un acabado 100% liso.',
+      'Combina con un blazer estructurado, camisa abierta o blusa de buen soporte.'
     ];
   }
 
   return {
-    isWornOnBody: Boolean(isWornPhoto),
+    isWornOnBody: wornFlag,
     keepVerdict,
     verdictTitle,
     overallFitScore,
     howItLooks,
     bodyTypeMatch,
     keepOrDiscardReason,
-    stylingImprovements
+    stylingImprovements,
+    whatToAvoid,
+    underwearAndBraGuide: {
+      recommendedBra,
+      braToAvoid,
+      ownedMatches: ownedBraMatches,
+      suggestedBuyIfMissing
+    },
+    hairstyleGuide: {
+      recommendedHairstyle,
+      hairstyleToAvoid,
+      hairAccessoriesTip
+    },
+    wardrobeCombinations: {
+      fromOwnedWardrobe,
+      suggestedPurchaseToPair
+    }
   };
 };
 
 /**
  * Analyzes a clothing image (especially when worn on the body!) using Google Gemini Multimodal API
  * and returns both catalog classification AND honest personal stylist feedback on fit, body type harmony,
- * and whether to keep, adjust, or discard/donate the garment.
- * 
- * @param {string} base64Data - Raw base64 string without data:image/jpeg;base64, prefix
- * @param {string} mimeType - e.g. 'image/jpeg'
- * @param {string} apiKey - Gemini API Key from Google AI Studio
- * @param {Object} userProfileContext - Optional body type & fit goals context
- * @returns {Promise<{ name: string, category: string, color: string, tags: string[], fitFeedback: Object }>}
+ * bra/underwear guidance, what to avoid, combinations from existing wardrobe, and whether to keep or discard.
  */
 export const analyzeClothingImage = async (base64Data, mimeType, apiKey, userProfileContext = {}) => {
-  const bodyType = userProfileContext?.bodyType || 'Curvy / Reloj de arena suave (estatura ~1.60m, buscando estilizar cintura y alargar silueta)';
+  const bodyType = userProfileContext?.bodyTypeProfile || userProfileContext?.bodyType || 'Curvy / Reloj de arena suave (estatura ~1.60m, buscando estilizar cintura y alargar silueta)';
   const fitGoals = userProfileContext?.fitGoals || 'Estilizar figura, definir cintura, alargar piernas, comodidad y verse pulcra';
+  const existingWardrobe = Array.isArray(userProfileContext?.existingWardrobe) ? userProfileContext.existingWardrobe : [];
 
   if (!apiKey || !apiKey.trim()) {
     throw new Error('Debes configurar tu Gemini API Key para usar el análisis visual automático.');
   }
 
+  const wardrobeSummary = existingWardrobe
+    .slice(0, 50)
+    .map(g => `- "${g.name}" (${g.category} | Color: ${g.color || 'Neutro'})`)
+    .join('\n');
+
   const prompt = `
-Eres un asesor de imagen personal de élite, sastre experto y estilista honesto pero empático para AURA Nexus.
+Eres un asesor de imagen personal de élite, especialista en lencería/corsetería técnica, sastre experto y estilista honesto para AURA Nexus.
 La usuaria ha subido una foto de una prenda (en la medida de lo posible LLEVÁNDOLA PUESTA para que evalúes cómo se le ve, o bien en foto individual).
 
 CONTEXTO CORPORAL Y OBJETIVOS DE ESTILO DE LA USUARIA:
 - Tipo de cuerpo / silueta: "${bodyType}"
 - Objetivos al vestir: "${fitGoals}"
 
+PRENDAS QUE LA USUARIA YA TIENE EN SU ARMARIO ACTUAL:
+${wardrobeSummary || '(Sin prendas registradas aún)'}
+
 Analiza minuciosamente la fotografía:
 1. Identifica la prenda (nombre, categoría, color, tags).
-2. Evalúa si la prenda está PUESTA en el cuerpo ("isWornOnBody": true) o sola en gancho/superficie ("isWornOnBody": false).
-3. Da una RETROALIMENTACIÓN HONESTA Y CONSTRUCTIVA ("fitFeedback"):
-   - ¿Cómo se le ve puesta? (Evalúa hombros, ajuste en busto/torso/cintura/cadera, largo de la prenda, caída de la tela, si le suma volumen innecesario o si la estiliza, si se ve desgastada o impecable). Si la foto no es puesta, evalúa cómo ese corte específico le quedará a su tipo de cuerpo.
-   - ¿Queda bien con su tipo de cuerpo y proporciones?
-   - ¿Debería CONSERVARLA ("keep"), CONSERVARLA PERO ESTILIZARLA/AJUSTARLA ("tailor_or_style"), o TIRARLA/DONARLA ("donate_or_discard")? Sé sincero: si la prenda le acorta la figura, le queda mal de hombros/tiro, no favorece su silueta o se ve vieja/desgastada, recomiéndale depurarla o ajustarla.
+2. Evalúa si la prenda está PUESTA en el cuerpo ("isWornOnBody": true) o sola ("isWornOnBody": false).
+3. Da una RETROALIMENTACIÓN COMPLETA Y HONESTA ("fitFeedback"):
+   - ¿Cómo se le ve puesta y si queda con su tipo de cuerpo?
+   - ¿Debería CONSERVARLA ("keep"), ESTILIZARLA/AJUSTARLA ("tailor_or_style"), o TIRARLA/DONARLA ("donate_or_discard")?
+   - **GUÍA DE BRASIER Y ROPA INTERIOR ("underwearAndBraGuide")**: Especialmente en blusas y playeras, a la usuaria le preocupa qué brasier/ropa interior usar y cuál evitar.
+     * "recommendedBra": Qué tipo exacto de brasier o ropa interior debe usar con esta prenda (ej. Bra corte Plunge en V para escotes, T-shirt bra copa lisa sin costuras en tono Nude/Piel para blusas claras o playeras de punto, Strapless con banda siliconada, corte láser seamless, etc.). Si en la foto puesta notas que el bra que lleva puesto se marca, asoma los tirantes o aplana el busto, díselo con tacto y precisión.
+     * "braToAvoid": Qué brasier o ropa interior DEBE EVITAR a toda costa con esta prenda (ej. si es una blusa o tiene escote en V, dile explícitamente NO usar bras deportivos/sports bras porque aplanan el pecho y se asoman en el escote; en blusas blancas NO usar bra blanco sino color piel; en telas lisas NO usar encaje con relieve).
+     * "ownedMatches": Si en su armario actual hay algún bra/top interior compatible, menciónalo.
+     * "suggestedBuyIfMissing": Qué bra o accesorio interior (ej. Bra Plunge Nude sin costuras, cinta doble cara Fashion Tape, pezoneras de silicón) le sugieres tener/comprar para que esta prenda luzca de 10.
+   - **GUÍA DE PEINADO IDEAL ("hairstyleGuide")**:
+     * "recommendedHairstyle": Qué peinado queda mejor con el cuello/escote y estilo de esta prenda (ej. semirecogido u ondas detrás de una oreja para escotes en V, coleta alta/chongo pulido para sudaderas o cuellos cerrados, blowout o recogido bajo para blusas formales/blazers).
+     * "hairstyleToAvoid": Qué peinado evitar con esta prenda (ej. no tapar el escote en V ni encimar cabello suelto sobre gorro de sudadera).
+     * "hairAccessoriesTip": Qué accesorio capilar suma (ej. Scrunchie de satén, pinza minimalista, aretes).
+   - **CON QUÉ PRENDAS DE SU ARMARIO COMBINARLA ("wardrobeCombinations")**:
+     * "fromOwnedWardrobe": 2 a 3 combinaciones concretas usando las prendas que YA TIENE en la lista de su armario actual.
+     * "suggestedPurchaseToPair": Si le sugieres comprar alguna prenda complementaria (por ejemplo, una blusa con escote en V o un pantalón de tiro alto), incluye cómo usarla y recuerda qué bra usar/evitar con esa sugerencia (ej. si sugieres comprar una blusa con escote en V, recuerda no usarla con bra deportivo sino con bra plunge).
+   - **CÓMO MEJORAR SU USO ("stylingImprovements") Y QUÉ EVITAR CUANDO LA USE ("whatToAvoid")**:
+     * "stylingImprovements": Trucos concretos para mejorar cómo luce la prenda (fajado, postura, ajuste de bra, mangas, proporciones).
+     * "whatToAvoid": Errores específicos que debe EVITAR cuando use esta prenda (tanto de ropa interior/brasier como de pantalones, calzado o accesorios que arruinen la silueta).
 
-Responde EXCLUSIVAMENTE con un objeto JSON válido (sin formato markdown adicional, sin bloques de código ni texto antes o después) con la siguiente estructura exacta:
+Responde EXCLUSIVAMENTE con un objeto JSON válido con la siguiente estructura exacta:
 
 {
-  "name": "Nombre descriptivo, estilizado y conciso de la prenda (ej. 'Playera Gráfica Oversize', 'Blazer Cruzado Marino', 'Pantalón Cargo Tiro Alto')",
-  "category": "tops" | "bottoms" | "outerwear" | "footwear" | "accessories",
-  "color": "Color predominante y tono en español (ej. 'Negro profundo', 'Azul marino', 'Rojo vino')",
-  "tags": ["3 a 5 palabras clave sobre estilo, corte, ocasión o material"],
+  "name": "Nombre descriptivo, estilizado y conciso de la prenda (ej. 'Blusa Fluida Escote en V', 'Playera Gráfica Oversize')",
+  "category": "tops" | "bottoms" | "outerwear" | "footwear" | "accessories" | "intimates",
+  "color": "Color predominante y tono en español",
+  "tags": ["3 a 5 palabras clave sobre estilo, corte, escote o material"],
   "fitFeedback": {
     "isWornOnBody": true,
     "keepVerdict": "keep" | "tailor_or_style" | "donate_or_discard",
-    "verdictTitle": "Veredicto directo y claro (ej. '✅ ¡Te queda excelente! Estiliza tu cintura', '✨ Consérvala pero fájala para no acortar el torso', '🗑️ Mejor depurar/tirar: no favorece tu silueta o se ve desgastada')",
+    "verdictTitle": "Veredicto directo y claro",
     "overallFitScore": 8.5,
-    "howItLooks": "Crítica detallada y honesta de cómo se le ve la prenda (caída, ajuste en hombros/cintura/cadera, largo, color y estado de la tela).",
-    "bodyTypeMatch": "Explicación de por qué este corte sí o no favorece su tipo de cuerpo y proporciones.",
-    "keepOrDiscardReason": "Recomendación directa sobre si debe conservarla en su armario, mandarla a ajustar o tirarla/donarla y por qué.",
+    "howItLooks": "Crítica detallada y honesta de cómo se le ve la prenda (caída, ajuste en busto/hombros/cintura/cadera).",
+    "bodyTypeMatch": "Explicación de por qué este corte sí o no favorece su tipo de cuerpo.",
+    "keepOrDiscardReason": "Recomendación directa sobre si conservarla, ajustarla o tirarla.",
     "stylingImprovements": [
-      "Truco práctico #1 para que se le vea aún mejor (ej. fajado francés, remangar mangas, usar con tiro alto)",
-      "Truco práctico #2 de combinación o proporción"
-    ]
+      "Cómo mejorar el uso de esta prenda #1",
+      "Cómo mejorar el uso de esta prenda #2"
+    ],
+    "whatToAvoid": [
+      "🚫 Qué evitar cuando uses esta prenda #1 (ej. no usar brasier deportivo porque aplana el busto y se asoma en el escote)",
+      "🚫 Qué evitar cuando uses esta prenda #2 (ej. evitar llevarla suelta con pantalones anchos o evitar bra blanco bajo tela clara)"
+    ],
+    "underwearAndBraGuide": {
+      "recommendedBra": "Tipo exacto de brasier / ropa interior ideal para esta prenda y por qué",
+      "braToAvoid": "Qué tipo de brasier / ropa interior evitar con esta prenda (ej. NO usar bras deportivos, encaje marcado o tirantes gruesos)",
+      "ownedMatches": ["Prenda interior de su armario si aplica"],
+      "suggestedBuyIfMissing": "Sugerencia de brasier o accesorio interior por comprar si no lo tiene"
+    },
+    "hairstyleGuide": {
+      "recommendedHairstyle": "💇‍♀️ Peinado ideal para el cuello/escote y estilo de esta prenda",
+      "hairstyleToAvoid": "🚫 Qué peinado evitar con esta prenda",
+      "hairAccessoriesTip": "Sugerencia de accesorio capilar (ej. Scrunchie de satén, pinza o aretes)"
+    },
+    "wardrobeCombinations": {
+      "fromOwnedWardrobe": [
+        "Combinación #1 usando prendas reales de su armario actual",
+        "Combinación #2 usando prendas reales de su armario actual"
+      ],
+      "suggestedPurchaseToPair": "Sugerencia de prenda por comprar para combinar (incluyendo advertencia de qué bra usar/evitar si sugiere blusa con escote en V)"
+    }
   }
 }
 
 Reglas estrictas de categoría:
-- "tops": playeras, camisas, blusas, tops, crop tops, camisetas sin mangas.
+- "tops": playeras, camisas, blusas, tops, crop tops, camisetas sin mangas, vestidos.
 - "bottoms": pantalones, jeans, cargo, shorts, faldas, leggings, pants.
 - "outerwear": chamarras, sudaderas, hoodies, blazers, sacos, abrigos, chalecos, suéteres, cardigans.
 - "footwear": tenis, botas, mocasines, sandalias, zapatos de tacón, botines.
 - "accessories": gorros, bufandas, cinturones, lentes, mochilas, bolsas, joyas, scrunchies.
+- "intimates": brasieres, bralettes, tops interiores, ropa interior, fajas, pezoneras.
 `;
 
   // Production models with automatic fallback
@@ -270,11 +478,13 @@ Reglas estrictas de categoría:
       const parsed = JSON.parse(cleaned);
 
       // Validate and sanitize categories
-      const validCategories = ['tops', 'bottoms', 'outerwear', 'footwear', 'accessories'];
+      const validCategories = ['tops', 'bottoms', 'outerwear', 'footwear', 'accessories', 'intimates'];
       let category = parsed.category?.toLowerCase() || '';
       if (!validCategories.includes(category)) {
         const textToInspect = `${parsed.name || ''} ${category} ${(parsed.tags || []).join(' ')}`.toLowerCase();
-        if (/pantalon|jeans|short|falda|cargo|legging|pants|bermuda/.test(textToInspect)) {
+        if (/bra|brasier|brazier|bralette|lenceria|ropa interior|strapless|seamless/.test(textToInspect)) {
+          category = 'intimates';
+        } else if (/pantalon|jeans|short|falda|cargo|legging|pants|bermuda/.test(textToInspect)) {
           category = 'bottoms';
         } else if (/chamarra|sudadera|hoodie|blazer|abrigo|sueter|cardigan|saco|chaleco|chaqueta/.test(textToInspect)) {
           category = 'outerwear';
@@ -293,11 +503,21 @@ Reglas estrictas de categoría:
         color: parsed.color,
         tags: parsed.tags,
         bodyType,
-        fitGoals
+        fitGoals,
+        existingWardrobe
       });
 
       const rawFb = parsed.fitFeedback && typeof parsed.fitFeedback === 'object' ? parsed.fitFeedback : {};
       const validVerdicts = ['keep', 'tailor_or_style', 'donate_or_discard'];
+      const rawBra = rawFb.underwearAndBraGuide && typeof rawFb.underwearAndBraGuide === 'object'
+        ? rawFb.underwearAndBraGuide
+        : {};
+      const rawHair = rawFb.hairstyleGuide && typeof rawFb.hairstyleGuide === 'object'
+        ? rawFb.hairstyleGuide
+        : {};
+      const rawCombos = rawFb.wardrobeCombinations && typeof rawFb.wardrobeCombinations === 'object'
+        ? rawFb.wardrobeCombinations
+        : {};
 
       const fitFeedback = {
         isWornOnBody: rawFb.isWornOnBody !== undefined ? Boolean(rawFb.isWornOnBody) : true,
@@ -311,7 +531,29 @@ Reglas estrictas de categoría:
         keepOrDiscardReason: rawFb.keepOrDiscardReason || fallbackFb.keepOrDiscardReason,
         stylingImprovements: Array.isArray(rawFb.stylingImprovements) && rawFb.stylingImprovements.length > 0
           ? rawFb.stylingImprovements
-          : fallbackFb.stylingImprovements
+          : fallbackFb.stylingImprovements,
+        whatToAvoid: Array.isArray(rawFb.whatToAvoid) && rawFb.whatToAvoid.length > 0
+          ? rawFb.whatToAvoid
+          : fallbackFb.whatToAvoid,
+        underwearAndBraGuide: {
+          recommendedBra: rawBra.recommendedBra || fallbackFb.underwearAndBraGuide.recommendedBra,
+          braToAvoid: rawBra.braToAvoid || fallbackFb.underwearAndBraGuide.braToAvoid,
+          ownedMatches: Array.isArray(rawBra.ownedMatches) && rawBra.ownedMatches.length > 0
+            ? rawBra.ownedMatches
+            : fallbackFb.underwearAndBraGuide.ownedMatches,
+          suggestedBuyIfMissing: rawBra.suggestedBuyIfMissing || fallbackFb.underwearAndBraGuide.suggestedBuyIfMissing
+        },
+        hairstyleGuide: {
+          recommendedHairstyle: rawHair.recommendedHairstyle || fallbackFb.hairstyleGuide.recommendedHairstyle,
+          hairstyleToAvoid: rawHair.hairstyleToAvoid || fallbackFb.hairstyleGuide.hairstyleToAvoid,
+          hairAccessoriesTip: rawHair.hairAccessoriesTip || fallbackFb.hairstyleGuide.hairAccessoriesTip
+        },
+        wardrobeCombinations: {
+          fromOwnedWardrobe: Array.isArray(rawCombos.fromOwnedWardrobe) && rawCombos.fromOwnedWardrobe.length > 0
+            ? rawCombos.fromOwnedWardrobe
+            : fallbackFb.wardrobeCombinations.fromOwnedWardrobe,
+          suggestedPurchaseToPair: rawCombos.suggestedPurchaseToPair || fallbackFb.wardrobeCombinations.suggestedPurchaseToPair
+        }
       };
 
       return {
@@ -436,9 +678,18 @@ export const generateFallbackOutfitPhotoAnalysis = ({
       bodyTypeFeedback: `Para tu perfil corporal (${bodyTypeProfile}), este conjunto funciona muy bien porque marca la cintura y mantiene líneas verticales limpias sin recargar volumen.`,
       colorAndProportionAnalysis:
         'Buena regla de tercios (1/3 arriba y 2/3 abajo con tiro alto o fajado parcial). Los tonos contrastan con suavidad y dirigen la atención al rostro y la silueta.',
+      underwearAndBraTip:
+        '👙 Ropa interior ideal: Usa un T-Shirt Bra sin costuras (Seamless) en tono Nude/Piel (o Bra Plunge en V si la blusa/playera tiene escote en V) y ropa interior corte láser invisible. 🚫 EVITA usar brasier deportivo debajo de blusas o escotes en V (aplana el busto y se asoman los tirantes) y evita bras blancos bajo telas claras.',
+      hairstyleRecommendation:
+        '💇‍♀️ Peinado recomendado: Semi-recogido pulido (Half-up) con ondas suaves o Coleta media-alta con tu Scrunchie de satén para despejar clavículas y estilizar el cuello. 🚫 Evita llevar el cabello suelto sin forma cubriendo ambos hombros si usas blazer o cuello estructurado.',
       stylingTips: [
         'Usa un fajado francés (al frente) para enfatizar la transición de la cintura.',
         'Si llevas tercera pieza (blazer, chamarra o camisa abierta), remangar ligeramente los antebrazos estiliza aún más la figura.'
+      ],
+      whatToAvoid: [
+        '🚫 Evita usar brasier deportivo (sports bra) si el outfit incluye blusa o escote en V.',
+        '🚫 Evita dejar la blusa o playera completamente suelta si el pantalón es holgado o cargo.',
+        '🚫 Evita calzado sucio o accesorios que recarguen la zona del cuello si ya llevas tercera pieza.'
       ]
     },
     detectedElements: parsedPieces
@@ -499,9 +750,15 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido (sin markdown ni texto extra)
     "overallFeedback": "Análisis detallado de cómo luce el outfit en conjunto, equilibrio visual, texturas y presencia.",
     "bodyTypeFeedback": "Por qué esta combinación de cortes favorece su tipo de cuerpo y silueta.",
     "colorAndProportionAnalysis": "Evaluación de la paleta cromática, contrastes y proporción superior vs inferior.",
+    "underwearAndBraTip": "Qué brasier y ropa interior usar con este outfit (ej. Bra Plunge Nude para escote en V, T-shirt bra sin costuras) y cuál EVITAR (ej. NO usar brasier deportivo con blusas o escotes en V, no usar bra blanco bajo ropa clara).",
+    "hairstyleRecommendation": "Qué peinado (ej. semi-recogido pulido, coleta alta con scrunchie de satén, ondas despejando clavículas, chongo bajo) le queda mejor a este outfit según el cuello/escote de la blusa o playera, y qué peinado evitar.",
     "stylingTips": [
       "Consejo práctico #1 para pulir o elevar este outfit",
       "Consejo práctico #2 (accesorios, fajado, calzado o tercera pieza)"
+    ],
+    "whatToAvoid": [
+      "🚫 Qué evitar #1 cuando uses este outfit (ej. bra deportivo, costuras visibles, largo que acorte piernas)",
+      "🚫 Qué evitar #2 cuando uses este outfit"
     ]
   },
   "detectedElements": [
@@ -596,10 +853,18 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido (sin markdown ni texto extra)
         bodyTypeFeedback: rawFb.bodyTypeFeedback || fallback.feedback.bodyTypeFeedback,
         colorAndProportionAnalysis:
           rawFb.colorAndProportionAnalysis || fallback.feedback.colorAndProportionAnalysis,
+        underwearAndBraTip:
+          rawFb.underwearAndBraTip || fallback.feedback.underwearAndBraTip,
+        hairstyleRecommendation:
+          rawFb.hairstyleRecommendation || fallback.feedback.hairstyleRecommendation,
         stylingTips:
           Array.isArray(rawFb.stylingTips) && rawFb.stylingTips.length > 0
             ? rawFb.stylingTips
-            : fallback.feedback.stylingTips
+            : fallback.feedback.stylingTips,
+        whatToAvoid:
+          Array.isArray(rawFb.whatToAvoid) && rawFb.whatToAvoid.length > 0
+            ? rawFb.whatToAvoid
+            : fallback.feedback.whatToAvoid
       };
 
       const rawElements = Array.isArray(parsed.detectedElements) ? parsed.detectedElements : [];
@@ -718,6 +983,8 @@ export const generateFallbackOutfit = (cleanGarments, occasion = '') => {
 
   const selectedGarmentIds = selectedGarments.map(g => g.id);
   const colors = selectedGarments.map(g => g.color).filter(Boolean);
+  const selectedTopText = `${top?.name || ''} ${top?.color || ''} ${(top?.tags || []).join(' ')}`.toLowerCase();
+  const isVNeck = /escote\s*v|cuello\s*v|\bv\b|cruzad|wrap|blusa/.test(selectedTopText);
 
   let styleRationale = `Conjunto equilibrado para "${occasion || 'tu reunión'}" combinando prendas limpias en tonos armónicos (${colors.slice(0, 3).join(', ')}). Proyecta presencia cuidada y acorde al momento.`;
   if (isFormal) {
@@ -726,11 +993,35 @@ export const generateFallbackOutfit = (cleanGarments, occasion = '') => {
     styleRationale = `Look dinámico con contrastes de textura que destaca tu personalidad y creatividad sin sacrificar elegancia.`;
   }
 
+  const underwearAndBraTip = isVNeck
+    ? '👙 Ropa interior ideal: Usa un Bra corte Plunge (puente bajo en V) en tono Nude/Piel de copa lisa para centrar el busto sin que se asome. 🚫 EVITA usar brasier deportivo (aplana el busto y asoma los tirantes en el escote).'
+    : '👙 Ropa interior ideal: Usa un T-Shirt Bra sin costuras (Seamless) en tono Nude/Piel con espalda ancha alisadora y ropa interior corte láser invisible. 🚫 EVITA brasieres de encaje con relieve o bras deportivos si llevas blusa o playera de calle.';
+
+  const whatToAvoid = [
+    '🚫 No uses brasier deportivo (sports bra) debajo de blusas o escotes en V (aplana el busto y rompe la línea del cuello).',
+    '🚫 Evita dejar la prenda superior completamente suelta si el pantalón es amplio; haz un fajado ligero frontal.',
+    '🚫 Si la blusa o playera es blanca o clara, evita usar bra blanco (usa siempre color piel/nude).'
+  ];
+
+  const suggestedUpgradeToBuy = isFormal
+    ? 'Si buscas elevar aún más este conjunto, considera comprar una Blusa fluida con escote en V en tono marfil o vino (recuerda usarla con Bra corte Plunge en V, nunca con bra deportivo).'
+    : 'Puedes complementar tu armario con un Bra T-Shirt Seamless color Nude y una blusa cruzada de escote en V (para usar con bra Plunge, evitando bras deportivos).';
+
+  const hairstyleRecommendation = isFormal
+    ? '💇‍♀️ Peinado ideal: Semi-recogido pulido o Chongo bajo (Sleek Low Bun) con raya en medio para despejar solapas del blazer y proyectar elegancia ejecutiva. 🚫 Evita cabello húmedo o esponjado sobre los hombros.'
+    : isVNeck
+    ? '💇‍♀️ Peinado ideal: Semi-recogido con ondas suaves o cabello detrás de un hombro para lucir el escote en V y alargar el cuello. 🚫 Evita cubrir todo el escote en V con el cabello hacia adelante.'
+    : '💇‍♀️ Peinado ideal: Coleta media-alta o media cola con tu Scrunchie de satén para despejar rostro y cuello, alargando visualmente tu estatura.';
+
   return {
     outfitName: `Look ${formalityLevel}: ${occasion ? occasion.slice(0, 32) : 'Estilo Personal'}`,
     selectedGarmentIds,
     styleRationale,
-    stylingTips: 'Faja ligeramente el top o camisa al frente y mantén el calzado limpio para un acabado impecable.',
+    stylingTips: 'Faja ligeramente el top o blusa al frente (french tuck) y mantén el calzado limpio para alargar tus piernas.',
+    underwearAndBraTip,
+    hairstyleRecommendation,
+    whatToAvoid,
+    suggestedUpgradeToBuy,
     formalityLevel
   };
 };
@@ -738,26 +1029,17 @@ export const generateFallbackOutfit = (cleanGarments, occasion = '') => {
 /**
  * Recommends an optimal outfit for a specific meeting/occasion using
  * Google Gemini Multimodal / Text AI, selecting exclusively from garments marked as clean.
- * 
- * @param {Array<Object>} cleanGarments - List of garments where isClean === true
- * @param {string} occasion - Meeting or occasion description
- * @param {string} apiKey - Gemini API Key
- * @returns {Promise<{
- *   outfitName: string,
- *   selectedGarmentIds: string[],
- *   styleRationale: string,
- *   stylingTips: string,
- *   formalityLevel: string
- * }>}
  */
 export const recommendOutfitForOccasion = async (cleanGarments, occasion, apiKey) => {
   if (!cleanGarments || cleanGarments.length === 0) {
     throw new Error('No tienes prendas limpias disponibles en tu armario para armar un outfit.');
   }
 
+  const fallbackOutfit = generateFallbackOutfit(cleanGarments, occasion);
+
   // Fallback if no API key is set
   if (!apiKey || !apiKey.trim()) {
-    return generateFallbackOutfit(cleanGarments, occasion);
+    return fallbackOutfit;
   }
 
   const cleanInventorySummary = cleanGarments.map(g => ({
@@ -769,8 +1051,8 @@ export const recommendOutfitForOccasion = async (cleanGarments, occasion, apiKey
   }));
 
   const prompt = `
-Eres un asesor de imagen de élite y estilista personal para la aplicación AURA Nexus.
-El usuario necesita armar un outfit completo para la siguiente ocasión / reunión:
+Eres un asesor de imagen de élite, experto en estilismo y corsetería/ropa interior para la aplicación AURA Nexus.
+La usuaria necesita armar un outfit completo para la siguiente ocasión / reunión:
 "${occasion || 'Reunión importante'}"
 
 INVENTARIO DE ROPA LIMPIA DISPONIBLE:
@@ -779,19 +1061,29 @@ ${JSON.stringify(cleanInventorySummary, null, 2)}
 INSTRUCCIONES ESTRICTAS:
 1. Selecciona ÚNICAMENTE prendas que existan en el inventario limpio de arriba, devolviendo sus IDs exactos en "selectedGarmentIds".
 2. Un outfit armónico y funcional debe tener:
-   - 1 Top (prenda superior)
+   - 1 Top (blusa, playera, camisa)
    - 1 Bottom (pantalón, short, falda, leggings)
    - 1 Footwear (calzado, si hay disponible)
-   - Opcional: 1 Outerwear (chamarra, blazer, abrigo, suéter si aporta al estilo de la ocasión)
-   - Opcional: 1 Accesorio (reloj, lentes, gorro, mochila)
-3. La combinación de colores, cortes y nivel de formalidad debe ser impecable para el evento solicitado.
+   - Opcional: 1 Outerwear (chamarra, blazer, abrigo, suéter) y 1 Accesorio.
+3. Incluye SIEMPRE:
+   - "underwearAndBraTip": Recomendación específica de qué brasier y ropa interior usar con la blusa/playera elegida (ej. Bra Plunge en V, T-shirt bra sin costuras tono piel/nude, strapless) y cuál NO usar (ej. NO usar brasier deportivo con blusas o escotes en V, no usar bra blanco bajo ropa clara).
+   - "hairstyleRecommendation": Qué peinado le queda mejor a este outfit y al corte/escote de la blusa o playera (ej. semi-recogido pulido, coleta alta con scrunchie de satén, ondas despejando clavículas) y qué peinado evitar.
+   - "whatToAvoid": Lista de 2 a 3 cosas que debe EVITAR al usar este outfit (errores de bra, proporción o accesorios).
+   - "suggestedUpgradeToBuy": Si le sugieres comprar alguna prenda opcional para elevar este look (por ejemplo una blusa con escote en V), indícalo junto con el recordatorio de qué bra usar/evitar con ella.
 
 Responde EXCLUSIVAMENTE con un JSON válido con la siguiente estructura:
 {
   "outfitName": "Nombre corto y estilizado del outfit (ej: 'Smart Casual Ejecutivo', 'Look Café Creativo')",
   "selectedGarmentIds": ["id_de_prenda_1", "id_de_prenda_2", "id_de_prenda_3"],
-  "styleRationale": "2 o 3 oraciones explicando con lenguaje de estilista profesional por qué estas piezas combinan y por qué son ideales para la reunión.",
-  "stylingTips": "Consejos prácticos de uso (ej. fajado francés, remangar mangas, uso de contrastes o calzado).",
+  "styleRationale": "2 o 3 oraciones explicando por qué estas piezas combinan y por qué son ideales para la ocasión.",
+  "stylingTips": "Consejos prácticos para mejorar el uso de las prendas (ej. fajado francés, remangar mangas, ajuste en cintura).",
+  "underwearAndBraTip": "Qué brasier y ropa interior usar con esta blusa/playera y cuál evitar (ej. Bra Plunge Nude, evitando bras deportivos o encaje que se marque).",
+  "hairstyleRecommendation": "Qué peinado le queda mejor con este outfit/escote y cuál evitar.",
+  "whatToAvoid": [
+    "🚫 Qué evitar #1 al usar estas prendas",
+    "🚫 Qué evitar #2 al usar estas prendas"
+  ],
+  "suggestedUpgradeToBuy": "Sugerencia opcional de compra para elevar el look (incluyendo consejo de bra si es blusa con escote en V)",
   "formalityLevel": "Formal" | "Smart Casual" | "Casual" | "Creativo" | "Confort"
 }
 `;
@@ -844,6 +1136,12 @@ Responde EXCLUSIVAMENTE con un JSON válido con la siguiente estructura:
           selectedGarmentIds: validIds,
           styleRationale: parsed.styleRationale || 'Combinación de prendas limpias seleccionada con criterio estilístico.',
           stylingTips: parsed.stylingTips || 'Mantén tu calzado limpio y combina con accesorios discretos.',
+          underwearAndBraTip: parsed.underwearAndBraTip || fallbackOutfit.underwearAndBraTip,
+          hairstyleRecommendation: parsed.hairstyleRecommendation || fallbackOutfit.hairstyleRecommendation,
+          whatToAvoid: Array.isArray(parsed.whatToAvoid) && parsed.whatToAvoid.length > 0
+            ? parsed.whatToAvoid
+            : fallbackOutfit.whatToAvoid,
+          suggestedUpgradeToBuy: parsed.suggestedUpgradeToBuy || fallbackOutfit.suggestedUpgradeToBuy,
           formalityLevel: parsed.formalityLevel || 'Smart Casual'
         };
       }
@@ -853,7 +1151,7 @@ Responde EXCLUSIVAMENTE con un JSON válido con la siguiente estructura:
   }
 
   // If all models failed or network error, return the algorithmic fallback
-  return generateFallbackOutfit(cleanGarments, occasion);
+  return fallbackOutfit;
 };
 
 /**
@@ -1444,6 +1742,106 @@ export const generateFallbackCopilotResponse = (userText = '', context = {}) => 
   const lower = userText.toLowerCase();
   const currentSchedule = Array.isArray(context?.schedule) ? context.schedule : [];
   const currentHousehold = Array.isArray(context?.householdItems) ? context.householdItems : [];
+  const currentWardrobe = Array.isArray(context?.wardrobe) ? context.wardrobe : [];
+
+  // 0A. Wardrobe, Blouse, T-Shirt, Bra/Underwear, Hairstyle & Outfit Guidance in Copilot IA
+  const isWardrobeOrStylingQuery =
+    /\b(blusa|blusas|playera|playeras|brazier|brasier|bra\b|bras\b|ropa\s+interior|escote|peinado|peinados|cabello.*outfit|outfit|outfits|prenda|prendas|sudadera|hoodie|legging|leggings|pantal[oó]n|cargo|blazer|armario|cl[oó]set)\b/i.test(userText) &&
+    !/shampoo|champ[uú]|crema\s+corporal|terssura|nivea|mona|perr|mascota/i.test(lower);
+
+  if (isWardrobeOrStylingQuery) {
+    // Extract quoted garment name or infer from user prompt
+    const quotedGarment = [...userText.matchAll(/[""«]([^""»]+)[""»]/g)].map(m => m[1].trim()).filter(Boolean)[0] || '';
+    const garmentSubject = quotedGarment || (
+      /blusa.*escote\s*v|escote\s*v/i.test(userText)
+        ? 'Blusa con Escote en V'
+        : /blusa/i.test(userText)
+        ? 'Blusa Fluida / Estructurada'
+        : /playera/i.test(userText)
+        ? 'Playera (Gráfica / Básica)'
+        : /outfit/i.test(userText)
+        ? 'Outfit Completo'
+        : 'Prenda de tu Armario'
+    );
+
+    const inferredCategory =
+      /pantal[oó]n|legging|cargo|jean|short|falda/i.test(userText)
+        ? 'bottoms'
+        : /blazer|sudadera|hoodie|chamarra|abrigo/i.test(userText)
+        ? 'outerwear'
+        : 'tops';
+
+    const inferredColor =
+      /blanc[oa]|marfil|crema|beige/i.test(userText)
+        ? 'Blanco / Claro'
+        : /negr[oa]|oscur[oa]/i.test(userText)
+        ? 'Negro'
+        : /vino|rojo|esmeralda|azul|rosa/i.test(userText)
+        ? 'Tono Joya'
+        : 'Neutro / Versátil';
+
+    const fitGuide = generateFallbackClothingFitFeedback({
+      name: garmentSubject,
+      category: inferredCategory,
+      color: inferredColor,
+      tags: userText.split(/\s+/).slice(0, 8),
+      isWornOnBody: true,
+      existingWardrobe: currentWardrobe
+    });
+
+    const braGuide = fitGuide.underwearAndBraGuide || {};
+    const hairGuide = fitGuide.hairstyleGuide || {};
+    const combos = fitGuide.wardrobeCombinations?.fromOwnedWardrobe || [];
+    const suggestedBuy = fitGuide.wardrobeCombinations?.suggestedPurchaseToPair || '';
+    const improvements = fitGuide.stylingImprovements || [];
+    const avoids = fitGuide.whatToAvoid || [];
+
+    return {
+      replyText: `### 👗 Asesoría de Imagen AURA Copilot: **${garmentSubject}** (Ropa Interior, Peinado, Combinaciones y Qué Evitar)
+
+He analizado tu consulta cruzándola con las prendas actuales de **Mi Armario** para darte la guía completa:
+
+#### 1. 👙 Guía de Brasier y Ropa Interior
+- **Qué usar:** ${braGuide.recommendedBra}
+- **🚫 Qué EVITAR:** ${braGuide.braToAvoid}
+${braGuide.ownedMatches?.length > 0 ? `- **En tu armario:** ${braGuide.ownedMatches.join(' • ')}\n` : ''}${braGuide.suggestedBuyIfMissing ? `- **🛒 Sugerencia útil:** ${braGuide.suggestedBuyIfMissing}` : ''}
+
+#### 2. 💇‍♀️ ¿Qué Peinado te queda mejor con esta prenda / outfit?
+- **Peinado recomendado:** ${hairGuide.recommendedHairstyle}
+- **🚫 Peinado a evitar:** ${hairGuide.hairstyleToAvoid}
+- **🎀 Accesorio capilar sugerido:** ${hairGuide.hairAccessoriesTip}
+
+#### 3. 👚 Con qué prendas de TU ARMARIO actual usarla
+${combos.map(c => `- ${c}`).join('\n')}
+${suggestedBuy ? `- **✨ Si compras una prenda para combinarla:** ${suggestedBuy}` : ''}
+
+#### 4. 💡 Cómo mejorar el uso de esta prenda
+${improvements.map(tip => `- ${tip}`).join('\n')}
+
+#### 5. 🚫 Qué EVITAR cuando la uses
+${avoids.map(av => `- ${av}`).join('\n')}
+
+---
+Si necesitas agregar el brasier recomendado a tu lista de compras, usa el botón de abajo:`,
+      actions: {
+        productComparison: null,
+        products: [
+          {
+            name: /escote\s*v|\bv\b|cruzad|blusa/i.test(userText)
+              ? 'Brasier Corte Plunge en V Seamless (Tono Nude / Piel)'
+              : 'T-Shirt Bra Sin Costuras Seamless (Tono Nude / Piel)',
+            category: 'Otros',
+            repurchaseVerdict: 'need_to_buy',
+            notes: 'Ropa interior recomendada por AURA Copilot para no marcar costuras ni asomar tirantes en blusas/playeras.'
+          }
+        ],
+        selfCare: [],
+        timers: [],
+        schedule: [],
+        petGuide: []
+      }
+    };
+  }
 
   // 0. New Product Integration & Equivalent Product Comparison ("compré...", "subí...", "tengo X y Y", "crema corporal", "shampoo", etc.)
   const isNewProductIntegration =
@@ -2029,10 +2427,17 @@ export const parseRoutineWithCopilot = async (userMessage, history = [], apiKey 
         .join('\n')
     : '- Crema Corporal Terssura\n- Shampoo de Chile / Romero\n- Agua de Rosas\n- Sérum de Cafeína\n- Pond’s Rejuveness FPS 30\n- Crema Concha Nácar Teatrical';
 
-  const prompt = `
-Eres AURA Copilot, el asistente de inteligencia artificial élite de AURA Nexus para Estilo de Vida, Belleza, Skincare, Tricología, Ergonomía, Productividad, Organización Personal y Cuidado de Mascotas (especialmente Mona, una perrita Pastor Alemán senior de 12 años con displasia de cadera bilateral).
+  const currentWardrobeSummary = Array.isArray(context?.wardrobe) && context.wardrobe.length > 0
+    ? context.wardrobe
+        .slice(0, 50)
+        .map(g => `- ${g.name} (Categoría: ${g.category} | Color: ${g.color || 'Neutro'} | ${g.isClean ? 'Limpia' : 'En lavandería'})`)
+        .join('\n')
+    : '- Playera de Evangelion Eva-01 (tops | Negro)\n- Pantalón Cargo Tiro Alto (bottoms | Negro)\n- Blazer Estructurado Joya (outerwear | Verde Esmeralda)\n- Leggings de Compresión Gruesos (bottoms | Gris Oscuro)\n- Sudadera Oversize Gris con Forro Satén (outerwear | Gris)\n- Tenis Blancos Limpios (footwear | Blanco)\n- Scrunchie de Satén (accessories | Rosa Palo)';
 
-La usuaria te ha enviado el siguiente mensaje, foto de producto, producto nuevo o rutina para analizar y estructurar:
+  const prompt = `
+Eres AURA Copilot, el asistente de inteligencia artificial élite de AURA Nexus para Estilo de Vida, Asesoría de Imagen & Armario Virtual (blusas, playeras, outfits, corsetería/brasieres y peinados), Belleza, Skincare, Tricología, Ergonomía, Productividad, Organización Personal y Cuidado de Mascotas (especialmente Mona, una perrita Pastor Alemán senior de 12 años con displasia de cadera bilateral).
+
+La usuaria te ha enviado el siguiente mensaje, foto de prenda/outfit, foto de producto, producto nuevo o rutina para analizar y estructurar:
 "${userMessage}"
 
 RUTINA DIARIA ACTUAL DE LA USUARIA (para que sepas qué pasos y productos ya usa y a qué hora):
@@ -2041,8 +2446,16 @@ ${currentScheduleSummary}
 INVENTARIO / PRODUCTOS ACTUALES DE LA USUARIA:
 ${currentHouseholdSummary}
 
+PRENDAS EN EL ARMARIO ACTUAL DE LA USUARIA (para combinar con lo que ya tiene):
+${currentWardrobeSummary}
+
 Tu tarea es doble:
 1. "replyText": Escribe una respuesta conversacional, empática, elegante y profesional en Markdown (en español).
+   - **SI LA USUARIA SUBE O PREGUNTA POR UNA PRENDA (BLUSA, PLAYERA, PANTALÓN, BLAZER), ROPA INTERIOR / BRASIER, PEINADO U OUTFIT**:
+     a) **👙 Qué Brasier y Ropa Interior usar vs. Qué EVITAR**: Dale recomendaciones específicas según el escote, tela y color (ej. para blusa con escote en V usar Bra corte Plunge en tono Nude/Piel y **NUNCA usar brasier deportivo / sports bra** porque aplana el busto y se asoman los tirantes/puente en la V; para blusas o playeras blancas/claras usar bra color Nude/Piel sin costuras y evitar bra blanco o encaje con relieve).
+     b) **💇‍♀️ Qué Peinado ("peinado") le queda mejor y cuál evitar**: Recomiéndale el peinado ideal según el cuello/escote de la playera, blusa u outfit (ej. escote en V → semi-recogido con ondas suaves despejando clavículas; cuello redondo/cerrado o hoodie → coleta media-alta o chongo pulido con su Scrunchie de satén para alargar el cuello; con blazer → semi-recogido pulido o low bun) y qué peinado evitar.
+     c) **👚 Con qué prendas de SU ARMARIO ACTUAL combinarla + Sugerencia de compra**: Menciona por nombre exacto las prendas de la lista "PRENDAS EN EL ARMARIO ACTUAL DE LA USUARIA" con las que mejor combina, y si le sugieres comprar alguna prenda (ej. una blusa con escote en V), recuérdale con qué bra usarla y qué evitar.
+     d) **💡 Cómo mejorar el uso de esa prenda y 🚫 qué EVITAR cuando la use**: Tips prácticos de estilismo (fajado francés, proporción de tercios, largo de mangas) y errores específicos a evitar.
    - Si la usuaria sube o menciona UN PRODUCTO NUEVO o DOS PRODUCTOS SIMILARES/SUPLEMENTARIOS (ej. Terssura crema corporal y Nivea crema corporal, o dos shampoos, dos limpiadores, dos cremas hidratantes):
      a) **Cómo agregarlo a su rutina**: Dinos con precisión en qué bloque existente de su rutina diaria (hora y título del paso) y en qué orden exacto aplicarlo.
      b) **Evaluación de Traslape (¿Esperar a terminar el actual o Alternar?)**:

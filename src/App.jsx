@@ -1363,6 +1363,8 @@ export default function App() {
                 setSchedule={setSchedule}
                 petData={petData}
                 setPetData={setPetData}
+                wardrobe={wardrobe}
+                setWardrobe={setWardrobe}
                 showToast={showToast}
                 setActiveModule={setActiveModule}
                 copilotInitialPrompt={copilotInitialPrompt}
@@ -1414,6 +1416,8 @@ export default function App() {
                 showToast={showToast}
                 geminiApiKey={geminiApiKey}
                 setGeminiApiKey={setGeminiApiKey}
+                setActiveModule={setActiveModule}
+                setCopilotInitialPrompt={setCopilotInitialPrompt}
               />
             </ErrorBoundary>
           )}

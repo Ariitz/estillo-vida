@@ -46,7 +46,9 @@ export default function WardrobeModule({
   setCustomOutfits,
   showToast,
   geminiApiKey,
-  setGeminiApiKey
+  setGeminiApiKey,
+  setActiveModule,
+  setCopilotInitialPrompt
 }) {
   const safeWardrobe = sanitizeWardrobeList(wardrobe);
   const safeCustomOutfits = sanitizeCustomOutfitList(customOutfits);
@@ -157,15 +159,67 @@ export default function WardrobeModule({
     bottoms: cleanGarments.filter(g => g && g.category === 'bottoms').length,
     outerwear: cleanGarments.filter(g => g && g.category === 'outerwear').length,
     footwear: cleanGarments.filter(g => g && g.category === 'footwear').length,
-    accessories: cleanGarments.filter(g => g && g.category === 'accessories').length
+    accessories: cleanGarments.filter(g => g && g.category === 'accessories').length,
+    intimates: cleanGarments.filter(g => g && g.category === 'intimates').length
   };
 
   const categories = {
-    tops: 'Tops / Camisas / Playeras',
+    tops: 'Tops / Blusas / Playeras',
     bottoms: 'Pantalones / Cargo / Leggings',
     outerwear: 'Abrigos / Sudaderas / Blazers',
     footwear: 'Calzado / Botas / Tenis',
-    accessories: 'Accesorios / Mochilas / Joyas'
+    accessories: 'Accesorios / Mochilas / Joyas',
+    intimates: 'Ropa Interior / Brasieres'
+  };
+
+  // Enriches any garment's fitFeedback with Bra/Underwear guidance, What to Avoid, and Wardrobe Combinations
+  const getCompleteGarmentFit = (garment) => {
+    const computedFallback = generateFallbackClothingFitFeedback({
+      name: garment?.name || '',
+      category: garment?.category || 'tops',
+      color: garment?.color || 'Neutro',
+      tags: garment?.tags || [],
+      isWornOnBody: Boolean(garment?.image),
+      bodyTypeProfile,
+      existingWardrobe: safeWardrobe
+    });
+    const stored = garment?.fitFeedback;
+    if (!stored) return computedFallback;
+    return {
+      ...computedFallback,
+      ...stored,
+      stylingImprovements: stored.stylingImprovements?.length > 0 ? stored.stylingImprovements : computedFallback.stylingImprovements,
+      whatToAvoid: stored.whatToAvoid?.length > 0 ? stored.whatToAvoid : computedFallback.whatToAvoid,
+      underwearAndBraGuide: {
+        recommendedBra: stored.underwearAndBraGuide?.recommendedBra || computedFallback.underwearAndBraGuide.recommendedBra,
+        braToAvoid: stored.underwearAndBraGuide?.braToAvoid || computedFallback.underwearAndBraGuide.braToAvoid,
+        ownedMatches: stored.underwearAndBraGuide?.ownedMatches?.length > 0
+          ? stored.underwearAndBraGuide.ownedMatches
+          : computedFallback.underwearAndBraGuide.ownedMatches,
+        suggestedBuyIfMissing: stored.underwearAndBraGuide?.suggestedBuyIfMissing || computedFallback.underwearAndBraGuide.suggestedBuyIfMissing
+      },
+      hairstyleGuide: {
+        recommendedHairstyle: stored.hairstyleGuide?.recommendedHairstyle || computedFallback.hairstyleGuide.recommendedHairstyle,
+        hairstyleToAvoid: stored.hairstyleGuide?.hairstyleToAvoid || computedFallback.hairstyleGuide.hairstyleToAvoid,
+        hairAccessoriesTip: stored.hairstyleGuide?.hairAccessoriesTip || computedFallback.hairstyleGuide.hairAccessoriesTip
+      },
+      wardrobeCombinations: {
+        fromOwnedWardrobe: stored.wardrobeCombinations?.fromOwnedWardrobe?.length > 0
+          ? stored.wardrobeCombinations.fromOwnedWardrobe
+          : computedFallback.wardrobeCombinations.fromOwnedWardrobe,
+        suggestedPurchaseToPair: stored.wardrobeCombinations?.suggestedPurchaseToPair || computedFallback.wardrobeCombinations.suggestedPurchaseToPair
+      }
+    };
+  };
+
+  const handleAskCopilotAboutClothing = (subjectLabel) => {
+    const promptText = `Tengo esta prenda u outfit: "${subjectLabel}". ¿Qué brasier/ropa interior me recomiendas usar y cuál evitar, qué peinado me quedaría mejor según el cuello/escote, con qué ropa de mi armario actual puedo combinarla, cómo mejorar su uso y qué evitar cuando la use?`;
+    if (setCopilotInitialPrompt) {
+      setCopilotInitialPrompt(promptText);
+    }
+    if (setActiveModule) {
+      setActiveModule('copilot');
+    }
   };
 
   const careAlerts = [
@@ -220,7 +274,10 @@ export default function WardrobeModule({
   const runAiAnalysis = async (base64, mimeType) => {
     setIsAnalyzing(true);
     try {
-      const result = await analyzeClothingImage(base64, mimeType, geminiApiKey, { bodyTypeProfile });
+      const result = await analyzeClothingImage(base64, mimeType, geminiApiKey, {
+        bodyTypeProfile,
+        existingWardrobe: safeWardrobe
+      });
       if (result.name) setGName(result.name);
       if (result.category) setGCategory(result.category);
       if (result.color) setGColor(result.color);
@@ -239,10 +296,11 @@ export default function WardrobeModule({
         color: gColor || 'Neutro',
         tags: gTags ? gTags.split(',').map(t => t.trim()) : [],
         isWornOnBody: true,
-        bodyTypeProfile
+        bodyTypeProfile,
+        existingWardrobe: safeWardrobe
       });
       setGFitFeedback(fallback);
-      showToast('info', 'Diagnóstico de Silueta Listo', 'Se generó retroalimentación de ajuste, tipo de cuerpo y conservación.');
+      showToast('info', 'Diagnóstico de Silueta Listo', 'Se generó guía de brasier, qué evitar, combinaciones y ajuste.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -273,10 +331,11 @@ export default function WardrobeModule({
         color: gColor || 'Neutro',
         tags: gTags ? gTags.split(',').map(t => t.trim()) : [],
         isWornOnBody: false,
-        bodyTypeProfile
+        bodyTypeProfile,
+        existingWardrobe: safeWardrobe
       });
       setGFitFeedback(fallback);
-      showToast('success', 'Diagnóstico Generado', 'Revisa el análisis de silueta y veredicto.');
+      showToast('success', 'Diagnóstico Generado', 'Revisa el análisis de brasier, qué evitar y cómo usarla.');
       return;
     }
     const base64 = gImage.split(',')[1];
@@ -295,7 +354,10 @@ export default function WardrobeModule({
       let fitFeedback = null;
 
       try {
-        const aiResult = await analyzeClothingImage(base64, mimeType, geminiApiKey, { bodyTypeProfile });
+        const aiResult = await analyzeClothingImage(base64, mimeType, geminiApiKey, {
+          bodyTypeProfile,
+          existingWardrobe: safeWardrobe
+        });
         fitFeedback = aiResult.fitFeedback;
       } catch (aiErr) {
         console.warn('Using fallback fit critique for existing garment:', aiErr.message);
@@ -305,7 +367,8 @@ export default function WardrobeModule({
           color: garment.color,
           tags: garment.tags,
           isWornOnBody: true,
-          bodyTypeProfile
+          bodyTypeProfile,
+          existingWardrobe: safeWardrobe
         });
       }
 
@@ -339,14 +402,7 @@ export default function WardrobeModule({
     };
     setWardrobe(prev => (Array.isArray(prev) ? prev : []).map(item => {
       if (item && item.id === garmentId) {
-        const baseFeedback = item.fitFeedback || generateFallbackClothingFitFeedback({
-          name: item.name,
-          category: item.category,
-          color: item.color,
-          tags: item.tags,
-          isWornOnBody: Boolean(item.image),
-          bodyTypeProfile
-        });
+        const baseFeedback = getCompleteGarmentFit(item);
         return {
           ...item,
           fitFeedback: {
@@ -369,7 +425,8 @@ export default function WardrobeModule({
       color: gColor || 'Varios',
       tags: tagsArr,
       isWornOnBody: Boolean(gImage),
-      bodyTypeProfile
+      bodyTypeProfile,
+      existingWardrobe: safeWardrobe
     });
 
     const newGarment = {
@@ -1246,7 +1303,7 @@ export default function WardrobeModule({
                         <span className="text-base">🪞</span>
                         <div>
                           <span className="text-xs font-extrabold text-[#e0a96d] font-outfit block">
-                            Retroalimentación de Imagen: ¿Cómo se te ve y deberías conservarla o tirarla?
+                            Retroalimentación de Imagen: ¿Cómo se te ve, qué brasier usar y qué evitar?
                           </span>
                           <span className="text-[10px] text-slate-400">
                             {gFitFeedback.isWornOnBody ? '✨ Prenda puesta detectada en foto' : '👚 Evaluación de corte y silueta'} • Score: <strong className="text-slate-200">{gFitFeedback.overallFitScore}/10</strong>
@@ -1302,10 +1359,98 @@ export default function WardrobeModule({
                       </div>
                     </div>
 
-                    {gFitFeedback.stylingImprovements?.length > 0 && (
-                      <div className="bg-[#171a24]/80 px-3 py-2 rounded-lg border border-slate-800 text-[11px] text-slate-300">
-                        <strong className="text-[#e0a96d]">💡 Tips para que te favorezca al máximo: </strong>
-                        <span>{gFitFeedback.stylingImprovements.join(' • ')}</span>
+                    {/* Bra & Underwear Guide inside Add Form */}
+                    {gFitFeedback.underwearAndBraGuide?.recommendedBra && (
+                      <div className="bg-[#171a24] p-3.5 rounded-xl border border-pink-500/25 space-y-2">
+                        <span className="text-[11px] font-extrabold text-pink-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>👙</span>
+                          <span>Guía de Brasier & Ropa Interior (Qué usar vs. Qué evitar)</span>
+                        </span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[11px]">
+                          <div className="bg-[#0b0c10] p-2.5 rounded-lg border border-emerald-500/25">
+                            <strong className="text-emerald-300 block mb-0.5">✅ Brasier / Interior recomendado:</strong>
+                            <span className="text-slate-300">{gFitFeedback.underwearAndBraGuide.recommendedBra}</span>
+                          </div>
+                          {gFitFeedback.underwearAndBraGuide.braToAvoid && (
+                            <div className="bg-[#0b0c10] p-2.5 rounded-lg border border-rose-500/25">
+                              <strong className="text-rose-300 block mb-0.5">🚫 Qué Brasier / Interior EVITAR:</strong>
+                              <span className="text-slate-300">{gFitFeedback.underwearAndBraGuide.braToAvoid}</span>
+                            </div>
+                          )}
+                        </div>
+                        {gFitFeedback.underwearAndBraGuide.suggestedBuyIfMissing && (
+                          <p className="text-[10px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-lg">
+                            <strong>🛒 Sugerencia si no lo tienes:</strong> {gFitFeedback.underwearAndBraGuide.suggestedBuyIfMissing}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Hairstyle Guide inside Add Form */}
+                    {gFitFeedback.hairstyleGuide?.recommendedHairstyle && (
+                      <div className="bg-[#171a24] p-3.5 rounded-xl border border-violet-500/25 space-y-2">
+                        <span className="text-[11px] font-extrabold text-violet-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>💇‍♀️</span>
+                          <span>Peinado Recomendado & Qué Peinado Evitar</span>
+                        </span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[11px]">
+                          <div className="bg-[#0b0c10] p-2.5 rounded-lg border border-violet-500/25">
+                            <strong className="text-violet-300 block mb-0.5">💇‍♀️ Peinado ideal para esta prenda:</strong>
+                            <span className="text-slate-300">{gFitFeedback.hairstyleGuide.recommendedHairstyle}</span>
+                          </div>
+                          {gFitFeedback.hairstyleGuide.hairstyleToAvoid && (
+                            <div className="bg-[#0b0c10] p-2.5 rounded-lg border border-rose-500/25">
+                              <strong className="text-rose-300 block mb-0.5">🚫 Peinado a evitar:</strong>
+                              <span className="text-slate-300">{gFitFeedback.hairstyleGuide.hairstyleToAvoid}</span>
+                            </div>
+                          )}
+                        </div>
+                        {gFitFeedback.hairstyleGuide.hairAccessoriesTip && (
+                          <p className="text-[10px] text-violet-200/90 bg-violet-500/10 border border-violet-500/20 px-2.5 py-1.5 rounded-lg">
+                            <strong>🎀 Accesorio capilar:</strong> {gFitFeedback.hairstyleGuide.hairAccessoriesTip}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Combinations with Owned Wardrobe & Improvements vs What to Avoid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                      {gFitFeedback.stylingImprovements?.length > 0 && (
+                        <div className="bg-[#171a24]/90 p-3 rounded-xl border border-emerald-500/20 space-y-1">
+                          <strong className="text-emerald-300 block">💡 Cómo mejorar el uso de esta prenda:</strong>
+                          <ul className="list-disc list-inside text-slate-300 space-y-1">
+                            {gFitFeedback.stylingImprovements.map((tip, idx) => (
+                              <li key={idx}>{tip}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {gFitFeedback.whatToAvoid?.length > 0 && (
+                        <div className="bg-[#171a24]/90 p-3 rounded-xl border border-rose-500/25 space-y-1">
+                          <strong className="text-rose-300 block">🚫 Qué EVITAR cuando uses esta prenda:</strong>
+                          <ul className="list-disc list-inside text-slate-300 space-y-1">
+                            {gFitFeedback.whatToAvoid.map((avoid, idx) => (
+                              <li key={idx}>{avoid.replace(/^🚫\s*/, '')}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {gFitFeedback.wardrobeCombinations?.fromOwnedWardrobe?.length > 0 && (
+                      <div className="bg-[#171a24]/80 px-3 py-2.5 rounded-xl border border-[#e0a96d]/25 text-[11px] text-slate-300 space-y-1">
+                        <strong className="text-[#e0a96d] block">👚 Con qué prendas de TU ARMARIO puedes usarla:</strong>
+                        <ul className="list-disc list-inside space-y-0.5">
+                          {gFitFeedback.wardrobeCombinations.fromOwnedWardrobe.map((combo, idx) => (
+                            <li key={idx}>{combo}</li>
+                          ))}
+                        </ul>
+                        {gFitFeedback.wardrobeCombinations.suggestedPurchaseToPair && (
+                          <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-800/80">
+                            <strong className="text-amber-300">✨ Si compras algo para combinarla:</strong> {gFitFeedback.wardrobeCombinations.suggestedPurchaseToPair}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1350,14 +1495,7 @@ export default function WardrobeModule({
                 </div>
               ) : (
                 filteredGarments.map(item => {
-                  const fit = item.fitFeedback || generateFallbackClothingFitFeedback({
-                    name: item.name,
-                    category: item.category,
-                    color: item.color,
-                    tags: item.tags,
-                    isWornOnBody: Boolean(item.image),
-                    bodyTypeProfile
-                  });
+                  const fit = getCompleteGarmentFit(item);
 
                   const verdictBadge = fit.keepVerdict === 'donate_or_discard'
                     ? { label: `🗑️ Depurar / Tirar • ${fit.overallFitScore}/10`, cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30' }
@@ -1408,7 +1546,7 @@ export default function WardrobeModule({
                         <h5 className="font-bold text-sm text-slate-100 font-outfit mt-2">{item.name}</h5>
                         <span className="text-xs text-slate-400 block mt-0.5">Color: {item.color}</span>
 
-                        {/* Stylist Verdict Pill & Snippet */}
+                        {/* Stylist Verdict Pill & Bra/Underwear + Avoid Snippet */}
                         <div className="mt-2.5 space-y-1.5">
                           <div className="flex items-center justify-between gap-1.5">
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${verdictBadge.cls}`}>
@@ -1418,6 +1556,42 @@ export default function WardrobeModule({
                           <p className="text-[11px] text-slate-400 line-clamp-2 bg-[#0b0c10]/80 p-2 rounded-lg border border-slate-800/80 leading-relaxed">
                             🪞 {fit.howItLooks}
                           </p>
+
+                          {(item.category === 'tops' || item.category === 'bottoms' || item.category === 'intimates') && fit.underwearAndBraGuide?.recommendedBra && (
+                            <div
+                              onClick={() => setActiveFitModalGarmentId(item.id)}
+                              className="bg-[#0b0c10]/90 hover:bg-[#0b0c10] border border-pink-500/20 rounded-lg p-2 space-y-1 cursor-pointer transition-colors"
+                              title="Haz clic para ver guía completa de brasier, con qué combinarla y qué evitar"
+                            >
+                              <p className="text-[10px] text-pink-200 line-clamp-2 leading-snug">
+                                <strong className="text-pink-300">👙 Bra/Interior: </strong>
+                                {fit.underwearAndBraGuide.recommendedBra.replace(/^👙\s*/, '')}
+                              </p>
+                              {fit.underwearAndBraGuide.braToAvoid && (
+                                <p className="text-[10px] text-rose-300/90 line-clamp-1 leading-snug">
+                                  <strong>🚫 Evita: </strong>
+                                  {fit.underwearAndBraGuide.braToAvoid.replace(/^🚫\s*/, '')}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {fit.hairstyleGuide?.recommendedHairstyle && (
+                            <p
+                              onClick={() => setActiveFitModalGarmentId(item.id)}
+                              className="text-[10px] text-violet-200 bg-[#0b0c10]/85 hover:bg-[#0b0c10] px-2 py-1.5 rounded-lg border border-violet-500/20 line-clamp-2 leading-snug cursor-pointer"
+                            >
+                              <strong className="text-violet-300">💇‍♀️ Peinado: </strong>
+                              {fit.hairstyleGuide.recommendedHairstyle.replace(/^💇‍♀️\s*(Peinado ideal:\s*)?/i, '')}
+                            </p>
+                          )}
+
+                          {fit.wardrobeCombinations?.fromOwnedWardrobe?.[0] && (
+                            <p className="text-[10px] text-slate-300 bg-[#0b0c10]/70 px-2 py-1.5 rounded-lg border border-slate-800/80 line-clamp-2 leading-snug">
+                              <strong className="text-[#e0a96d]">👚 Con tu armario: </strong>
+                              {fit.wardrobeCombinations.fromOwnedWardrobe[0]}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -1437,6 +1611,16 @@ export default function WardrobeModule({
                             className="bg-[#0b0c10] hover:bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/30 text-[10px] font-bold py-1 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
                           >
                             <span>🪞 Ver retro</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleAskCopilotAboutClothing(`${item.name} (${item.color || 'Neutro'})`)}
+                            className="bg-[#0b0c10] hover:bg-violet-500/15 text-violet-300 border border-violet-500/30 text-[10px] font-bold py-1 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                            title="Consultar en Copilot IA qué bra, peinado y combinación usar"
+                          >
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>Copilot IA</span>
                           </button>
 
                           <label className="bg-[#0b0c10] hover:bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-semibold py-1 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors">
@@ -1708,13 +1892,61 @@ export default function WardrobeModule({
                 <div className="p-4 bg-[#0b0c10] border border-[#e0a96d]/15 rounded-xl space-y-1.5">
                   <span className="text-xs font-bold text-[#e0a96d] flex items-center gap-1.5 font-outfit">
                     <Award className="w-3.5 h-3.5" />
-                    <span>Consejos de estilismo</span>
+                    <span>Cómo mejorar el uso de estas prendas</span>
                   </span>
                   <p className="text-xs text-slate-300 leading-relaxed">
                     {recommendedOutfit.stylingTips}
                   </p>
                 </div>
               </div>
+
+              {/* Bra / Underwear Tip & What to Avoid in AI Stylist */}
+              {(recommendedOutfit.underwearAndBraTip || recommendedOutfit.whatToAvoid?.length > 0 || recommendedOutfit.suggestedUpgradeToBuy) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {recommendedOutfit.underwearAndBraTip && (
+                    <div className="p-4 bg-[#0b0c10] border border-pink-500/25 rounded-xl space-y-1.5">
+                      <span className="text-xs font-bold text-pink-300 flex items-center gap-1.5 font-outfit">
+                        <span>👙</span>
+                        <span>Ropa Interior & Brasier para este Outfit</span>
+                      </span>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        {recommendedOutfit.underwearAndBraTip}
+                      </p>
+                      {recommendedOutfit.suggestedUpgradeToBuy && (
+                        <p className="text-[11px] text-amber-300/90 pt-1.5 border-t border-slate-800">
+                          <strong>🛒 Si compras algo para complementar:</strong> {recommendedOutfit.suggestedUpgradeToBuy}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {recommendedOutfit.hairstyleRecommendation && (
+                    <div className="p-4 bg-[#0b0c10] border border-violet-500/25 rounded-xl space-y-1.5">
+                      <span className="text-xs font-bold text-violet-300 flex items-center gap-1.5 font-outfit">
+                        <span>💇‍♀️</span>
+                        <span>Peinado Recomendado para este Look</span>
+                      </span>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        {recommendedOutfit.hairstyleRecommendation}
+                      </p>
+                    </div>
+                  )}
+
+                  {recommendedOutfit.whatToAvoid?.length > 0 && (
+                    <div className="p-4 bg-[#0b0c10] border border-rose-500/25 rounded-xl space-y-1.5">
+                      <span className="text-xs font-bold text-rose-300 flex items-center gap-1.5 font-outfit">
+                        <span>🚫</span>
+                        <span>Qué EVITAR cuando uses este conjunto</span>
+                      </span>
+                      <ul className="list-disc list-inside text-xs text-slate-300 space-y-1">
+                        {recommendedOutfit.whatToAvoid.map((avoid, idx) => (
+                          <li key={idx}>{avoid.replace(/^🚫\s*/, '')}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Garments Visual Grid */}
               <div className="space-y-3">
@@ -2058,12 +2290,55 @@ export default function WardrobeModule({
                           </div>
                         </div>
 
-                        {outfitPhotoAnalysis.feedback.stylingTips?.length > 0 && (
-                          <div className="bg-[#171a24]/90 px-3.5 py-2.5 rounded-xl border border-[#e0a96d]/20 text-[11px] text-slate-300">
-                            <strong className="text-[#e0a96d]">💡 Tips para elevar aún más este look: </strong>
-                            <span>{outfitPhotoAnalysis.feedback.stylingTips.join(' • ')}</span>
+                        {(outfitPhotoAnalysis.feedback.underwearAndBraTip || outfitPhotoAnalysis.feedback.hairstyleRecommendation) && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {outfitPhotoAnalysis.feedback.underwearAndBraTip && (
+                              <div className="bg-[#171a24] p-3.5 rounded-xl border border-pink-500/25 space-y-1">
+                                <span className="text-[10px] font-bold text-pink-300 uppercase tracking-wider block">
+                                  👙 Brasier & Ropa Interior Recomendada (y qué evitar)
+                                </span>
+                                <p className="text-[11px] text-slate-300 leading-relaxed">
+                                  {outfitPhotoAnalysis.feedback.underwearAndBraTip}
+                                </p>
+                              </div>
+                            )}
+
+                            {outfitPhotoAnalysis.feedback.hairstyleRecommendation && (
+                              <div className="bg-[#171a24] p-3.5 rounded-xl border border-violet-500/25 space-y-1">
+                                <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider block">
+                                  💇‍♀️ Peinado Recomendado para este Outfit
+                                </span>
+                                <p className="text-[11px] text-slate-300 leading-relaxed">
+                                  {outfitPhotoAnalysis.feedback.hairstyleRecommendation}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {outfitPhotoAnalysis.feedback.stylingTips?.length > 0 && (
+                            <div className="bg-[#171a24]/90 px-3.5 py-2.5 rounded-xl border border-[#e0a96d]/20 text-[11px] text-slate-300 space-y-1">
+                              <strong className="text-[#e0a96d] block">💡 Cómo mejorar aún más este look:</strong>
+                              <ul className="list-disc list-inside space-y-0.5">
+                                {outfitPhotoAnalysis.feedback.stylingTips.map((t, i) => (
+                                  <li key={i}>{t}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {outfitPhotoAnalysis.feedback.whatToAvoid?.length > 0 && (
+                            <div className="bg-[#171a24]/90 px-3.5 py-2.5 rounded-xl border border-rose-500/25 text-[11px] text-slate-300 space-y-1">
+                              <strong className="text-rose-300 block">🚫 Qué EVITAR cuando uses este outfit:</strong>
+                              <ul className="list-disc list-inside space-y-0.5">
+                                {outfitPhotoAnalysis.feedback.whatToAvoid.map((av, i) => (
+                                  <li key={i}>{av.replace(/^🚫\s*/, '')}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -2666,14 +2941,7 @@ export default function WardrobeModule({
       {activeFitModalGarmentId && (() => {
         const garment = safeWardrobe.find(g => g && g.id === activeFitModalGarmentId);
         if (!garment) return null;
-        const fit = garment.fitFeedback || generateFallbackClothingFitFeedback({
-          name: garment.name,
-          category: garment.category,
-          color: garment.color,
-          tags: garment.tags,
-          isWornOnBody: Boolean(garment.image),
-          bodyTypeProfile
-        });
+        const fit = getCompleteGarmentFit(garment);
 
         return createPortal(
           <div className="fixed inset-0 bg-[#0b0c10]/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
@@ -2793,18 +3061,112 @@ export default function WardrobeModule({
                     <p className="text-xs text-slate-300 leading-relaxed">{fit.keepOrDiscardReason}</p>
                   </div>
 
-                  {fit.stylingImprovements?.length > 0 && (
-                    <div className="bg-[#0b0c10] p-3.5 rounded-xl border border-[#e0a96d]/20 space-y-1.5">
-                      <span className="text-xs font-bold text-[#e0a96d] block">
-                        💡 Cómo estilizarla para que luzca mejor:
+                  {/* Bra & Underwear Guide */}
+                  {fit.underwearAndBraGuide?.recommendedBra && (
+                    <div className="bg-[#0b0c10] p-3.5 rounded-xl border border-pink-500/30 space-y-2">
+                      <span className="text-xs font-extrabold text-pink-300 flex items-center gap-1.5">
+                        <span>👙</span>
+                        <span>Guía de Brasier & Ropa Interior (Qué usar vs. Qué evitar)</span>
                       </span>
-                      <ul className="list-disc list-inside text-xs text-slate-300 space-y-1">
-                        {fit.stylingImprovements.map((tip, i) => (
-                          <li key={i}>{tip}</li>
-                        ))}
-                      </ul>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                        <div className="bg-[#171a24] p-2.5 rounded-lg border border-emerald-500/25 space-y-1">
+                          <strong className="text-emerald-300 block text-[11px]">✅ Brasier / Interior ideal:</strong>
+                          <p className="text-slate-300 leading-relaxed text-[11px]">{fit.underwearAndBraGuide.recommendedBra}</p>
+                        </div>
+                        {fit.underwearAndBraGuide.braToAvoid && (
+                          <div className="bg-[#171a24] p-2.5 rounded-lg border border-rose-500/25 space-y-1">
+                            <strong className="text-rose-300 block text-[11px]">🚫 Qué Brasier / Interior EVITAR:</strong>
+                            <p className="text-slate-300 leading-relaxed text-[11px]">{fit.underwearAndBraGuide.braToAvoid}</p>
+                          </div>
+                        )}
+                      </div>
+                      {fit.underwearAndBraGuide.ownedMatches?.length > 0 && (
+                        <div className="text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg">
+                          <strong>👚 De tu armario: </strong>{fit.underwearAndBraGuide.ownedMatches.join(' • ')}
+                        </div>
+                      )}
+                      {fit.underwearAndBraGuide.suggestedBuyIfMissing && (
+                        <div className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-lg">
+                          <strong>🛒 Sugerencia si no lo tienes: </strong>{fit.underwearAndBraGuide.suggestedBuyIfMissing}
+                        </div>
+                      )}
                     </div>
                   )}
+
+                  {/* Hairstyle Guide in Modal */}
+                  {fit.hairstyleGuide?.recommendedHairstyle && (
+                    <div className="bg-[#0b0c10] p-3.5 rounded-xl border border-violet-500/30 space-y-2">
+                      <span className="text-xs font-extrabold text-violet-300 flex items-center gap-1.5">
+                        <span>💇‍♀️</span>
+                        <span>Peinado Recomendado & Qué Peinado Evitar</span>
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                        <div className="bg-[#171a24] p-2.5 rounded-lg border border-violet-500/25 space-y-1">
+                          <strong className="text-violet-300 block text-[11px]">💇‍♀️ Peinado ideal:</strong>
+                          <p className="text-slate-300 leading-relaxed text-[11px]">{fit.hairstyleGuide.recommendedHairstyle}</p>
+                        </div>
+                        {fit.hairstyleGuide.hairstyleToAvoid && (
+                          <div className="bg-[#171a24] p-2.5 rounded-lg border border-rose-500/25 space-y-1">
+                            <strong className="text-rose-300 block text-[11px]">🚫 Peinado a evitar:</strong>
+                            <p className="text-slate-300 leading-relaxed text-[11px]">{fit.hairstyleGuide.hairstyleToAvoid}</p>
+                          </div>
+                        )}
+                      </div>
+                      {fit.hairstyleGuide.hairAccessoriesTip && (
+                        <div className="text-[11px] text-violet-200 bg-violet-500/10 border border-violet-500/20 px-2.5 py-1.5 rounded-lg">
+                          <strong>🎀 Accesorio capilar: </strong>{fit.hairstyleGuide.hairAccessoriesTip}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Owned Wardrobe Combinations */}
+                  {fit.wardrobeCombinations?.fromOwnedWardrobe?.length > 0 && (
+                    <div className="bg-[#0b0c10] p-3.5 rounded-xl border border-[#e0a96d]/25 space-y-1.5">
+                      <span className="text-xs font-bold text-[#e0a96d] block">
+                        👚 Con qué prendas de TU ARMARIO combinarla:
+                      </span>
+                      <ul className="list-disc list-inside text-xs text-slate-300 space-y-1">
+                        {fit.wardrobeCombinations.fromOwnedWardrobe.map((combo, i) => (
+                          <li key={i}>{combo}</li>
+                        ))}
+                      </ul>
+                      {fit.wardrobeCombinations.suggestedPurchaseToPair && (
+                        <p className="text-[11px] text-amber-300/90 pt-1.5 border-t border-slate-800">
+                          <strong>✨ Si compras alguna prenda para combinar:</strong> {fit.wardrobeCombinations.suggestedPurchaseToPair}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* How to Improve vs What to Avoid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {fit.stylingImprovements?.length > 0 && (
+                      <div className="bg-[#0b0c10] p-3.5 rounded-xl border border-emerald-500/25 space-y-1.5">
+                        <span className="text-xs font-bold text-emerald-300 block">
+                          💡 Cómo mejorar el uso de esta prenda:
+                        </span>
+                        <ul className="list-disc list-inside text-xs text-slate-300 space-y-1">
+                          {fit.stylingImprovements.map((tip, i) => (
+                            <li key={i}>{tip}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {fit.whatToAvoid?.length > 0 && (
+                      <div className="bg-[#0b0c10] p-3.5 rounded-xl border border-rose-500/30 space-y-1.5">
+                        <span className="text-xs font-bold text-rose-300 block">
+                          🚫 Qué EVITAR cuando uses esta prenda:
+                        </span>
+                        <ul className="list-disc list-inside text-xs text-slate-300 space-y-1">
+                          {fit.whatToAvoid.map((avoid, i) => (
+                            <li key={i}>{avoid.replace(/^🚫\s*/, '')}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2823,13 +3185,28 @@ export default function WardrobeModule({
                   <span>Tirar / Eliminar del Armario</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveFitModalGarmentId(null)}
-                  className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-xl cursor-pointer"
-                >
-                  Listo
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const label = `${garment.name} (${garment.color || 'Neutro'})`;
+                      setActiveFitModalGarmentId(null);
+                      handleAskCopilotAboutClothing(label);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-violet-500/15 hover:bg-violet-500/25 text-violet-200 border border-violet-500/35 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-violet-300" />
+                    <span>Consultar en Copilot IA</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveFitModalGarmentId(null)}
+                    className="btn-rose-gold text-xs font-bold py-2 px-5 rounded-xl cursor-pointer"
+                  >
+                    Listo
+                  </button>
+                </div>
               </div>
             </div>
           </div>,

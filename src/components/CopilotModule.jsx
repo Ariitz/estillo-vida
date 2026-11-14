@@ -38,6 +38,8 @@ export default function CopilotModule({
   setCustomTimers,
   schedule = [],
   setSchedule,
+  wardrobe = [],
+  setWardrobe,
   petData,
   setPetData,
   showToast,
@@ -146,6 +148,10 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
 
   const quickPrompts = [
     {
+      label: '👚 Blusa / Playera / Outfit: ¿Qué bra, peinado y combinación usar?',
+      text: 'Tengo una blusa con escote en V (y algunas playeras blancas/claras) y me preocupa el brasier y cómo llevarla. ¿Qué ropa interior o bra debo usar y cuál evitar (ej. bras deportivos), qué peinado me quedaría mejor, con qué prendas de mi armario combinarla y qué evitar cuando la use?'
+    },
+    {
       label: '⏳ Terssura vs. Nivea Crema Corporal (¿Esperar o alternar?)',
       text: 'Tengo Terssura crema corporal y tengo una Nivea crema corporal. ¿Cómo las agrego a mi rutina? ¿Me conviene usar las dos al mismo tiempo o esperar a que se termine una, y cuál es mejor para conservar y comprar la próxima vez?'
     },
@@ -180,10 +186,11 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
     setIsProcessing(true);
 
     try {
-      showToast('info', 'AURA Copilot Analizando', 'Analizando tu rutina actual, traslape de productos y cuál conservar...');
+      showToast('info', 'AURA Copilot Analizando', 'Analizando tu rutina, armario, traslape de productos y recomendaciones...');
       const response = await parseRoutineWithCopilot(prompt, messages, geminiApiKey, {
         schedule,
         householdItems,
+        wardrobe,
         imageAttachment
       });
 
