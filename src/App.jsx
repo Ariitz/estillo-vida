@@ -699,6 +699,20 @@ export default function App() {
     }
   }, [isSyncActive, firebaseConfig]);
 
+  const safeSetLocalStorage = (key, valueStr) => {
+    try {
+      localStorage.setItem(key, valueStr);
+    } catch (err) {
+      console.warn(`localStorage quota reached while saving ${key}, freeing cache...`, err);
+      try {
+        localStorage.removeItem('aura-copilot-messages');
+        localStorage.setItem(key, valueStr);
+      } catch (retryErr) {
+        console.error(`Failed to persist ${key} to localStorage:`, retryErr);
+      }
+    }
+  };
+
   // Helper pack/unpack methods
   const getSyncData = () => {
     return {
@@ -724,6 +738,25 @@ export default function App() {
       geminiApiKey: (geminiApiKey || localStorage.getItem('aura-gemini-key') || '').trim(),
       lastUpdated: Date.now()
     };
+  };
+
+  const buildSafeCloudPayload = (timestamp) => {
+    const raw = {
+      ...getSyncData(),
+      lastUpdated: timestamp
+    };
+    const clean = JSON.parse(JSON.stringify(raw));
+    const serialized = JSON.stringify(clean);
+    // Protect against Firestore 1MB document limit when many photos are uploaded
+    if (serialized.length > 850000) {
+      if (Array.isArray(clean.customOutfits)) {
+        clean.customOutfits = clean.customOutfits.map(o => (o && o.image ? { ...o, image: null } : o));
+      }
+      if ( JSON.stringify(clean).length > 850000 && Array.isArray(clean.wardrobe)) {
+        clean.wardrobe = clean.wardrobe.map(w => (w && w.image ? { ...w, image: null } : w));
+      }
+    }
+    return clean;
   };
 
   const setAllStatesFromData = (data) => {
@@ -869,13 +902,10 @@ export default function App() {
     try {
       const now = Date.now();
       lastLocalUpdateRef.current = now;
-      localStorage.setItem('aura-last-updated', now.toString());
+      safeSetLocalStorage('aura-last-updated', now.toString());
 
       const docRef = doc(db, 'users', firebaseConfig.syncKey);
-      await setDoc(docRef, {
-        ...getSyncData(),
-        lastUpdated: now
-      });
+      await setDoc(docRef, buildSafeCloudPayload(now));
       const timeStr = new Date().toLocaleTimeString();
       setLastSyncTime(timeStr);
       showToast('success', 'Sincronizado', 'Datos subidos a la nube con éxito.');
@@ -899,12 +929,17 @@ export default function App() {
       if (docSnap.exists()) {
         const cloudData = docSnap.data();
         const cloudTimestamp = cloudData.lastUpdated || 0;
+        const latestLocalTs = Math.max(
+          lastLocalUpdateRef.current,
+          parseInt(localStorage.getItem('aura-last-updated') || '0', 10)
+        );
+        lastLocalUpdateRef.current = latestLocalTs;
 
         // If cloud data is newer than what we currently have loaded, update state
-        if (cloudTimestamp > lastLocalUpdateRef.current) {
+        if (cloudTimestamp > latestLocalTs) {
           isRemoteUpdateRef.current = true;
           lastLocalUpdateRef.current = cloudTimestamp;
-          localStorage.setItem('aura-last-updated', cloudTimestamp.toString());
+          safeSetLocalStorage('aura-last-updated', cloudTimestamp.toString());
           setAllStatesFromData(cloudData);
           setLastSyncTime(new Date().toLocaleTimeString());
         }
@@ -930,35 +965,30 @@ export default function App() {
       return;
     }
 
-    if (!db || !isSyncActive || !isAutoSyncEnabled || !firebaseConfig.syncKey) return;
-
     const now = Date.now();
     lastLocalUpdateRef.current = now;
-    localStorage.setItem('aura-last-updated', now.toString());
+    safeSetLocalStorage('aura-last-updated', now.toString());
+
+    if (!db || !isSyncActive || !isAutoSyncEnabled || !firebaseConfig.syncKey) return;
 
     const handler = setTimeout(async () => {
       try {
         const docRef = doc(db, 'users', firebaseConfig.syncKey);
-        await setDoc(docRef, {
-          ...getSyncData(),
-          lastUpdated: now
-        });
+        await setDoc(docRef, buildSafeCloudPayload(now));
         setLastSyncTime(new Date().toLocaleTimeString());
       } catch (error) {
         console.error("Autosync write error:", error);
       }
-    }, 1500);
+    }, 400);
 
     return () => clearTimeout(handler);
   }, [
-    db,
-    isSyncActive,
-    isAutoSyncEnabled,
     weight,
     height,
     waterIntake,
     schedule,
     selfCareActivities,
+    healthSymptoms,
     householdItems,
     experiences,
     wardrobe,
@@ -970,6 +1000,8 @@ export default function App() {
     dailyNutritionLogs,
     userOils,
     customBlends,
+    petData,
+    bagEssentials,
     geminiApiKey
   ]);
 
@@ -977,47 +1009,47 @@ export default function App() {
   // SYNC TO LOCAL STORAGE
   // ==========================================
   useEffect(() => {
-    localStorage.setItem('aura-weight', weight.toString());
+    safeSetLocalStorage('aura-weight', weight.toString());
   }, [weight]);
 
   useEffect(() => {
-    localStorage.setItem('aura-height', height.toString());
+    safeSetLocalStorage('aura-height', height.toString());
   }, [height]);
 
   useEffect(() => {
-    localStorage.setItem('aura-water', waterIntake.toString());
+    safeSetLocalStorage('aura-water', waterIntake.toString());
   }, [waterIntake]);
 
   useEffect(() => {
-    localStorage.setItem('aura-schedule', JSON.stringify(schedule));
+    safeSetLocalStorage('aura-schedule', JSON.stringify(schedule));
   }, [schedule]);
 
   useEffect(() => {
-    localStorage.setItem('aura-selfcare', JSON.stringify(selfCareActivities));
+    safeSetLocalStorage('aura-selfcare', JSON.stringify(selfCareActivities));
   }, [selfCareActivities]);
 
   useEffect(() => {
-    localStorage.setItem('aura-household', JSON.stringify(householdItems));
+    safeSetLocalStorage('aura-household', JSON.stringify(householdItems));
   }, [householdItems]);
 
   useEffect(() => {
-    localStorage.setItem('aura-experiences', JSON.stringify(experiences));
+    safeSetLocalStorage('aura-experiences', JSON.stringify(experiences));
   }, [experiences]);
 
   useEffect(() => {
-    localStorage.setItem('aura-wardrobe', JSON.stringify(wardrobe));
+    safeSetLocalStorage('aura-wardrobe', JSON.stringify(wardrobe));
   }, [wardrobe]);
 
   useEffect(() => {
-    localStorage.setItem('aura-outfits', JSON.stringify(customOutfits));
+    safeSetLocalStorage('aura-outfits', JSON.stringify(customOutfits));
   }, [customOutfits]);
 
   useEffect(() => {
-    localStorage.setItem('aura-manuals', JSON.stringify(customManuals));
+    safeSetLocalStorage('aura-manuals', JSON.stringify(customManuals));
   }, [customManuals]);
 
   useEffect(() => {
-    localStorage.setItem('aura-timers', JSON.stringify(customTimers));
+    safeSetLocalStorage('aura-timers', JSON.stringify(customTimers));
   }, [customTimers]);
 
   // ==========================================

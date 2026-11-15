@@ -34,7 +34,7 @@ import {
   Lightbulb,
   Bot
 } from 'lucide-react';
-import { sanitizeScheduleList, sanitizeSelfCareList, extractRoutineProductsFromText, sanitizeRoutineProduct } from '../utils/sanitizers';
+import { sanitizeScheduleList, sanitizeSelfCareList, extractRoutineProductsFromText, sanitizeRoutineProduct, areSameRoutineProduct } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
 import { 
   getLocalDateString, 
@@ -207,9 +207,30 @@ export default function ScheduleModule({
     return null;
   };
 
+  const persistJsonSafely = (key, data) => {
+    try {
+      const str = JSON.stringify(data);
+      localStorage.setItem(key, str);
+      const now = Date.now().toString();
+      localStorage.setItem('aura-last-updated', now);
+    } catch (err) {
+      try {
+        localStorage.removeItem('aura-copilot-messages');
+        localStorage.setItem(key, JSON.stringify(data));
+        localStorage.setItem('aura-last-updated', Date.now().toString());
+      } catch (e) {
+        console.warn(`Could not immediately persist ${key}:`, e);
+      }
+    }
+  };
+
   const getEffectiveProductStatus = (prod) => {
     if (!prod) return 'owned';
-    if (prod.status && ['owned', 'to_buy', 'to_try', 'never'].includes(prod.status) && prod.status !== 'owned') {
+    const validStatuses = ['owned', 'to_buy', 'to_try', 'never'];
+    if (prod.manualOverride && validStatuses.includes(prod.status)) {
+      return prod.status;
+    }
+    if (prod.status && ['to_buy', 'to_try', 'never'].includes(prod.status)) {
       return prod.status;
     }
     const matchedH = findMatchingHouseholdItem(prod.name);
@@ -218,7 +239,7 @@ export default function ScheduleModule({
       if (matchedH.repurchaseVerdict === 'need_to_buy' || matchedH.repurchaseVerdict === 'running_low') return 'to_buy';
       return 'owned';
     }
-    return prod.status || 'owned';
+    return validStatuses.includes(prod.status) ? prod.status : 'owned';
   };
 
   const removeProductMentionFromDesc = (desc = '', productName = '') => {
@@ -278,8 +299,8 @@ export default function ScheduleModule({
   };
 
   const handleToggleRoutineStatus = (scheduleItemId) => {
-    setSchedule(prev =>
-      sanitizeScheduleList(prev).map(item => {
+    setSchedule(prev => {
+      const nextList = sanitizeScheduleList(prev).map(item => {
         if (String(item.id) !== String(scheduleItemId)) return item;
         const nextStatus = item.routineStatus === 'idea' ? 'active' : 'idea';
         showToast(
@@ -290,78 +311,117 @@ export default function ScheduleModule({
             : `"${item.title}" marcada como sugerencia/idea que aún no aplicas.`
         );
         return { ...item, routineStatus: nextStatus };
-      })
-    );
+      });
+      persistJsonSafely('aura-schedule', nextList);
+      return nextList;
+    });
   };
 
-  const handleSetRoutineProductStatus = (scheduleItemId, productId, nextStatus) => {
-    let targetProdName = '';
-    setSchedule(prev =>
-      sanitizeScheduleList(prev).map(item => {
+  const handleSetRoutineProductStatus = (scheduleItemId, productId, nextStatus, explicitProdName = '') => {
+    // Resolve product name synchronously so React 18 batching never leaves it empty
+    let resolvedProdName = String(explicitProdName || '').trim();
+    if (!resolvedProdName) {
+      const targetItem = sanitizeScheduleList(schedule).find(i => String(i.id) === String(scheduleItemId));
+      const foundProd = targetItem?.products?.find(p => p.id === productId);
+      if (foundProd?.name) {
+        resolvedProdName = foundProd.name;
+      }
+    }
+
+    setSchedule(prev => {
+      const nextList = sanitizeScheduleList(prev).map(item => {
         if (String(item.id) !== String(scheduleItemId)) return item;
-        const currentProds = Array.isArray(item.products) ? item.products : extractRoutineProductsFromText(item.desc, item.title);
+        const currentProds = Array.isArray(item.products) && item.products.length > 0
+          ? item.products
+          : extractRoutineProductsFromText(item.desc, item.title);
+
+        let matchedAny = false;
         const updatedProds = currentProds.map(p => {
-          if (p.id === productId) {
-            targetProdName = p.name;
+          const isMatch =
+            p.id === productId ||
+            (resolvedProdName && areSameRoutineProduct(p.name, resolvedProdName));
+          if (isMatch) {
+            matchedAny = true;
+            if (!resolvedProdName && p.name) resolvedProdName = p.name;
             return { ...p, status: nextStatus, manualOverride: true };
           }
           return p;
         });
-        return { ...item, products: updatedProds };
-      })
-    );
 
-    if (targetProdName && setHouseholdItems) {
-      const matchedH = findMatchingHouseholdItem(targetProdName);
+        if (!matchedAny && resolvedProdName) {
+          updatedProds.push(
+            sanitizeRoutineProduct({
+              id: productId || ('rp-' + Date.now()),
+              name: resolvedProdName,
+              status: nextStatus,
+              manualOverride: true
+            })
+          );
+        }
+
+        return { ...item, products: updatedProds };
+      });
+      persistJsonSafely('aura-schedule', nextList);
+      return nextList;
+    });
+
+    if (resolvedProdName && setHouseholdItems) {
+      const matchedH = findMatchingHouseholdItem(resolvedProdName);
       const verdictMap = { owned: 'yes', to_buy: 'need_to_buy', to_try: 'need_to_buy', never: 'no' };
       const mappedVerdict = verdictMap[nextStatus] || 'yes';
 
       if (matchedH) {
-        setHouseholdItems(prev =>
-          (Array.isArray(prev) ? prev : []).map(h =>
+        setHouseholdItems(prev => {
+          const nextH = (Array.isArray(prev) ? prev : []).map(h =>
             h && h.id === matchedH.id ? { ...h, repurchaseVerdict: mappedVerdict } : h
-          )
-        );
+          );
+          persistJsonSafely('aura-household', nextH);
+          return nextH;
+        });
       } else if (nextStatus === 'to_buy' || nextStatus === 'to_try') {
-        setHouseholdItems(prev => [
-          ...(Array.isArray(prev) ? prev : []),
-          {
-            id: 'item-' + Date.now(),
-            name: targetProdName,
-            category: 'Skincare',
-            stores: [],
-            pendingStores: [],
-            subproducts: [],
-            favoriteVariety: '',
-            varietyOpinions: {},
-            preferredStore: '',
-            repurchaseVerdict: 'need_to_buy',
-            notes: nextStatus === 'to_try'
-              ? 'Agregado desde Mi Rutina Diaria (Por comprar y probar).'
-              : 'Agregado desde Mi Rutina Diaria (Por comprar).'
-          }
-        ]);
+        setHouseholdItems(prev => {
+          const nextH = [
+            ...(Array.isArray(prev) ? prev : []),
+            {
+              id: 'item-' + Date.now(),
+              name: resolvedProdName,
+              category: 'Skincare',
+              stores: [],
+              pendingStores: [],
+              subproducts: [],
+              favoriteVariety: '',
+              varietyOpinions: {},
+              preferredStore: '',
+              repurchaseVerdict: 'need_to_buy',
+              notes: nextStatus === 'to_try'
+                ? 'Agregado desde Mi Rutina Diaria (Por comprar y probar).'
+                : 'Agregado desde Mi Rutina Diaria (Por comprar).'
+            }
+          ];
+          persistJsonSafely('aura-household', nextH);
+          return nextH;
+        });
       }
     }
 
     const statusLabels = {
-      owned: '✅ Ya lo tengo en casa',
-      to_buy: '🛒 Por comprar (sincronizado con Insumos)',
-      to_try: '🧪 Por probar / Por comprar y probar',
+      owned: '✅ Ya lo tengo en casa (guardado)',
+      to_buy: '🛒 Por comprar (guardado y sincronizado con Insumos)',
+      to_try: '🧪 Por probar / Por comprar y probar (guardado)',
       never: '🚫 No volver a usar (puedes quitarlo de la rutina con 🗑️)'
     };
-    if (targetProdName) {
-      showToast('info', targetProdName, statusLabels[nextStatus] || 'Estado actualizado');
+    if (resolvedProdName) {
+      showToast('info', resolvedProdName, statusLabels[nextStatus] || 'Estado actualizado');
     }
   };
 
   const handleRemoveProductFromRoutine = (scheduleItemId, prod) => {
     if (!prod) return;
-    setSchedule(prev =>
-      sanitizeScheduleList(prev).map(item => {
+    setSchedule(prev => {
+      const nextList = sanitizeScheduleList(prev).map(item => {
         if (String(item.id) !== String(scheduleItemId)) return item;
         const currentProds = Array.isArray(item.products) ? item.products : extractRoutineProductsFromText(item.desc, item.title);
-        const updatedProds = currentProds.filter(p => p.id !== prod.id && p.name !== prod.name);
+        const updatedProds = currentProds.filter(p => p.id !== prod.id && !areSameRoutineProduct(p.name, prod.name));
         const cleanedDesc = removeProductMentionFromDesc(item.desc, prod.name);
         const prevRemoved = Array.isArray(item.removedProductNames) ? item.removedProductNames : [];
         const removedKey = String(prod.name || '').toLowerCase().trim();
@@ -371,8 +431,10 @@ export default function ScheduleModule({
           removedProductNames: removedKey ? Array.from(new Set([...prevRemoved, removedKey])) : prevRemoved,
           desc: cleanedDesc
         };
-      })
-    );
+      });
+      persistJsonSafely('aura-schedule', nextList);
+      return nextList;
+    });
     showToast('info', 'Producto Eliminado de la Rutina', `Se quitó "${prod.name}" de este paso de tu rutina.`);
   };
 
@@ -380,14 +442,15 @@ export default function ScheduleModule({
     const cleanName = inlineProductName.trim();
     if (!cleanName) return;
 
-    setSchedule(prev =>
-      sanitizeScheduleList(prev).map(item => {
+    setSchedule(prev => {
+      const nextList = sanitizeScheduleList(prev).map(item => {
         if (String(item.id) !== String(scheduleItemId)) return item;
         const currentProds = Array.isArray(item.products) ? item.products : extractRoutineProductsFromText(item.desc, item.title);
         const newProd = sanitizeRoutineProduct({
           id: 'rp-' + Date.now(),
           name: cleanName,
-          status: inlineProductStatus
+          status: inlineProductStatus,
+          manualOverride: true
         });
         const normDesc = normalizeProductText(item.desc || '');
         const normName = normalizeProductText(cleanName);
@@ -400,8 +463,10 @@ export default function ScheduleModule({
           desc: updatedDesc,
           products: [...currentProds, newProd].filter(Boolean)
         };
-      })
-    );
+      });
+      persistJsonSafely('aura-schedule', nextList);
+      return nextList;
+    });
 
     if (inlineProductStatus === 'to_buy' && setHouseholdItems && !findMatchingHouseholdItem(cleanName)) {
       setHouseholdItems(prev => [
@@ -543,7 +608,15 @@ export default function ScheduleModule({
 
   const handleSaveEdit = () => {
     if (!editingItem.title.trim()) return;
-    setSchedule(schedule.map(item => item.id === editingItem.id ? editingItem : item));
+    setSchedule(prev => {
+      const nextList = sanitizeScheduleList(
+        (Array.isArray(prev) ? prev : []).map(item =>
+          String(item.id) === String(editingItem.id) ? editingItem : item
+        )
+      );
+      persistJsonSafely('aura-schedule', nextList);
+      return nextList;
+    });
     showToast('success', 'Actividad Actualizada', `Se guardó "${editingItem.title}"`);
     setEditingItem(null);
   };
@@ -639,7 +712,7 @@ export default function ScheduleModule({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              handleSetRoutineProductStatus(item.id, prod.id, 'owned');
+              handleSetRoutineProductStatus(item.id, prod.id, 'owned', prod.name);
             }}
             title="✅ Ya lo tengo en casa"
             className={`px-0.5 rounded text-[10px] transition-all cursor-pointer ${
@@ -652,7 +725,7 @@ export default function ScheduleModule({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              handleSetRoutineProductStatus(item.id, prod.id, 'to_buy');
+              handleSetRoutineProductStatus(item.id, prod.id, 'to_buy', prod.name);
             }}
             title="🛒 Por comprar (sincroniza con Insumos)"
             className={`px-0.5 rounded text-[10px] transition-all cursor-pointer ${
@@ -665,7 +738,7 @@ export default function ScheduleModule({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              handleSetRoutineProductStatus(item.id, prod.id, 'to_try');
+              handleSetRoutineProductStatus(item.id, prod.id, 'to_try', prod.name);
             }}
             title="🧪 Por comprar y probar / Por probar"
             className={`px-0.5 rounded text-[10px] transition-all cursor-pointer ${
@@ -678,7 +751,7 @@ export default function ScheduleModule({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              handleSetRoutineProductStatus(item.id, prod.id, 'never');
+              handleSetRoutineProductStatus(item.id, prod.id, 'never', prod.name);
             }}
             title="🚫 No volver a usar / comprar"
             className={`px-0.5 rounded text-[10px] transition-all cursor-pointer ${
@@ -2501,8 +2574,32 @@ export default function ScheduleModule({
                   <div className="flex flex-wrap gap-1.5">
                     {editingItem.products.map((prod) => (
                       <div key={prod.id} className="inline-flex items-center gap-1 bg-[#0b0c10] border border-slate-700 px-2 py-1 rounded-lg text-[11px] text-slate-200">
-                        <span>{prod.status === 'owned' ? '✅' : prod.status === 'to_buy' ? '🛒' : prod.status === 'to_try' ? '🧪' : '🚫'}</span>
                         <span>{prod.name}</span>
+                        <span className="inline-flex items-center gap-0.5 pl-1 border-l border-slate-700">
+                          {[
+                            { st: 'owned', icon: '✅', title: 'Ya lo tengo' },
+                            { st: 'to_buy', icon: '🛒', title: 'Por comprar' },
+                            { st: 'to_try', icon: '🧪', title: 'Por probar' },
+                            { st: 'never', icon: '🚫', title: 'No volver a usar' }
+                          ].map(opt => (
+                            <button
+                              key={opt.st}
+                              type="button"
+                              onClick={() => {
+                                const nextProds = editingItem.products.map(p =>
+                                  p.id === prod.id ? { ...p, status: opt.st, manualOverride: true } : p
+                                );
+                                setEditingItem({ ...editingItem, products: nextProds });
+                              }}
+                              title={opt.title}
+                              className={`px-0.5 rounded text-[10px] cursor-pointer transition-all ${
+                                (prod.status || 'owned') === opt.st ? 'bg-[#e0a96d]/30 ring-1 ring-[#e0a96d]' : 'opacity-40 hover:opacity-100'
+                              }`}
+                            >
+                              {opt.icon}
+                            </button>
+                          ))}
+                        </span>
                         <button
                           type="button"
                           onClick={() => {

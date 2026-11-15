@@ -138,7 +138,10 @@ Prueba pegando una rutina o haz clic en cualquiera de las sugerencias rápidas a
   useEffect(() => {
     if (typeof localStorage !== 'undefined') {
       try {
-        localStorage.setItem('aura-copilot-messages', JSON.stringify(messages));
+        const slimMessages = (Array.isArray(messages) ? messages : [])
+          .slice(-25)
+          .map(m => (m && m.imagePreview ? { ...m, imagePreview: null } : m));
+        localStorage.setItem('aura-copilot-messages', JSON.stringify(slimMessages));
       } catch (e) {
         console.warn('Could not save copilot messages to localStorage:', e);
       }

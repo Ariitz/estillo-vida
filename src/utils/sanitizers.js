@@ -285,7 +285,8 @@ export const extractRoutineProductsFromText = (desc = '', title = '') => {
       unique.push({
         id: 'rp-' + norm.replace(/[^a-z0-9]+/g, '-').slice(0, 32),
         name: item.name,
-        status: defaultStatus
+        status: defaultStatus,
+        manualOverride: false
       });
     }
   }
@@ -293,15 +294,36 @@ export const extractRoutineProductsFromText = (desc = '', title = '') => {
   return unique;
 };
 
+export const normalizeRoutineProductKey = (name = '') =>
+  safeString(name)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/['’]/g, "'")
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+export const areSameRoutineProduct = (nameA = '', nameB = '') => {
+  const a = normalizeRoutineProductKey(nameA);
+  const b = normalizeRoutineProductKey(nameB);
+  if (!a || !b) return false;
+  if (a === b || a.includes(b) || b.includes(a)) return true;
+  if (a.includes('limpiador') && a.includes('cerave') && b.includes('limpiador') && b.includes('cerave')) return true;
+  if (a.includes('faja moldeadora') && b.includes('faja moldeadora')) return true;
+  return false;
+};
+
 export const sanitizeRoutineProduct = (prod, idx = 0) => {
   if (!prod) return null;
   if (typeof prod === 'string') {
     const cleanName = prod.trim();
     if (!cleanName) return null;
+    const norm = normalizeRoutineProductKey(cleanName);
     return {
-      id: 'rp-' + idx + '-' + cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24),
+      id: 'rp-' + (norm.replace(/[^a-z0-9]+/g, '-').slice(0, 32) || idx),
       name: cleanName,
-      status: 'owned',
+      status: /faja\s+moldeadora|neat\s+3b/i.test(cleanName) ? 'to_buy' : 'owned',
       manualOverride: false
     };
   }
@@ -314,8 +336,9 @@ export const sanitizeRoutineProduct = (prod, idx = 0) => {
     if (!prod.manualOverride && status === 'owned' && /faja\s+moldeadora/i.test(cleanName)) {
       status = 'to_buy';
     }
+    const norm = normalizeRoutineProductKey(cleanName);
     return {
-      id: safeString(prod.id || ('rp-' + idx + '-' + cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24))),
+      id: safeString(prod.id || ('rp-' + (norm.replace(/[^a-z0-9]+/g, '-').slice(0, 32) || idx))),
       name: cleanName,
       status,
       manualOverride: Boolean(prod.manualOverride)
@@ -340,24 +363,48 @@ export const sanitizeScheduleItem = (item) => {
   const routineStatus = validRoutineStatuses.includes(rawRoutineStatus) ? rawRoutineStatus : 'active';
 
   const extractedFromDesc = extractRoutineProductsFromText(desc, title);
-  const savedProducts = Array.isArray(item.products)
+  const rawSavedProducts = Array.isArray(item.products)
     ? item.products.map((p, idx) => sanitizeRoutineProduct(p, idx)).filter(Boolean)
     : [];
-  const removedNames = new Set(
-    (Array.isArray(item.removedProductNames) ? item.removedProductNames : [])
-      .map(n => safeString(n).toLowerCase().trim())
-  );
+  const removedNamesList = (Array.isArray(item.removedProductNames) ? item.removedProductNames : [])
+    .map(n => safeString(n).toLowerCase().trim())
+    .filter(Boolean);
+  const removedNames = new Set(removedNamesList);
+
+  // Deduplicate savedProducts preserving manualOverride and user-chosen status
+  const mergedProducts = [];
+  for (const sp of rawSavedProducts) {
+    const existingIdx = mergedProducts.findIndex(mp => mp.id === sp.id || areSameRoutineProduct(mp.name, sp.name));
+    if (existingIdx >= 0) {
+      const existing = mergedProducts[existingIdx];
+      // Prefer the entry with manualOverride: true, or the more specific name
+      const preferred = sp.manualOverride && !existing.manualOverride ? sp : existing;
+      const longerName = (sp.name?.length || 0) > (existing.name?.length || 0) ? sp.name : existing.name;
+      mergedProducts[existingIdx] = {
+        ...preferred,
+        name: longerName,
+        status: preferred.status,
+        manualOverride: Boolean(existing.manualOverride || sp.manualOverride)
+      };
+    } else {
+      mergedProducts.push(sp);
+    }
+  }
 
   // Merge saved products with any newly detected products in desc so inline highlighting always works
-  const mergedProducts = [...savedProducts];
   for (const ext of extractedFromDesc) {
     const extLower = ext.name.toLowerCase().replace(/['’]/g, "'").trim();
-    if (removedNames.has(extLower)) continue;
-    const alreadyExists = mergedProducts.some(mp => {
-      const mpLower = mp.name.toLowerCase().replace(/['’]/g, "'").trim();
-      return mpLower === extLower || mpLower.includes(extLower) || extLower.includes(mpLower);
-    });
-    if (!alreadyExists) {
+    if (removedNames.has(extLower) || removedNamesList.some(rn => areSameRoutineProduct(rn, ext.name))) continue;
+    const existingIdx = mergedProducts.findIndex(mp => mp.id === ext.id || areSameRoutineProduct(mp.name, ext.name));
+    if (existingIdx >= 0) {
+      // Keep the saved product's status & manualOverride, but ensure name can match inline desc
+      const existing = mergedProducts[existingIdx];
+      mergedProducts[existingIdx] = {
+        ...existing,
+        status: existing.status,
+        manualOverride: Boolean(existing.manualOverride)
+      };
+    } else {
       mergedProducts.push(ext);
     }
   }
