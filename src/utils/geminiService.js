@@ -2631,8 +2631,10 @@ export const calculateMealHydrationAndCompensation = ({
   protein = 25,
   fat = 15,
   mealType = 'lunch',
+  targetMealKcal = null,
   weightKg = 80,
-  targetKcalToCompensate = null
+  targetKcalToCompensate = null,
+  surplusKcal = null
 } = {}) => {
   const kcal = Math.max(0, Number(calories) || 0);
   const c = Math.max(0, Number(carbs) || 0);
@@ -2647,7 +2649,9 @@ export const calculateMealHydrationAndCompensation = ({
     dinner: 450,
     snack: 200
   };
-  const budget = mealBudgets[mealType] || 450;
+  const budget = targetMealKcal !== null && Number.isFinite(Number(targetMealKcal))
+    ? Math.max(0, Number(targetMealKcal))
+    : (mealBudgets[mealType] || 450);
   const mealExcessKcal = Math.max(0, kcal - budget);
   const isOverMealBudget = mealExcessKcal >= 60;
 
@@ -2660,8 +2664,12 @@ export const calculateMealHydrationAndCompensation = ({
   // Calories to burn in the compensation plan:
   // If user specified an explicit target, use it; otherwise if the meal exceeded its budget, compensate the excess;
   // otherwise show how to burn 100% or 50% of the meal.
-  const kcalToBurn = targetKcalToCompensate !== null && targetKcalToCompensate > 0
-    ? Math.round(targetKcalToCompensate)
+  const explicitTarget = targetKcalToCompensate !== null && Number(targetKcalToCompensate) > 0
+    ? Number(targetKcalToCompensate)
+    : (surplusKcal !== null && Number(surplusKcal) > 0 ? Number(surplusKcal) : null);
+
+  const kcalToBurn = explicitTarget !== null
+    ? Math.round(explicitTarget)
     : (isOverMealBudget ? mealExcessKcal : Math.max(100, Math.round(kcal * 0.5)));
 
   // Extra water specifically to flush excess sodium/glycogen when overeating
@@ -2716,6 +2724,7 @@ export const calculateMealHydrationAndCompensation = ({
     isOverMealBudget,
     kcalToBurn,
     extraWaterForExcessMl,
+    extraWaterForSurplusMl: extraWaterForExcessMl,
     exercises
   };
 };

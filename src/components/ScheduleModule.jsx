@@ -34,7 +34,7 @@ import {
   Lightbulb,
   Bot
 } from 'lucide-react';
-import { sanitizeScheduleList, sanitizeSelfCareList, extractRoutineProductsFromText, sanitizeRoutineProduct, areSameRoutineProduct } from '../utils/sanitizers';
+import { safeNumber, sanitizeScheduleList, sanitizeSelfCareList, extractRoutineProductsFromText, sanitizeRoutineProduct, areSameRoutineProduct } from '../utils/sanitizers';
 import { findSimilarity } from '../utils/similarity';
 import { 
   getLocalDateString, 
@@ -117,12 +117,16 @@ export default function ScheduleModule({
   const [scProtocol, setScProtocol] = useState('');
   const [scLastDate, setScLastDate] = useState(() => getLocalDateString());
 
-  // Water goal: weight * 35 ml
-  const waterGoal = Math.round(weight * 35);
-  const waterPercent = Math.min(100, Math.round((waterIntake / waterGoal) * 100));
+  // Water goal: weight * 35 ml (sanitized so NaN can never appear)
+  const safeWeight = safeNumber(weight, 92.0) > 0 ? safeNumber(weight, 92.0) : 92.0;
+  const safeHeight = safeNumber(height, 1.60) > 0 ? safeNumber(height, 1.60) : 1.60;
+  const safeWaterIntake = Math.max(0, Math.round(safeNumber(waterIntake, 0)));
+  const waterGoal = Math.max(500, Math.round(safeWeight * 35));
+  const waterPercent = Math.min(100, Math.max(0, Math.round((safeWaterIntake / waterGoal) * 100)));
+  const isWaterGoalReached = safeWaterIntake >= waterGoal;
 
   // BMI (IMC)
-  const imc = (weight / (height * height)).toFixed(1);
+  const imc = (safeWeight / (safeHeight * safeHeight)).toFixed(1);
   const getImcStatus = (val) => {
     if (val < 18.5) return { label: 'Bajo peso', color: 'text-amber-400' };
     if (val < 25) return { label: 'Normal', color: 'text-emerald-400' };
@@ -1390,17 +1394,30 @@ export default function ScheduleModule({
                 </div>
 
                 <div className="flex justify-between items-baseline mb-2">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-black text-[#e0a96d] font-outfit">{waterIntake}</span>
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className={`text-3xl font-black font-outfit ${isWaterGoalReached ? 'text-emerald-400' : 'text-[#e0a96d]'}`}>
+                      {safeWaterIntake}
+                    </span>
                     <span className="text-xs text-slate-400 font-semibold">/ {waterGoal} ml</span>
+                    {isWaterGoalReached && (
+                      <span className="ml-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        ¡Meta alcanzada! 🎉
+                      </span>
+                    )}
                   </div>
-                  <span className="text-sm font-bold text-[#e0a96d]">{waterPercent}%</span>
+                  <span className={`text-sm font-bold ${isWaterGoalReached ? 'text-emerald-400' : 'text-[#e0a96d]'}`}>
+                    {isWaterGoalReached ? '100% (¡Meta cumplida!)' : `${waterPercent}%`}
+                  </span>
                 </div>
 
                 {/* Progress Bar Container */}
                 <div className="w-full bg-[#0b0c10] h-3 rounded-full overflow-hidden mb-5 border border-[#e0a96d]/10">
                   <div 
-                    className="bg-gradient-to-r from-[#e0a96d] to-[#f5d4af] h-full progress-bar-transition rounded-full"
+                    className={`${
+                      isWaterGoalReached
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-300'
+                        : 'bg-gradient-to-r from-[#e0a96d] to-[#f5d4af]'
+                    } h-full progress-bar-transition rounded-full`}
                     style={{ width: `${waterPercent}%` }}
                   />
                 </div>
@@ -1409,8 +1426,13 @@ export default function ScheduleModule({
               <div className="grid grid-cols-3 gap-2.5 relative z-10">
                 <button
                   onClick={() => {
-                    setWaterIntake(waterIntake + 250);
-                    showToast('info', 'Consumo de Agua', 'Añadido +250 ml de agua');
+                    const nextVal = safeWaterIntake + 250;
+                    setWaterIntake(nextVal);
+                    if (nextVal >= waterGoal && safeWaterIntake < waterGoal) {
+                      showToast('success', '🎉 ¡100% Meta de Agua Alcanzada!', `Llegaste a ${nextVal} ml de tu meta de ${waterGoal} ml.`);
+                    } else {
+                      showToast('info', 'Consumo de Agua', 'Añadido +250 ml de agua');
+                    }
                   }}
                   className="bg-[#0b0c10] border border-[#e0a96d]/20 hover:border-[#e0a96d]/50 hover:bg-[#e0a96d]/5 text-slate-200 text-xs font-semibold py-2 px-1.5 rounded-lg transition-all cursor-pointer flex flex-col items-center gap-1"
                 >
@@ -1419,8 +1441,13 @@ export default function ScheduleModule({
                 </button>
                 <button
                   onClick={() => {
-                    setWaterIntake(waterIntake + 500);
-                    showToast('info', 'Consumo de Agua', 'Añadido +500 ml de agua');
+                    const nextVal = safeWaterIntake + 500;
+                    setWaterIntake(nextVal);
+                    if (nextVal >= waterGoal && safeWaterIntake < waterGoal) {
+                      showToast('success', '🎉 ¡100% Meta de Agua Alcanzada!', `Llegaste a ${nextVal} ml de tu meta de ${waterGoal} ml.`);
+                    } else {
+                      showToast('info', 'Consumo de Agua', 'Añadido +500 ml de agua');
+                    }
                   }}
                   className="bg-[#0b0c10] border border-[#e0a96d]/20 hover:border-[#e0a96d]/50 hover:bg-[#e0a96d]/5 text-slate-200 text-xs font-semibold py-2 px-1.5 rounded-lg transition-all cursor-pointer flex flex-col items-center gap-1"
                 >

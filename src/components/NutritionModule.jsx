@@ -136,7 +136,7 @@ export default function NutritionModule({
 
   const handleAddWaterMl = (mlToAdd, label = '') => {
     if (typeof setWaterIntake !== 'function') return;
-    const amount = Math.max(50, Math.round(mlToAdd));
+    const amount = Math.max(50, Math.round(safeNumber(mlToAdd, 250)));
     setWaterIntake(prev => Math.max(0, safeNumber(prev, 0) + amount));
     showToast('success', '💧 Agua Registrada', `Se sumaron +${amount} ml a tu hidratación de hoy${label ? ` (${label})` : ''}.`);
   };
@@ -1038,7 +1038,7 @@ export default function NutritionModule({
                 <span>Sugerencia de Agua Hoy</span>
               </span>
               <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">
-                {waterIntake} / {dailyWaterRecommendation.totalGoalMl} ml
+                {Math.max(0, Math.round(safeNumber(waterIntake, 0)))} / {dailyWaterRecommendation.totalGoalMl} ml ({dailyWaterRecommendation.progressPct}%)
               </span>
             </div>
 
@@ -1134,15 +1134,15 @@ export default function NutritionModule({
             <div className="flex items-center gap-2 text-xs">
               <Droplet className="w-4 h-4 text-sky-400 shrink-0" />
               <span className="text-slate-300">
-                Agua extra para compensar y desinflamar: <strong className="text-sky-300">+{activeDashboardCompensation.extraWaterForSurplusMl} ml</strong> ({Math.ceil(activeDashboardCompensation.extraWaterForSurplusMl / 250)} vasos)
+                Agua extra para compensar y desinflamar: <strong className="text-sky-300">+{activeDashboardCompensation.extraWaterForSurplusMl || activeDashboardCompensation.extraWaterForExcessMl || 250} ml</strong> ({Math.ceil((activeDashboardCompensation.extraWaterForSurplusMl || activeDashboardCompensation.extraWaterForExcessMl || 250) / 250)} vasos)
               </span>
             </div>
             <button
               type="button"
-              onClick={() => handleAddWaterMl(activeDashboardCompensation.extraWaterForSurplusMl, 'Agua de compensación')}
+              onClick={() => handleAddWaterMl(activeDashboardCompensation.extraWaterForSurplusMl || activeDashboardCompensation.extraWaterForExcessMl || 250, 'Agua de compensación')}
               className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 cursor-pointer transition-colors"
             >
-              + Sumar {activeDashboardCompensation.extraWaterForSurplusMl} ml
+              + Sumar {activeDashboardCompensation.extraWaterForSurplusMl || activeDashboardCompensation.extraWaterForExcessMl || 250} ml
             </button>
           </div>
 

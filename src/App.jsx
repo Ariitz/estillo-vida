@@ -469,19 +469,29 @@ export default function App() {
 
   // Persistent States loaded from localStorage (with presets fallback)
   const [weight, setWeight] = useState(() => {
-    const saved = localStorage.getItem('aura-weight');
-    return saved ? parseFloat(saved) : 92.0;
+    const parsed = safeNumber(localStorage.getItem('aura-weight'), 92.0);
+    return parsed > 0 ? parsed : 92.0;
   });
 
   const [height, setHeight] = useState(() => {
-    const saved = localStorage.getItem('aura-height');
-    return saved ? parseFloat(saved) : 1.60;
+    const parsed = safeNumber(localStorage.getItem('aura-height'), 1.60);
+    return parsed > 0 ? parsed : 1.60;
   });
 
-  const [waterIntake, setWaterIntake] = useState(() => {
-    const saved = localStorage.getItem('aura-water');
-    return saved ? parseInt(saved) : 0;
+  const [waterIntake, setRawWaterIntake] = useState(() => {
+    const parsed = safeNumber(localStorage.getItem('aura-water'), 0);
+    return Math.max(0, Math.round(parsed));
   });
+
+  const setWaterIntake = (valOrUpdater) => {
+    setRawWaterIntake(prev => {
+      const safePrev = Math.max(0, Math.round(safeNumber(prev, 0)));
+      const rawNext = typeof valOrUpdater === 'function' ? valOrUpdater(safePrev) : valOrUpdater;
+      const numNext = Number(rawNext);
+      if (!Number.isFinite(numNext)) return safePrev;
+      return Math.max(0, Math.round(numNext));
+    });
+  };
 
   const getSavedArray = (key, fallback) => {
     const saved = localStorage.getItem(key);
@@ -1009,15 +1019,18 @@ export default function App() {
   // SYNC TO LOCAL STORAGE
   // ==========================================
   useEffect(() => {
-    safeSetLocalStorage('aura-weight', weight.toString());
+    const safeW = safeNumber(weight, 92.0) > 0 ? safeNumber(weight, 92.0) : 92.0;
+    safeSetLocalStorage('aura-weight', safeW.toString());
   }, [weight]);
 
   useEffect(() => {
-    safeSetLocalStorage('aura-height', height.toString());
+    const safeH = safeNumber(height, 1.60) > 0 ? safeNumber(height, 1.60) : 1.60;
+    safeSetLocalStorage('aura-height', safeH.toString());
   }, [height]);
 
   useEffect(() => {
-    safeSetLocalStorage('aura-water', waterIntake.toString());
+    const safeWater = Math.max(0, Math.round(safeNumber(waterIntake, 0)));
+    safeSetLocalStorage('aura-water', safeWater.toString());
   }, [waterIntake]);
 
   useEffect(() => {
@@ -1065,8 +1078,10 @@ export default function App() {
   };
 
   // Water goal & percent for Sidebar Widget
-  const waterGoal = Math.round(weight * 35);
-  const waterPercent = Math.min(100, Math.round((waterIntake / waterGoal) * 100));
+  const safeWeightVal = safeNumber(weight, 92.0) > 0 ? safeNumber(weight, 92.0) : 92.0;
+  const safeWaterVal = Math.max(0, Math.round(safeNumber(waterIntake, 0)));
+  const waterGoal = Math.max(500, Math.round(safeWeightVal * 35));
+  const waterPercent = Math.min(100, Math.max(0, Math.round((safeWaterVal / waterGoal) * 100)));
 
   // Breadcrumbs title mapper
   const moduleTitles = {
@@ -1184,18 +1199,20 @@ export default function App() {
                 <span className="flex items-center gap-1 uppercase tracking-wider">
                   <Droplet className="w-3.5 h-3.5 text-[#e0a96d]" /> H₂O Hoy
                 </span>
-                <span className="text-[#e0a96d]">{waterPercent}%</span>
+                <span className={safeWaterVal >= waterGoal ? 'text-emerald-400' : 'text-[#e0a96d]'}>
+                  {safeWaterVal >= waterGoal ? '100% ✨' : `${waterPercent}%`}
+                </span>
               </div>
 
               <div className="flex items-baseline justify-between">
-                <span className="text-sm font-bold text-slate-200">{waterIntake} ml</span>
+                <span className="text-sm font-bold text-slate-200">{safeWaterVal} ml</span>
                 <span className="text-[9px] text-slate-500 font-semibold">Meta: {waterGoal}ml</span>
               </div>
 
               {/* Mini progress bar */}
               <div className="w-full bg-[#0b0c10] h-1.5 rounded-full overflow-hidden border border-slate-900">
                 <div
-                  className="bg-[#e0a96d] h-full progress-bar-transition rounded-full"
+                  className={`${safeWaterVal >= waterGoal ? 'bg-emerald-400' : 'bg-[#e0a96d]'} h-full progress-bar-transition rounded-full`}
                   style={{ width: `${waterPercent}%` }}
                 />
               </div>
@@ -1203,7 +1220,7 @@ export default function App() {
               <div className="flex gap-1.5 pt-1">
                 <button
                   onClick={() => {
-                    setWaterIntake(waterIntake + 250);
+                    setWaterIntake(safeWaterVal + 250);
                     showToast('info', 'Consumo de Agua', 'Consumo: +250 ml de agua');
                   }}
                   className="flex-1 bg-[#0b0c10] hover:bg-[#e0a96d]/5 border border-[#e0a96d]/15 text-[9px] font-bold py-1 px-1 rounded text-center transition-colors cursor-pointer text-slate-300"
@@ -1212,7 +1229,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => {
-                    setWaterIntake(waterIntake + 500);
+                    setWaterIntake(safeWaterVal + 500);
                     showToast('info', 'Consumo de Agua', 'Consumo: +500 ml de agua');
                   }}
                   className="flex-1 bg-[#0b0c10] hover:bg-[#e0a96d]/5 border border-[#e0a96d]/15 text-[9px] font-bold py-1 px-1 rounded text-center transition-colors cursor-pointer text-slate-300"
