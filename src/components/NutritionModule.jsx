@@ -1083,30 +1083,35 @@ export default function NutritionModule({
         </div>
 
         {/* Excess Compensation Calculator Card ("¿Me sobrepasé en un alimento?") */}
-        <div className="lg:col-span-7 bg-[#171a24] border border-[#e0a96d]/25 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
-            <div>
+        <div className="lg:col-span-7 bg-[#171a24] border border-[#e0a96d]/25 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3 overflow-hidden min-w-0">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 border-b border-slate-800 pb-2.5 min-w-0">
+            <div className="min-w-0 flex-1">
               <span className="text-xs font-extrabold text-[#e0a96d] font-outfit flex items-center gap-1.5 uppercase tracking-wider">
-                <Activity className="w-4 h-4 text-[#e0a96d]" />
+                <Activity className="w-4 h-4 text-[#e0a96d] shrink-0" />
                 <span>¿Me sobrepasé en un alimento? • Plan de Compensación</span>
               </span>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-400 mt-0.5 break-words">
                 {activeDashboardCompensation.modeLabel}
               </p>
             </div>
 
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto min-w-0 shrink-0">
               <select
                 value={selectedCompMealId}
                 onChange={(e) => setSelectedCompMealId(e.target.value)}
-                className="bg-[#0b0c10] border border-[#e0a96d]/30 rounded-lg py-1.5 px-2.5 text-slate-200 text-[11px] font-semibold focus:outline-none cursor-pointer"
+                className="w-full sm:w-auto max-w-full sm:max-w-[230px] md:max-w-[260px] truncate bg-[#0b0c10] border border-[#e0a96d]/30 rounded-lg py-1.5 px-2.5 text-slate-200 text-[11px] font-semibold focus:outline-none cursor-pointer"
               >
                 <option value="auto">✨ Detectar exceso automático</option>
-                {dayMeals.map(m => (
-                  <option key={m.id} value={m.id}>
-                    🍽️ {m.name} ({m.calories} kcal)
-                  </option>
-                ))}
+                {dayMeals.map(m => {
+                  const shortName = String(m.name || 'Comida').length > 35
+                    ? `${String(m.name).slice(0, 35)}…`
+                    : m.name;
+                  return (
+                    <option key={m.id} value={m.id}>
+                      🍽️ {shortName} ({m.calories} kcal)
+                    </option>
+                  );
+                })}
                 <option value="custom">⚙️ Elegir kcal a compensar...</option>
               </select>
 
