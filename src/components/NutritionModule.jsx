@@ -40,6 +40,7 @@ import {
   compressImage, 
   analyzeMealImage, 
   analyzeMealText,
+  analyzeRestaurantMenuImage,
   generateAdaptiveCoachingAdvice,
   calculateMealHydrationAndCompensation
 } from '../utils/geminiService';
@@ -80,6 +81,19 @@ export default function NutritionModule({
   const [scannedImage, setScannedImage] = useState('');
   const [portionScale, setPortionScale] = useState(1);
   const fileInputRef = useRef(null);
+
+  // Restaurant Menu Advisor State ("¿Qué pedir en el restaurante según lo que he comido hoy?")
+  const [isAnalyzingMenu, setIsAnalyzingMenu] = useState(false);
+  const [menuImage, setMenuImage] = useState('');
+  const [menuNote, setMenuNote] = useState('');
+  const [menuTargetMealType, setMenuTargetMealType] = useState(() => {
+    const hr = new Date().getHours();
+    if (hr < 12) return 'breakfast';
+    if (hr < 18) return 'lunch';
+    return 'dinner';
+  });
+  const [menuRecommendation, setMenuRecommendation] = useState(null);
+  const menuFileInputRef = useRef(null);
 
   // Manual Add / Edit Modal State
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -488,6 +502,114 @@ export default function NutritionModule({
     setScannedMeal(null);
     setScannedImage('');
     setPortionScale(1);
+  };
+
+  // Restaurant Menu Photo Upload & Context-Aware Recommendation
+  const handleMenuPhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsAnalyzingMenu(true);
+      showToast('info', 'Leyendo Menú del Restaurante', 'Evaluando las opciones del menú según lo que ya comiste hoy y tus macros restantes...');
+
+      const { dataUrl, base64, mimeType } = await compressImage(file, 900, 0.78);
+      setMenuImage(dataUrl);
+
+      const recommendation = await analyzeRestaurantMenuImage(base64, mimeType, geminiApiKey, {
+        dayMeals,
+        dailyTotals,
+        profile,
+        waterIntake: Math.max(0, Math.round(safeNumber(waterIntake, 0))),
+        waterGoal: dailyWaterRecommendation.totalGoalMl,
+        weightKg: safeNumber(weight, 65),
+        restaurantNote: menuNote,
+        targetMealType: menuTargetMealType
+      });
+
+      setMenuRecommendation(recommendation);
+      showToast('success', '🍽️ Recomendación de Menú Lista', 'Te sugerimos las 3 mejores opciones según tus calorías y proteína restantes de hoy.');
+    } catch (err) {
+      console.error('Restaurant Menu Vision Error:', err);
+      showToast('warning', 'Asesor de Menú', 'Se generó una guía inteligente según tu balance de hoy.');
+    } finally {
+      setIsAnalyzingMenu(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleAnalyzeMenuWithoutPhoto = async (customCuisineNote = '') => {
+    const noteToUse = (customCuisineNote || menuNote).trim();
+    if (customCuisineNote) setMenuNote(customCuisineNote);
+
+    try {
+      setIsAnalyzingMenu(true);
+      showToast('info', 'Analizando Balance del Día', 'Calculando qué pedir en el restaurante según lo que llevas comido hoy...');
+      const base64 = menuImage ? menuImage.split(',')[1] : null;
+      const mimeType = menuImage ? (menuImage.split(';')[0].replace('data:', '') || 'image/jpeg') : null;
+
+      const recommendation = await analyzeRestaurantMenuImage(base64, mimeType, geminiApiKey, {
+        dayMeals,
+        dailyTotals,
+        profile,
+        waterIntake: Math.max(0, Math.round(safeNumber(waterIntake, 0))),
+        waterGoal: dailyWaterRecommendation.totalGoalMl,
+        weightKg: safeNumber(weight, 65),
+        restaurantNote: noteToUse,
+        targetMealType: menuTargetMealType
+      });
+      setMenuRecommendation(recommendation);
+      showToast('success', '🍽️ Sugerencias Listas', 'Revisa qué pedir y qué evitar hoy según tu progreso diario.');
+    } catch (err) {
+      console.error('Menu advisor error:', err);
+    } finally {
+      setIsAnalyzingMenu(false);
+    }
+  };
+
+  const handleOrderAndLogMenuOption = (opt) => {
+    if (!opt) return;
+    const kcal = Math.max(100, safeNumber(opt.estimatedCalories, 420));
+    const prot = Math.max(0, safeNumber(opt.macros?.protein, 35));
+    const carbs = Math.max(0, safeNumber(opt.macros?.carbs, 25));
+    const fat = Math.max(0, safeNumber(opt.macros?.fat, 14));
+    const fiber = Math.max(0, safeNumber(opt.macros?.fiber, 6));
+    const mType = opt.mealType || menuTargetMealType || 'lunch';
+
+    const comp = calculateMealHydrationAndCompensation({
+      calories: kcal,
+      carbs,
+      protein: prot,
+      fat,
+      targetMealKcal: getMealIdealBudget(mType, false),
+      weightKg: safeNumber(weight, 65)
+    });
+
+    const newMeal = sanitizeNutritionMeal({
+      id: 'meal-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      date: selectedDate,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      name: opt.dishName || 'Platillo de Restaurante Recomendado',
+      mealType: mType,
+      isMultiMealBatch: false,
+      calories: kcal,
+      protein: prot,
+      carbs,
+      fat,
+      fiber,
+      image: menuImage || '',
+      satietyScore: 8.8,
+      glycemicImpact: 'low',
+      recommendedWaterMl: comp.recommendedWaterMl,
+      compensationExercises: comp.exercises,
+      weightLossVerdict: opt.whyItFitsToday || 'Elegido con el Asesor de Restaurante IA.',
+      weightLossTips: [opt.howToOrderTip, menuRecommendation?.drinkAndSideTip].filter(Boolean),
+      notes: opt.howToOrderTip ? `Tip al pedir: ${opt.howToOrderTip}` : ''
+    });
+
+    if (!newMeal) return;
+    setNutritionMeals(prev => [newMeal, ...(Array.isArray(prev) ? prev : [])]);
+    showToast('success', '🍽️ Platillo Registrado en tu Día', `Se agregó "${newMeal.name}" (${newMeal.calories} kcal • ${newMeal.protein}g proteína).`);
   };
 
   // Calculate with IA from text description for Manual Add form
@@ -1392,6 +1514,287 @@ export default function NutritionModule({
                 <Check className="w-4 h-4" />
                 <span>Guardar en Bitácora de Hoy</span>
               </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ========================================== */}
+      {/* 3.5. RESTAURANT MENU ADVISOR ("¿Qué pedir según lo que he comido hoy?") */}
+      {/* ========================================== */}
+      <div className="bg-[#171a24] border border-[#e0a96d]/30 rounded-2xl p-5 shadow-xl space-y-4 overflow-hidden">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base font-bold text-slate-100 font-outfit flex items-center gap-2">
+                <Utensils className="w-5 h-5 text-[#e0a96d]" />
+                <span>¿En un Restaurante y no sabes qué pedir? • Asesor de Menú IA</span>
+              </h3>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/30">
+                Basado en tu día
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Sube la foto del menú (o elige el tipo de restaurante) y te recomendamos qué pedir exactamente según las calorías y macros que ya comiste hoy.
+            </p>
+          </div>
+
+          {/* Live Daily Balance Summary Pills */}
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold shrink-0">
+            <span className="px-2.5 py-1 rounded-lg bg-[#0b0c10] text-slate-300 border border-slate-800">
+              Comido hoy: <strong className="text-slate-100">{dailyTotals.calories}</strong> / {profile.dailyCalorieTarget} kcal
+            </span>
+            <span className={`px-2.5 py-1 rounded-lg border ${
+              profile.dailyCalorieTarget - dailyTotals.calories >= 0
+                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+            }`}>
+              {profile.dailyCalorieTarget - dailyTotals.calories >= 0
+                ? `Disponibles: ${profile.dailyCalorieTarget - dailyTotals.calories} kcal`
+                : `Exceso hoy: +${Math.abs(profile.dailyCalorieTarget - dailyTotals.calories)} kcal`}
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
+              Proteína restante: {Math.max(0, (profile.proteinTarget || 110) - dailyTotals.protein)}g
+            </span>
+          </div>
+        </div>
+
+        {/* Controls: Meal time + Restaurant note/craving + Photo upload + Quick cuisines */}
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
+            <div className="md:col-span-3">
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block mb-1">
+                Tiempo de comida a pedir
+              </label>
+              <select
+                value={menuTargetMealType}
+                onChange={(e) => setMenuTargetMealType(e.target.value)}
+                className="w-full bg-[#0b0c10] border border-[#e0a96d]/25 rounded-xl py-2 px-3 text-slate-200 text-xs font-semibold focus:outline-none cursor-pointer"
+              >
+                <option value="breakfast">🍳 Desayuno / Brunch</option>
+                <option value="lunch">🥗 Comida / Almuerzo</option>
+                <option value="dinner">🌙 Cena</option>
+                <option value="snack">☕ Café / Snack</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-5">
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block mb-1">
+                Restaurante, tipo de cocina o antojo (Opcional)
+              </label>
+              <input
+                type="text"
+                value={menuNote}
+                onChange={(e) => setMenuNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAnalyzeMenuWithoutPhoto();
+                  }
+                }}
+                placeholder="Ej. Comida mexicana, sushi, italiano, cafetería, mariscos..."
+                className="w-full bg-[#0b0c10] border border-slate-700 focus:border-[#e0a96d] rounded-xl py-2 px-3 text-xs text-slate-100 focus:outline-none"
+              />
+            </div>
+
+            <div className="md:col-span-4 flex items-end gap-2">
+              <input
+                type="file"
+                ref={menuFileInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={handleMenuPhotoUpload}
+              />
+              <button
+                type="button"
+                onClick={() => menuFileInputRef.current?.click()}
+                disabled={isAnalyzingMenu}
+                className="btn-rose-gold text-xs font-bold py-2 px-3.5 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all flex-1 shadow-lg"
+              >
+                {isAnalyzingMenu ? (
+                  <>
+                    <Loader2 className="w-4 h-4 text-[#0b0c10] animate-spin" />
+                    <span>Analizando Menú...</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-4 h-4" />
+                    <span>Foto del Menú</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAnalyzeMenuWithoutPhoto()}
+                disabled={isAnalyzingMenu}
+                className="py-2 px-3.5 rounded-xl bg-[#0b0c10] hover:bg-slate-800 border border-[#e0a96d]/35 text-[#e0a96d] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0"
+                title="Sugerir qué pedir según lo que has comido hoy"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Sugerir Hoy</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Restaurant Type Chips */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            <span className="text-[10px] font-bold text-slate-400 mr-1">Sugerencia rápida por tipo de lugar:</span>
+            {[
+              { label: '🌮 Mexicano / Parrilla', note: 'Restaurante mexicano y carnes a la parrilla' },
+              { label: '🍣 Sushi / Japonés', note: 'Restaurante japonés / sushi / teppanyaki' },
+              { label: '🍝 Italiano / Pizzería', note: 'Restaurante italiano / pastas / carnes' },
+              { label: '☕ Cafetería / Brunch', note: 'Cafetería / brunch / paninis' },
+              { label: '🐟 Mariscos / Pescados', note: 'Restaurante de mariscos y pescados' }
+            ].map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => handleAnalyzeMenuWithoutPhoto(preset.note)}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#0b0c10] hover:bg-[#e0a96d]/15 text-slate-300 hover:text-[#e0a96d] border border-slate-800 hover:border-[#e0a96d]/40 cursor-pointer transition-all"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* AI Menu Recommendation Result Card */}
+        {menuRecommendation && (
+          <div className="bg-[#0b0c10] border border-[#e0a96d]/40 rounded-2xl p-4 sm:p-5 space-y-4 animate-fade-in shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-start gap-3">
+                {menuImage && (
+                  <img
+                    src={menuImage}
+                    alt="Menú del restaurante"
+                    onClick={() => setActivePhotoModal({ image: menuImage, title: menuRecommendation.restaurantStyle || 'Menú Escaneado' })}
+                    className="w-16 h-16 rounded-xl object-cover border border-[#e0a96d]/40 shrink-0 cursor-pointer hover:opacity-90"
+                    title="Haz clic para ampliar la foto del menú"
+                  />
+                )}
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Estrategia Personalizada para tu Día • {menuRecommendation.restaurantStyle}</span>
+                  </span>
+                  <p className="text-xs text-slate-200 mt-1 leading-relaxed">
+                    {menuRecommendation.dayContextSummary}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuRecommendation(null);
+                  setMenuImage('');
+                }}
+                className="text-slate-400 hover:text-rose-400 p-1 rounded cursor-pointer shrink-0"
+                title="Cerrar recomendación"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Top 3 Recommended Dishes to Order */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              {(menuRecommendation.recommendedOptions || []).map((opt, idx) => (
+                <div
+                  key={idx}
+                  className={`rounded-xl p-3.5 border flex flex-col justify-between space-y-3 transition-all ${
+                    idx === 0
+                      ? 'bg-[#171a24] border-[#e0a96d]/50 shadow-lg ring-1 ring-[#e0a96d]/20'
+                      : 'bg-[#171a24]/80 border-slate-800'
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                        idx === 0
+                          ? 'bg-[#e0a96d]/20 text-[#e0a96d] border-[#e0a96d]/40'
+                          : 'bg-slate-800 text-slate-300 border-slate-700'
+                      }`}>
+                        {opt.rankLabel}
+                      </span>
+                      <span className="text-sm font-black text-[#e0a96d] font-outfit shrink-0">
+                        ~{opt.estimatedCalories} kcal
+                      </span>
+                    </div>
+
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-100 leading-snug">
+                      {opt.dishName}
+                    </h4>
+
+                    {/* Macros */}
+                    <div className="flex flex-wrap gap-1 text-[10px] font-bold">
+                      <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/25">
+                        Prot: {opt.macros?.protein || 35}g
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                        Carbs: {opt.macros?.carbs || 25}g
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/25">
+                        Grasa: {opt.macros?.fat || 14}g
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                        Fibra: {opt.macros?.fiber || 6}g
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      <strong className="text-emerald-300">Por qué te conviene hoy:</strong> {opt.whyItFitsToday}
+                    </p>
+
+                    <div className="p-2 rounded-lg bg-[#0b0c10] border border-[#e0a96d]/20 text-[11px] text-slate-300">
+                      <strong className="text-[#e0a96d] block mb-0.5">🗣️ Cómo pedirlo al mesero:</strong>
+                      <span>{opt.howToOrderTip}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOrderAndLogMenuOption(opt)}
+                    className={`w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                      idx === 0
+                        ? 'btn-rose-gold shadow-md'
+                        : 'bg-[#0b0c10] hover:bg-[#e0a96d]/15 text-[#e0a96d] border border-[#e0a96d]/35'
+                    }`}
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Elegir y Registrar en mi Día</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* What to Avoid Today & Drink/Order Tip */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              {Array.isArray(menuRecommendation.avoidToday) && menuRecommendation.avoidToday.length > 0 && (
+                <div className="p-3 rounded-xl bg-rose-950/25 border border-rose-500/30 space-y-1.5">
+                  <span className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    <span>Qué evitar hoy en este menú (dado lo que ya comiste):</span>
+                  </span>
+                  <ul className="space-y-1 text-[11px] text-slate-300 list-disc list-inside">
+                    {menuRecommendation.avoidToday.map((item, i) => (
+                      <li key={i} className="leading-relaxed">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {menuRecommendation.drinkAndSideTip && (
+                <div className="p-3 rounded-xl bg-sky-950/25 border border-sky-500/30 space-y-1 flex flex-col justify-center">
+                  <span className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                    <Droplet className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                    <span>Bebida y Orden de Ingesta Sugerido:</span>
+                  </span>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    {menuRecommendation.drinkAndSideTip}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -4548,3 +4548,371 @@ Responde EXCLUSIVAMENTE con un objeto JSON válido con esta estructura exacta:
 
   return generateFallbackStoreSuggestions(cleanQuery, category);
 };
+
+// ==========================================
+// 11. RESTAURANT MENU ADVISOR (WHAT TO ORDER GIVEN TODAY'S MEALS)
+// ==========================================
+
+export const generateFallbackMenuRecommendation = (context = {}) => {
+  const {
+    dayMeals = [],
+    dailyTotals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
+    profile = { dailyCalorieTarget: 1500, proteinTarget: 110, carbsTarget: 130, fatTarget: 50 },
+    restaurantNote = '',
+    targetMealType = 'lunch'
+  } = context;
+
+  const targetKcal = Number(profile.dailyCalorieTarget) || 1500;
+  const consumedKcal = Number(dailyTotals.calories) || 0;
+  const remainingKcal = targetKcal - consumedKcal;
+
+  const targetProtein = Number(profile.proteinTarget) || 110;
+  const consumedProtein = Number(dailyTotals.protein) || 0;
+  const remainingProtein = Math.max(0, targetProtein - consumedProtein);
+
+  const consumedCarbs = Number(dailyTotals.carbs) || 0;
+  const targetCarbs = Number(profile.carbsTarget) || 130;
+  const highCarbsAlready = consumedCarbs >= targetCarbs * 0.75;
+
+  const eatenNames = dayMeals.length > 0
+    ? dayMeals.map(m => `${m.name} (${m.calories} kcal, ${m.protein || 0}g prot)`).join(', ')
+    : 'Ningún alimento registrado aún hoy';
+
+  const noteLower = String(restaurantNote || '').toLowerCase();
+  const isTightBudget = remainingKcal <= 420;
+  const idealDishBudget = remainingKcal > 0
+    ? Math.min(650, Math.max(280, remainingKcal))
+    : 320;
+
+  let dayContextSummary = '';
+  if (dayMeals.length === 0) {
+    dayContextSummary = `Aún no tienes comidas registradas hoy (tienes tu presupuesto completo de ${targetKcal} kcal y ${targetProtein}g de proteína). Lo ideal para abrir tu día en el restaurante es un platillo con 35-45g de proteína magra, fibra vegetal primero y carbohidratos moderados (~${Math.min(550, Math.round(targetKcal * 0.35))} kcal) para mantener saciedad y energía estable.`;
+  } else if (remainingKcal > 450) {
+    dayContextSummary = `Hoy has consumido ${consumedKcal} kcal (${eatenNames}). Te quedan ${remainingKcal} kcal disponibles y ${remainingProtein}g de proteína para llegar a tu meta. ${highCarbsAlready ? 'Como ya consumiste buena parte de tus carbohidratos hoy, te conviene pedir proteína magra + vegetales y evitar pastas, pan o arroz extra.' : 'Tienes un margen cómodo para pedir un plato fuerte proteico bien balanceado sin salirte de tu déficit.'}`;
+  } else if (remainingKcal > 0) {
+    dayContextSummary = `Hoy llevas ${consumedKcal} kcal (${eatenNames}) y te queda un margen ajustado de ${remainingKcal} kcal (con ${remainingProtein}g de proteína pendiente). En este menú tu estrategia ganadora es pedir proteína magra a la plancha/parrilla sobre cama de verdes o caldo claro, sin frituras ni aderezos cremosos.`;
+  } else {
+    dayContextSummary = `Hoy ya alcanzaste tu meta calórica (${consumedKcal} / ${targetKcal} kcal con: ${eatenNames}). Para disfrutar el restaurante sin frenar tu progreso, pide una opción ultra ligera de proteína limpia con vegetales al vapor o ensalada (~280-350 kcal), priorizando cubrir proteína (${remainingProtein}g restantes) y saciedad con fibra.`;
+  }
+
+  let recommendedOptions = [];
+  let avoidToday = [];
+  let restaurantStyle = 'Restaurante / Carta General';
+
+  if (/japon|sushi|ramen|asiatic|oriental|poke/i.test(noteLower)) {
+    restaurantStyle = 'Cocina Japonesa / Asiática';
+    recommendedOptions = [
+      {
+        rankLabel: '🥇 Mejor Opción Ideal para tu Día',
+        dishName: 'Sashimi Mixto o Tataki de Salmón/Atún + Edamames al Vapor y Sopa Miso',
+        mealType: targetMealType,
+        estimatedCalories: isTightBudget ? 340 : 430,
+        macros: { protein: 42, carbs: 16, fat: 14, fiber: 6 },
+        whyItFitsToday: `Aporta 42g de proteína limpia y Omega-3 para cubrir los ${remainingProtein}g que te faltan hoy, manteniéndose dentro de tu margen (${remainingKcal > 0 ? `${remainingKcal} kcal restantes` : 'ligero para no sumar exceso'}) sin el arroz azucarado de los rollos.`,
+        howToOrderTip: 'Pide primero la sopa miso y edamames al vapor; evita salsa de anguila (dulce) y mayonesa spicy, usa soya baja en sodio con limón.'
+      },
+      {
+        rankLabel: '🥈 Opción Balanceada / Antojo Inteligente',
+        dishName: 'Teppanyaki o Yakitori de Pollo / Res / Camarón con Verduras Asadas (sin arroz frito)',
+        mealType: targetMealType,
+        estimatedCalories: isTightBudget ? 380 : 490,
+        macros: { protein: 38, carbs: 24, fat: 16, fiber: 7 },
+        whyItFitsToday: 'Gran volumen de vegetales al wok que dan máxima saciedad visual y estomacal con proteína completa.',
+        howToOrderTip: 'Pide que lo cocinen con poca grasa/mantequilla y sustituye el arroz gohan o yakimeshi por doble porción de verduras.'
+      },
+      {
+        rankLabel: '🥉 Rollo Ligero (Si tienes antojo de Sushi)',
+        dishName: 'Rollo envuelto en Pepino o Hoja de Soya con Atún/Salmón y Aguacate (sin empanizar)',
+        mealType: targetMealType,
+        estimatedCalories: 360,
+        macros: { protein: 28, carbs: 26, fat: 14, fiber: 5 },
+        whyItFitsToday: 'Satisface el antojo de sushi ahorrando más de 350 kcal de arroz, queso crema y tempura.',
+        howToOrderTip: 'Pide rollo tipo Naruto (envuelto en pepino) o sin queso Philadelphia ni capeado tempura.'
+      }
+    ];
+    avoidToday = [
+      'Rollos empanizados/tempura con queso crema y tampico (650-900 kcal por rollo, altos en grasa oxidada y carbohidrato refinado).',
+      'Arroz Yakimeshi combinado con rollo (duplica la carga glucémica de la comida).'
+    ];
+  } else if (/italian|pizza|pasta|trattoria/i.test(noteLower)) {
+    restaurantStyle = 'Restaurante Italiano / Mediterráneo';
+    recommendedOptions = [
+      {
+        rankLabel: '🥇 Mejor Opción Ideal para tu Día',
+        dishName: 'Salmón, Pescado o Pechuga a la Parrilla (Tagliata/Piccata) con Espárragos y Ensalada',
+        mealType: targetMealType,
+        estimatedCalories: isTightBudget ? 370 : 460,
+        macros: { protein: 44, carbs: 14, fat: 18, fiber: 6 },
+        whyItFitsToday: `Se ajusta directo a tus ${remainingKcal > 0 ? `${remainingKcal} kcal disponibles` : 'objetivos de control calórico'} y suma 44g de proteína sin disparar glucosa.`,
+        howToOrderTip: 'Pide la salsa o aceite de oliva al lado, acompáñalo con verduras grilladas y evita la canasta de pan inicial.'
+      },
+      {
+        rankLabel: '🥈 Opción Fresca Proteica',
+        dishName: 'Carpaccio de Res o Salmón / Ensalada Caprese con Pollo Grillado',
+        mealType: targetMealType,
+        estimatedCalories: 380,
+        macros: { protein: 35, carbs: 10, fat: 20, fiber: 4 },
+        whyItFitsToday: 'Bajísimo en carbohidratos (ideal si ya comiste carbohidratos hoy) y muy rico en proteína de alta biodisponibilidad.',
+        howToOrderTip: 'Usa limón, alcaparras y solo media porción del aceite de oliva o vinagreta.'
+      },
+      {
+        rankLabel: '🥉 Si deseas Pasta o Pizza (Control de Porción)',
+        dishName: 'Media porción de Pasta Pomodoro con Camarones/Pollo + Ensalada Verde de entrada',
+        mealType: targetMealType,
+        estimatedCalories: 490,
+        macros: { protein: 32, carbs: 52, fat: 14, fiber: 6 },
+        whyItFitsToday: 'La salsa de tomate natural (pomodoro/marinara) ahorra ~350 kcal frente a una salsa Alfredo o 4 quesos.',
+        howToOrderTip: 'Come primero una ensalada verde con vinagre balsámico para reducir el pico de glucosa de la pasta en un 30%.'
+      }
+    ];
+    avoidToday = [
+      'Pastas en salsa blanca/cremosa (Fettuccine Alfredo, Carbonara o 4 Quesos: superan las 950-1,200 kcal por plato).',
+      'Pan con mantequilla de cortesía antes del plato fuerte (suma 250-350 kcal sin aportar saciedad real).'
+    ];
+  } else if (/cafe|cafeter|starbucks|brunch|desayun/i.test(noteLower) || targetMealType === 'breakfast') {
+    restaurantStyle = 'Cafetería / Brunch / Desayuno';
+    recommendedOptions = [
+      {
+        rankLabel: '🥇 Mejor Opción Ideal para tu Día',
+        dishName: 'Omelette de Claras (o 2 Huevos) con Espinaca, Champiñones y Pechuga de Pavo + Ensalada',
+        mealType: targetMealType,
+        estimatedCalories: isTightBudget ? 320 : 390,
+        macros: { protein: 36, carbs: 14, fat: 16, fiber: 5 },
+        whyItFitsToday: `Te da 36g de proteína de absorción sostenida y encaja perfecto en tus ${remainingKcal > 0 ? `${remainingKcal} kcal restantes` : 'metas de déficit'}.`,
+        howToOrderTip: 'Pide que lo preparen con poco aceite, sin papas hashbrown fritas y con 1 sola rebanada de pan integral o fruta.'
+      },
+      {
+        rankLabel: '🥈 Opción Práctica de Cafetería',
+        dishName: 'Panini / Baguette Integral de Pavo o Pollo a la Parrilla (mitad de pan o abierto) + Americano/Té',
+        mealType: targetMealType,
+        estimatedCalories: 410,
+        macros: { protein: 31, carbs: 36, fat: 13, fiber: 5 },
+        whyItFitsToday: 'Balanceado y fácil de pedir en cualquier cafetería sin caer en repostería azucarada.',
+        howToOrderTip: 'Pídelo sin mayonesa ni aderezo chipotle (cámbialo por mostaza o aguacate) y retira la tapa superior del pan si ya comiste carbohidratos hoy.'
+      },
+      {
+        rankLabel: '🥉 Opción Ligera / Snack Proteico',
+        dishName: 'Bowl de Yogurt Griego sin Azúcar con Frutos Rojos y Semillas + Cold Brew / Latte Deslactosado Light',
+        mealType: targetMealType,
+        estimatedCalories: 290,
+        macros: { protein: 24, carbs: 28, fat: 8, fiber: 6 },
+        whyItFitsToday: 'Excelente cuando buscas algo fresco, digestivo y bajo en calorías que controle el antojo dulce.',
+        howToOrderTip: 'Pide la granola y la miel aparte para usar solo 1 cucharada.'
+      }
+    ];
+    avoidToday = [
+      'Frappuccinos, bebidas con jarabes saborizados o chai con azúcar (aportan 380-550 kcal líquidas de azúcar pura).',
+      'Chilaquiles con crema/queso gratinado o waffles/hotcakes con jarabe (superan las 850 kcal y dan hambre a las 2 horas).'
+    ];
+  } else {
+    restaurantStyle = 'Restaurante / Comida Mexicana o Internacional';
+    recommendedOptions = [
+      {
+        rankLabel: '🥇 Mejor Opción Ideal para tu Día',
+        dishName: 'Filete de Pescado, Salmón o Pechuga de Pollo a la Plancha/Parrilla con Verduras al Vapor y Ensalada',
+        mealType: targetMealType,
+        estimatedCalories: isTightBudget ? 360 : 450,
+        macros: { protein: 45, carbs: 18, fat: 15, fiber: 7 },
+        whyItFitsToday: `Es el platillo más eficiente para tu día: aporta 45g de proteína (te faltan ${remainingProtein}g) y solo ~${isTightBudget ? 360 : 450} kcal de tus ${remainingKcal > 0 ? `${remainingKcal} kcal disponibles` : 'calorías del día'}.`,
+        howToOrderTip: 'Pide que lo cocinen a la plancha con limón/hierbas (sin mantequilla), cambia papas fritas o arroz por doble verdura y pide aderezos aparte.'
+      },
+      {
+        rankLabel: '🥈 Opción Mexicana / Antojo Saludable',
+        dishName: 'Fajitas o Alambre de Pollo/Arrachera Magra con Pimientos y Nopales (sin queso gratinado) + 2 Tortillas de Maíz',
+        mealType: targetMealType,
+        estimatedCalories: isTightBudget ? 410 : 490,
+        macros: { protein: 40, carbs: 30, fat: 18, fiber: 8 },
+        whyItFitsToday: 'Muchísimo sabor y fibra gracias a los pimientos/nopales, controlando los carbohidratos a solo 2 tortillas de maíz.',
+        howToOrderTip: 'Evita los totopos de la mesa antes de que llegue tu plato y acompaña con salsa mexicana/pico de gallo y guacamole moderado.'
+      },
+      {
+        rankLabel: '🥉 Opción Ligera y Reconfortante',
+        dishName: 'Sopa de Lima / Consomé con Pollo Deshebrado y Aguacate o Ceviche de Pescado al Limón',
+        mealType: targetMealType,
+        estimatedCalories: 330,
+        macros: { protein: 32, carbs: 20, fat: 12, fiber: 5 },
+        whyItFitsToday: 'Hidratante, muy baja densidad calórica y alta saciedad inmediata gracias al líquido caliente o proteína marina.',
+        howToOrderTip: 'Si pides ceviche o sopa, acompáñalo con tostadas horneadas (máximo 2) en lugar de totopos fritos.'
+      }
+    ];
+    avoidToday = [
+      'Totopos con frijoles/crema de entrada mientras esperas (suman 400-500 kcal antes de empezar tu plato fuerte).',
+      'Platillos empanizados, milanesas fritas, gratinados con queso o en salsas cremosas.',
+      'Refrescos, aguas frescas azucaradas o cocteles con jarabe (añaden 250-400 kcal vacías).'
+    ];
+  }
+
+  return {
+    restaurantStyle,
+    dayContextSummary,
+    remainingCalories: remainingKcal,
+    remainingProtein,
+    recommendedOptions,
+    avoidToday,
+    drinkAndSideTip: '💧 Pide un vaso grande de agua natural o agua mineral con limón (350-500 ml) 10 minutos antes de tu plato fuerte. Inicia comiendo siempre los vegetales/ensalada, luego la proteína y deja los carbohidratos al final para reducir el pico de insulina.'
+  };
+};
+
+export const analyzeRestaurantMenuImage = async (base64Data, mimeType, apiKey, context = {}) => {
+  if (!apiKey || !apiKey.trim()) {
+    return generateFallbackMenuRecommendation(context);
+  }
+
+  const {
+    dayMeals = [],
+    dailyTotals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
+    profile = { dailyCalorieTarget: 1500, proteinTarget: 110, carbsTarget: 130, fatTarget: 50 },
+    waterIntake = 0,
+    waterGoal = 2500,
+    restaurantNote = '',
+    targetMealType = 'lunch'
+  } = context;
+
+  const targetKcal = Number(profile.dailyCalorieTarget) || 1500;
+  const consumedKcal = Number(dailyTotals.calories) || 0;
+  const remainingKcal = targetKcal - consumedKcal;
+  const targetProtein = Number(profile.proteinTarget) || 110;
+  const consumedProtein = Number(dailyTotals.protein) || 0;
+  const remainingProtein = Math.max(0, targetProtein - consumedProtein);
+
+  const mealsSummary = dayMeals.length > 0
+    ? dayMeals.map(m => `- ${m.name} (${m.mealType}): ${m.calories} kcal | Prot: ${m.protein || 0}g | Carbs: ${m.carbs || 0}g | Grasa: ${m.fat || 0}g | Fibra: ${m.fiber || 0}g`).join('\n')
+    : '- Aún no ha registrado alimentos hoy.';
+
+  const prompt = `
+Eres la nutrióloga clínica y estratega de pérdida de grasa personal de la usuaria.
+La usuaria acaba de llegar a un restaurante, no sabe qué pedir y te envía la FOTO DEL MENÚ / CARTA / VITRINA (y/o nota del restaurante: "${restaurantNote || 'Sin nota adicional'}") para el tiempo de comida: "${targetMealType}".
+
+CONTEXTO REAL DE LO QUE LA USUARIA HA COMIDO HOY:
+- Meta diaria de calorías (déficit calórico): ${targetKcal} kcal
+- Calorías ya consumidas hoy: ${consumedKcal} kcal
+- Calorías restantes disponibles para hoy: ${remainingKcal} kcal
+- Meta diaria de proteína: ${targetProtein}g | Proteína consumida hoy: ${consumedProtein}g | Proteína que le falta hoy: ${remainingProtein}g
+- Carbohidratos consumidos hoy: ${dailyTotals.carbs || 0}g (Meta: ${profile.carbsTarget || 130}g)
+- Grasas consumidas hoy: ${dailyTotals.fat || 0}g (Meta: ${profile.fatTarget || 50}g)
+- Fibra consumida hoy: ${dailyTotals.fiber || 0}g
+- Agua bebida hoy: ${waterIntake} ml de ${waterGoal} ml
+- Lista exacta de alimentos que ya comió hoy:
+${mealsSummary}
+
+TU TAREA:
+1. Lee cuidadosamente los platillos reales que aparecen en la foto del menú (o si es la foto de un buffet/vitrina/restaurante, identifica las opciones visibles o propias de ese restaurante).
+2. Elige las 3 MEJORES OPCIONES específicas del menú que más le convienen pedir EN ESTE MOMENTO dado lo que ya comió hoy, las calorías que le quedan (${remainingKcal} kcal) y la proteína que le falta (${remainingProtein}g).
+   - Si ya le quedan pocas calorías o se pasó, recomiéndale las opciones más ligeras, magras y saciantes del menú.
+   - Si ya comió muchos carbohidratos o grasas hoy, prioriza platillos de proteína magra + fibra/vegetales.
+3. Para cada una de las 3 opciones recomendadas, dale un "hack para pedir al mesero" (ej. pedir aderezo aparte, cambiar guarnición frita por ensalada/verduras, a la plancha sin mantequilla, etc.).
+4. Indica 2 o 3 platillos específicos de ese menú que hoy DEBE EVITAR dado su historial del día.
+
+Responde EXCLUSIVAMENTE con un objeto JSON válido con esta estructura exacta:
+{
+  "restaurantStyle": "Nombre o tipo de restaurante/menú detectado en la foto",
+  "dayContextSummary": "Explicación clara y personalizada de 2-3 oraciones conectando lo que ya comió hoy (${consumedKcal} kcal, ${consumedProtein}g prot) con lo que le conviene priorizar ahora en este menú.",
+  "remainingCalories": ${remainingKcal},
+  "remainingProtein": ${remainingProtein},
+  "recommendedOptions": [
+    {
+      "rankLabel": "🥇 Mejor Opción Ideal para tu Día",
+      "dishName": "Nombre exacto del platillo del menú + modificación sugerida",
+      "mealType": "${targetMealType}",
+      "estimatedCalories": 430,
+      "macros": { "protein": 42, "carbs": 22, "fat": 15, "fiber": 7 },
+      "whyItFitsToday": "Por qué este platillo del menú es perfecto según lo que ya comió hoy y sus calorías/proteína restantes.",
+      "howToOrderTip": "Instrucción exacta para decirle al mesero y ahorrar calorías ocultas."
+    },
+    {
+      "rankLabel": "🥈 Opción Balanceada / Antojo Inteligente",
+      "dishName": "Segunda opción del menú",
+      "mealType": "${targetMealType}",
+      "estimatedCalories": 480,
+      "macros": { "protein": 36, "carbs": 35, "fat": 16, "fiber": 6 },
+      "whyItFitsToday": "Por qué encaja bien con su día.",
+      "howToOrderTip": "Cómo pedirlo al mesero."
+    },
+    {
+      "rankLabel": "🥉 Opción Ligera de Alta Saciedad",
+      "dishName": "Tercera opción más ligera del menú",
+      "mealType": "${targetMealType}",
+      "estimatedCalories": 340,
+      "macros": { "protein": 32, "carbs": 16, "fat": 12, "fiber": 6 },
+      "whyItFitsToday": "Ideal si quiere reservar calorías o cenar ligero.",
+      "howToOrderTip": "Cómo pedirlo al mesero."
+    }
+  ],
+  "avoidToday": [
+    "Platillo 1 del menú a evitar hoy y por qué choca con lo que ya comió",
+    "Platillo 2 del menú a evitar hoy y cuántas kcal ocultas suele tener"
+  ],
+  "drinkAndSideTip": "Recomendación de bebida del menú, cuánta agua tomar y en qué orden comer el platillo."
+}
+`;
+
+  const models = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest'];
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const parts = [{ text: prompt }];
+      if (base64Data) {
+        parts.push({
+          inline_data: {
+            mime_type: mimeType || 'image/jpeg',
+            data: base64Data
+          }
+        });
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: {
+            response_mime_type: 'application/json',
+            temperature: 0.25
+          }
+        })
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) continue;
+
+      let cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed.recommendedOptions) && parsed.recommendedOptions.length > 0) {
+        return {
+          restaurantStyle: parsed.restaurantStyle || 'Menú de Restaurante Analizado',
+          dayContextSummary: parsed.dayContextSummary || generateFallbackMenuRecommendation(context).dayContextSummary,
+          remainingCalories: remainingKcal,
+          remainingProtein,
+          recommendedOptions: parsed.recommendedOptions.map((opt, idx) => ({
+            rankLabel: opt.rankLabel || (idx === 0 ? '🥇 Mejor Opción Ideal para tu Día' : idx === 1 ? '🥈 Opción Balanceada' : '🥉 Opción Ligera'),
+            dishName: opt.dishName || 'Platillo Recomendado',
+            mealType: ['breakfast', 'lunch', 'dinner', 'snack'].includes(opt.mealType) ? opt.mealType : targetMealType,
+            estimatedCalories: Math.max(100, parseInt(opt.estimatedCalories, 10) || 420),
+            macros: {
+              protein: Math.max(0, parseInt(opt.macros?.protein, 10) || 35),
+              carbs: Math.max(0, parseInt(opt.macros?.carbs, 10) || 25),
+              fat: Math.max(0, parseInt(opt.macros?.fat, 10) || 14),
+              fiber: Math.max(0, parseInt(opt.macros?.fiber, 10) || 6)
+            },
+            whyItFitsToday: opt.whyItFitsToday || 'Se ajusta a tus calorías y requerimiento de proteína restantes de hoy.',
+            howToOrderTip: opt.howToOrderTip || 'Pide aderezos aparte y guarnición de verduras o ensalada.'
+          })),
+          avoidToday: Array.isArray(parsed.avoidToday) && parsed.avoidToday.length > 0
+            ? parsed.avoidToday
+            : generateFallbackMenuRecommendation(context).avoidToday,
+          drinkAndSideTip: parsed.drinkAndSideTip || '💧 Acompaña con agua natural o mineral con limón (350-500 ml) y empieza por las verduras/ensalada.'
+        };
+      }
+    } catch (err) {
+      console.warn(`Restaurant menu analysis with ${model} failed:`, err.message);
+    }
+  }
+
+  return generateFallbackMenuRecommendation(context);
+};
