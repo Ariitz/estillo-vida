@@ -483,6 +483,11 @@ export const sanitizeHealthSymptomList = (list) => {
 export const sanitizeExperienceItem = (exp) => {
   if (!exp || typeof exp !== 'object') return null;
 
+  const validHomeOffice = ['none', 'yes', 'conditional', 'no'];
+  const validWifi = ['unknown', 'good', 'regular', 'none'];
+  const validOutlets = ['unknown', 'many', 'limited', 'none'];
+  const validNoise = ['unknown', 'quiet', 'moderate', 'noisy'];
+
   return {
     id: safeString(exp.id || 'exp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4)),
     name: safeString(exp.name || exp.title || 'Experiencia'),
@@ -495,7 +500,13 @@ export const sanitizeExperienceItem = (exp) => {
     placeOrBrand: safeString(exp.placeOrBrand || exp.brand || exp.place || ''),
     date: safeString(exp.date || getLocalDateString()),
     notes: safeString(exp.notes || ''),
-    image: exp.image ? safeString(exp.image) : null
+    image: exp.image ? safeString(exp.image) : null,
+    homeOfficeStatus: validHomeOffice.includes(exp.homeOfficeStatus) ? exp.homeOfficeStatus : 'none',
+    wifiStatus: validWifi.includes(exp.wifiStatus) ? exp.wifiStatus : 'unknown',
+    powerOutlets: validOutlets.includes(exp.powerOutlets) ? exp.powerOutlets : 'unknown',
+    noiseOrComfort: validNoise.includes(exp.noiseOrComfort) ? exp.noiseOrComfort : 'unknown',
+    bestBranchesOrTables: safeString(exp.bestBranchesOrTables || ''),
+    homeOfficeNotes: safeString(exp.homeOfficeNotes || '')
   };
 };
 

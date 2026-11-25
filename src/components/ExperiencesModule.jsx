@@ -18,7 +18,11 @@ import {
   Loader2,
   Image as ImageIcon,
   Pencil,
-  AlertTriangle
+  AlertTriangle,
+  Laptop,
+  Wifi,
+  Plug,
+  Volume2
 } from 'lucide-react';
 import { compressImage, analyzeExperienceImage } from '../utils/geminiService';
 import { sanitizeExperienceList, sanitizeExperienceItem } from '../utils/sanitizers';
@@ -36,11 +40,12 @@ export default function ExperiencesModule({
   const [catFilter, setCatFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [verdictFilter, setVerdictFilter] = useState('all');
+  const [homeOfficeFilter, setHomeOfficeFilter] = useState('all');
 
   // Form states
   const [isAdding, setIsAdding] = useState(false);
   const [name, setName] = useState('');
-  const [itemType, setItemType] = useState('product'); // 'product' | 'place'
+  const [itemType, setItemType] = useState('place'); // 'product' | 'place'
   const [category, setCategory] = useState('Cafeterías');
   const [status, setStatus] = useState('pending'); // 'pending' | 'completed'
   const [rating, setRating] = useState(5);
@@ -50,6 +55,12 @@ export default function ExperiencesModule({
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [placeImage, setPlaceImage] = useState('');
+  const [homeOfficeStatus, setHomeOfficeStatus] = useState('none'); // 'none' | 'yes' | 'conditional' | 'no'
+  const [wifiStatus, setWifiStatus] = useState('unknown'); // 'unknown' | 'good' | 'regular' | 'none'
+  const [powerOutlets, setPowerOutlets] = useState('unknown'); // 'unknown' | 'many' | 'limited' | 'none'
+  const [noiseOrComfort, setNoiseOrComfort] = useState('unknown'); // 'unknown' | 'quiet' | 'moderate' | 'noisy'
+  const [bestBranchesOrTables, setBestBranchesOrTables] = useState('');
+  const [homeOfficeNotes, setHomeOfficeNotes] = useState('');
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -112,7 +123,13 @@ export default function ExperiencesModule({
       placeOrBrand: placeOrBrand.trim(),
       date,
       notes: notes.trim(),
-      image: placeImage || null
+      image: placeImage || null,
+      homeOfficeStatus: itemType === 'place' ? homeOfficeStatus : 'none',
+      wifiStatus: itemType === 'place' ? wifiStatus : 'unknown',
+      powerOutlets: itemType === 'place' ? powerOutlets : 'unknown',
+      noiseOrComfort: itemType === 'place' ? noiseOrComfort : 'unknown',
+      bestBranchesOrTables: itemType === 'place' ? bestBranchesOrTables.trim() : '',
+      homeOfficeNotes: itemType === 'place' ? homeOfficeNotes.trim() : ''
     };
 
     const sanitized = sanitizeExperienceItem(newItem);
@@ -123,6 +140,12 @@ export default function ExperiencesModule({
     setPlaceOrBrand('');
     setNotes('');
     setPlaceImage('');
+    setHomeOfficeStatus('none');
+    setWifiStatus('unknown');
+    setPowerOutlets('unknown');
+    setNoiseOrComfort('unknown');
+    setBestBranchesOrTables('');
+    setHomeOfficeNotes('');
     setIsAdding(false);
     setSimilarPrompt(null);
     showToast('success', 'Registro Guardado', `Se guardó "${trimmedName}" en tu bitácora.`);
@@ -168,7 +191,13 @@ export default function ExperiencesModule({
       placeOrBrand: item.placeOrBrand || '',
       date: item.date || new Date().toISOString().split('T')[0],
       notes: item.notes || '',
-      image: item.image || null
+      image: item.image || null,
+      homeOfficeStatus: item.homeOfficeStatus || 'none',
+      wifiStatus: item.wifiStatus || 'unknown',
+      powerOutlets: item.powerOutlets || 'unknown',
+      noiseOrComfort: item.noiseOrComfort || 'unknown',
+      bestBranchesOrTables: item.bestBranchesOrTables || '',
+      homeOfficeNotes: item.homeOfficeNotes || ''
     });
   };
 
@@ -185,7 +214,9 @@ export default function ExperiencesModule({
       ...editingItem,
       name: trimmedName,
       placeOrBrand: (editingItem.placeOrBrand || '').trim(),
-      notes: (editingItem.notes || '').trim()
+      notes: (editingItem.notes || '').trim(),
+      bestBranchesOrTables: (editingItem.bestBranchesOrTables || '').trim(),
+      homeOfficeNotes: (editingItem.homeOfficeNotes || '').trim()
     };
 
     const sanitized = sanitizeExperienceItem(updatedObj);
@@ -243,6 +274,38 @@ export default function ExperiencesModule({
     }));
   };
 
+  const handleUpdateHomeOfficeField = (itemId, field, value, toastMsg = '') => {
+    setExperiences(prev => (Array.isArray(prev) ? prev : []).map(item => {
+      if (item && item.id === itemId) {
+        const nextType = (field === 'homeOfficeStatus' && value !== 'none') ? 'place' : item.type;
+        return sanitizeExperienceItem({
+          ...item,
+          type: nextType,
+          [field]: value
+        });
+      }
+      return item;
+    }));
+    if (toastMsg) {
+      showToast('info', '💻 Home Office Actualizado', toastMsg);
+    }
+  };
+
+  const cycleWifiStatus = (current = 'unknown') => {
+    const order = ['unknown', 'good', 'regular', 'none'];
+    return order[(order.indexOf(current) + 1) % order.length];
+  };
+
+  const cyclePowerOutlets = (current = 'unknown') => {
+    const order = ['unknown', 'many', 'limited', 'none'];
+    return order[(order.indexOf(current) + 1) % order.length];
+  };
+
+  const cycleNoiseComfort = (current = 'unknown') => {
+    const order = ['unknown', 'quiet', 'moderate', 'noisy'];
+    return order[(order.indexOf(current) + 1) % order.length];
+  };
+
   const handleUpdateVerdict = (itemId, newVerdict) => {
     setExperiences(prev => (Array.isArray(prev) ? prev : []).map(item => {
       if (item && item.id === itemId) {
@@ -268,19 +331,38 @@ export default function ExperiencesModule({
     const nameStr = String(item.name || '');
     const placeOrBrandStr = String(item.placeOrBrand || '');
     const notesStr = String(item.notes || '');
+    const branchesStr = String(item.bestBranchesOrTables || '');
+    const hoNotesStr = String(item.homeOfficeNotes || '');
     const search = String(searchTerm || '').toLowerCase().trim();
 
     const matchesSearch = !search ||
       nameStr.toLowerCase().includes(search) || 
       placeOrBrandStr.toLowerCase().includes(search) ||
-      notesStr.toLowerCase().includes(search);
+      notesStr.toLowerCase().includes(search) ||
+      branchesStr.toLowerCase().includes(search) ||
+      hoNotesStr.toLowerCase().includes(search);
     
     const matchesType = typeFilter === 'all' || item.type === typeFilter;
     const matchesCat = catFilter === 'all' || item.category === catFilter;
     const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
     const matchesVerdict = verdictFilter === 'all' || item.verdict === verdictFilter;
 
-    return matchesSearch && matchesType && matchesCat && matchesStatus && matchesVerdict;
+    let matchesHomeOffice = true;
+    if (homeOfficeFilter === 'any_yes') {
+      matchesHomeOffice = item.homeOfficeStatus === 'yes' || item.homeOfficeStatus === 'conditional';
+    } else if (homeOfficeFilter === 'yes') {
+      matchesHomeOffice = item.homeOfficeStatus === 'yes';
+    } else if (homeOfficeFilter === 'conditional') {
+      matchesHomeOffice = item.homeOfficeStatus === 'conditional';
+    } else if (homeOfficeFilter === 'outlets') {
+      matchesHomeOffice = item.powerOutlets === 'many' || item.powerOutlets === 'limited';
+    } else if (homeOfficeFilter === 'wifi') {
+      matchesHomeOffice = item.wifiStatus === 'good';
+    } else if (homeOfficeFilter === 'no') {
+      matchesHomeOffice = item.homeOfficeStatus === 'no';
+    }
+
+    return matchesSearch && matchesType && matchesCat && matchesStatus && matchesVerdict && matchesHomeOffice;
   });
 
   return (
@@ -309,7 +391,7 @@ export default function ExperiencesModule({
         </div>
 
         {/* Filter selectors row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2 border-t border-slate-800">
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo</label>
             <select
@@ -358,6 +440,22 @@ export default function ExperiencesModule({
               <option value="yes">👍 Volvería / Compraría de nuevo</option>
               <option value="maybe">🤔 Duda</option>
               <option value="no">👎 No volvería / No compraría</option>
+            </select>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <label className="block text-[10px] font-bold text-[#e0a96d] uppercase mb-1">💻 Home Office</label>
+            <select
+              value={homeOfficeFilter}
+              onChange={(e) => setHomeOfficeFilter(e.target.value)}
+              className="w-full bg-[#0b0c10] border border-[#e0a96d]/30 rounded py-1.5 px-2 text-xs text-slate-200 focus:outline-none"
+            >
+              <option value="all">Todos (Home Office)</option>
+              <option value="any_yes">💻 Se puede trabajar (Sí + Condicional)</option>
+              <option value="yes">✅ Ideal para Home Office</option>
+              <option value="conditional">⚠️ Solo en ciertas sucursales / mesas</option>
+              <option value="outlets">🔌 Con enchufe para laptop</option>
+              <option value="wifi">📶 Con buen Internet / Wi-Fi</option>
+              <option value="no">🚫 No apto para Home Office</option>
             </select>
           </div>
         </div>
@@ -627,6 +725,116 @@ export default function ExperiencesModule({
             />
           </div>
 
+          {/* Home Office Section for Places / Establishments */}
+          {itemType === 'place' && (
+            <div className="p-4 bg-[#0b0c10] border border-[#e0a96d]/30 rounded-xl space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Laptop className="w-4 h-4 text-[#e0a96d]" />
+                  <span className="text-xs font-bold text-slate-100 font-outfit">
+                    💻 ¿Es bueno para ir a hacer Home Office? (Wi-Fi, Enchufes para Laptop, Sucursales y Mesas)
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-400">
+                  Guarda si tienen Internet, contactos eléctricos y en qué mesa o sucursal conviene sentarse
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-[#e0a96d] uppercase mb-1">
+                    Veredicto Home Office
+                  </label>
+                  <select
+                    value={homeOfficeStatus}
+                    onChange={(e) => setHomeOfficeStatus(e.target.value)}
+                    className="w-full bg-[#171a24] border border-[#e0a96d]/25 rounded-lg py-2 px-2.5 text-xs text-slate-100 focus:outline-none cursor-pointer"
+                  >
+                    <option value="none">➖ No evaluado / No aplica</option>
+                    <option value="yes">✅ Sí, ideal para Home Office</option>
+                    <option value="conditional">⚠️ Sí, pero en ciertas sucursales / mesas</option>
+                    <option value="no">🚫 No apto para Home Office</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    📶 Internet / Wi-Fi
+                  </label>
+                  <select
+                    value={wifiStatus}
+                    onChange={(e) => setWifiStatus(e.target.value)}
+                    className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-2 px-2.5 text-xs text-slate-200 focus:outline-none cursor-pointer"
+                  >
+                    <option value="unknown">➖ Sin especificar</option>
+                    <option value="good">📶 Buen Wi-Fi (rápido / videollamadas)</option>
+                    <option value="regular">📶 Wi-Fi regular / intermitente</option>
+                    <option value="none">📵 Sin Wi-Fi (llevar hotspot / datos)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    🔌 Conexión para mi Laptop
+                  </label>
+                  <select
+                    value={powerOutlets}
+                    onChange={(e) => setPowerOutlets(e.target.value)}
+                    className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-2 px-2.5 text-xs text-slate-200 focus:outline-none cursor-pointer"
+                  >
+                    <option value="unknown">➖ Sin especificar</option>
+                    <option value="many">🔌 Sí, muchos enchufes disponibles</option>
+                    <option value="limited">🔌 Solo en ciertas mesas / barra</option>
+                    <option value="none">🔋 Sin enchufes (ir con batería al 100%)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    🎧 Ambiente / Ruido
+                  </label>
+                  <select
+                    value={noiseOrComfort}
+                    onChange={(e) => setNoiseOrComfort(e.target.value)}
+                    className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-2 px-2.5 text-xs text-slate-200 focus:outline-none cursor-pointer"
+                  >
+                    <option value="unknown">➖ Sin especificar</option>
+                    <option value="quiet">🤫 Tranquilo / Ideal para llamadas</option>
+                    <option value="moderate">🎧 Ruido moderado (con audífonos)</option>
+                    <option value="noisy">🔊 Ruidoso / Música fuerte</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    📍 ¿En qué sucursales o mesas sí se puede?
+                  </label>
+                  <input
+                    type="text"
+                    value={bestBranchesOrTables}
+                    onChange={(e) => setBestBranchesOrTables(e.target.value)}
+                    placeholder="Ej. Sucursal San Ángel en 2do piso, mesas pegadas al muro derecho..."
+                    className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    📝 Notas de Home Office (Internet, contactos, horarios, contraseña...)
+                  </label>
+                  <input
+                    type="text"
+                    value={homeOfficeNotes}
+                    onChange={(e) => setHomeOfficeNotes(e.target.value)}
+                    placeholder="Ej. Tienen Internet pero no enchufe en terraza; o sí hay enchufe pero falla el Wi-Fi..."
+                    className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-2 px-3 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
@@ -773,6 +981,160 @@ export default function ExperiencesModule({
                     className="w-full bg-[#0b0c10] border border-[#e0a96d]/10 rounded-lg p-2 text-slate-300 text-xs focus:outline-none focus:border-[#e0a96d]/30 mt-1 h-14 resize-none transition-colors"
                   />
                 </div>
+
+                {/* Home Office Section on Card (for Establishments or Cafeterías/Restaurantes) */}
+                {(item.type === 'place' || item.homeOfficeStatus !== 'none' || item.category === 'Cafeterías' || item.category === 'Restaurantes') && (
+                  <div className="mt-3 p-3 rounded-xl bg-[#0b0c10] border border-[#e0a96d]/25 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#e0a96d] flex items-center gap-1.5">
+                        <Laptop className="w-3.5 h-3.5 text-[#e0a96d]" />
+                        <span>Modo Home Office</span>
+                      </span>
+
+                      <select
+                        value={item.homeOfficeStatus || 'none'}
+                        onChange={(e) =>
+                          handleUpdateHomeOfficeField(
+                            item.id,
+                            'homeOfficeStatus',
+                            e.target.value,
+                            `Estado Home Office de "${item.name}" actualizado.`
+                          )
+                        }
+                        className={`text-[10px] font-bold py-1 px-2 rounded-lg border cursor-pointer focus:outline-none transition-all ${
+                          item.homeOfficeStatus === 'yes'
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
+                            : item.homeOfficeStatus === 'conditional'
+                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/35'
+                            : item.homeOfficeStatus === 'no'
+                            ? 'bg-rose-500/15 text-rose-300 border-rose-500/35'
+                            : 'bg-[#171a24] text-slate-400 border-slate-700'
+                        }`}
+                      >
+                        <option value="none" className="bg-[#171a24] text-slate-300">➖ ¿Sirve para Home Office?</option>
+                        <option value="yes" className="bg-[#171a24] text-emerald-300">💻 Ideal para Home Office</option>
+                        <option value="conditional" className="bg-[#171a24] text-amber-300">⚠️ Solo ciertas sucursales / mesas</option>
+                        <option value="no" className="bg-[#171a24] text-rose-300">🚫 No apto para Home Office</option>
+                      </select>
+                    </div>
+
+                    {/* Quick 1-Click Toggle Pills for Wi-Fi, Laptop Power Outlets & Noise */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateHomeOfficeField(
+                            item.id,
+                            'wifiStatus',
+                            cycleWifiStatus(item.wifiStatus),
+                            'Estado de Internet / Wi-Fi actualizado.'
+                          )
+                        }
+                        title="Haz clic para cambiar el estado de Internet / Wi-Fi"
+                        className={`text-[10px] font-bold px-2 py-1 rounded-lg border cursor-pointer transition-all flex items-center gap-1 ${
+                          item.wifiStatus === 'good'
+                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                            : item.wifiStatus === 'regular'
+                            ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                            : item.wifiStatus === 'none'
+                            ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                            : 'bg-[#171a24] text-slate-400 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <span>
+                          {item.wifiStatus === 'good'
+                            ? '📶 Buen Wi-Fi'
+                            : item.wifiStatus === 'regular'
+                            ? '📶 Wi-Fi regular'
+                            : item.wifiStatus === 'none'
+                            ? '📵 Sin Internet'
+                            : '📶 Wi-Fi: Definir'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateHomeOfficeField(
+                            item.id,
+                            'powerOutlets',
+                            cyclePowerOutlets(item.powerOutlets),
+                            'Disponibilidad de enchufes para laptop actualizada.'
+                          )
+                        }
+                        title="Haz clic para cambiar si hay enchufes para conectar tu laptop"
+                        className={`text-[10px] font-bold px-2 py-1 rounded-lg border cursor-pointer transition-all flex items-center gap-1 ${
+                          item.powerOutlets === 'many'
+                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                            : item.powerOutlets === 'limited'
+                            ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                            : item.powerOutlets === 'none'
+                            ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                            : 'bg-[#171a24] text-slate-400 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <span>
+                          {item.powerOutlets === 'many'
+                            ? '🔌 Con enchufes lap'
+                            : item.powerOutlets === 'limited'
+                            ? '🔌 Enchufes en ciertas mesas'
+                            : item.powerOutlets === 'none'
+                            ? '🔋 Sin conexión para lap'
+                            : '🔌 Enchufes: Definir'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateHomeOfficeField(
+                            item.id,
+                            'noiseOrComfort',
+                            cycleNoiseComfort(item.noiseOrComfort),
+                            'Nivel de ruido/ambiente actualizado.'
+                          )
+                        }
+                        title="Haz clic para cambiar el nivel de ruido o comodidad para llamadas"
+                        className={`text-[10px] font-bold px-2 py-1 rounded-lg border cursor-pointer transition-all flex items-center gap-1 ${
+                          item.noiseOrComfort === 'quiet'
+                            ? 'bg-sky-500/10 text-sky-300 border-sky-500/30'
+                            : item.noiseOrComfort === 'moderate'
+                            ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
+                            : item.noiseOrComfort === 'noisy'
+                            ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                            : 'bg-[#171a24] text-slate-400 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <span>
+                          {item.noiseOrComfort === 'quiet'
+                            ? '🤫 Tranquilo (Llamadas OK)'
+                            : item.noiseOrComfort === 'moderate'
+                            ? '🎧 Con audífonos'
+                            : item.noiseOrComfort === 'noisy'
+                            ? '🔊 Ruidoso'
+                            : '🎧 Ambiente: Definir'}
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Branches / Tables & Specific Home Office Notes */}
+                    <div className="space-y-1.5 pt-0.5">
+                      <input
+                        type="text"
+                        value={item.bestBranchesOrTables || ''}
+                        onChange={(e) => handleUpdateHomeOfficeField(item.id, 'bestBranchesOrTables', e.target.value)}
+                        placeholder="📍 ¿En qué sucursal o mesa sentarse? (ej. Sucursal Centro, mesa junto a ventana)..."
+                        className="w-full bg-[#171a24] border border-slate-800 focus:border-[#e0a96d]/40 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-200 focus:outline-none"
+                      />
+                      <textarea
+                        value={item.homeOfficeNotes || ''}
+                        onChange={(e) => handleUpdateHomeOfficeField(item.id, 'homeOfficeNotes', e.target.value)}
+                        placeholder="💻 Notas Home Office (ej. Sí hay Internet pero no enchufes en terraza, o sí hay enchufe pero llevar datos)..."
+                        className="w-full bg-[#171a24] border border-slate-800 focus:border-[#e0a96d]/40 rounded-lg p-2 text-[11px] text-slate-300 focus:outline-none h-14 resize-none"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Card Footer (Date for Completed + Edit action) */}
@@ -1040,9 +1402,112 @@ export default function ExperiencesModule({
                   value={editingItem.notes || ''}
                   onChange={(e) => setEditingItem({ ...editingItem, notes: e.target.value })}
                   placeholder="Escribe tu reseña, qué pediste, qué te pareció..."
-                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg p-2.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] h-24 resize-none"
+                  className="w-full bg-[#0b0c10] border border-[#e0a96d]/20 rounded-lg p-2.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] h-20 resize-none"
                 />
               </div>
+
+              {/* Home Office Details inside Edit Modal */}
+              {(editingItem.type === 'place' || editingItem.homeOfficeStatus !== 'none' || editingItem.category === 'Cafeterías' || editingItem.category === 'Restaurantes') && (
+                <div className="p-3.5 bg-[#0b0c10] border border-[#e0a96d]/30 rounded-xl space-y-3">
+                  <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                    <Laptop className="w-4 h-4 text-[#e0a96d]" />
+                    <span className="text-xs font-bold text-slate-100 font-outfit">
+                      💻 Evaluación de Home Office (Wi-Fi, Enchufes para Laptop, Sucursales y Mesas)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#e0a96d] uppercase mb-1">
+                        ¿Es bueno para Home Office?
+                      </label>
+                      <select
+                        value={editingItem.homeOfficeStatus || 'none'}
+                        onChange={(e) => setEditingItem({ ...editingItem, homeOfficeStatus: e.target.value })}
+                        className="w-full bg-[#171a24] border border-[#e0a96d]/25 rounded-lg py-1.5 px-2 text-xs text-slate-100 focus:outline-none"
+                      >
+                        <option value="none">➖ No evaluado / No aplica</option>
+                        <option value="yes">✅ Sí, ideal para Home Office</option>
+                        <option value="conditional">⚠️ Sí, pero depende de sucursal / mesa</option>
+                        <option value="no">🚫 No apto para Home Office</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                        📶 Internet / Wi-Fi
+                      </label>
+                      <select
+                        value={editingItem.wifiStatus || 'unknown'}
+                        onChange={(e) => setEditingItem({ ...editingItem, wifiStatus: e.target.value })}
+                        className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-1.5 px-2 text-xs text-slate-200 focus:outline-none"
+                      >
+                        <option value="unknown">➖ Sin especificar</option>
+                        <option value="good">📶 Buen Wi-Fi (rápido / videollamadas)</option>
+                        <option value="regular">📶 Wi-Fi regular / intermitente</option>
+                        <option value="none">📵 Sin Internet / Wi-Fi</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                        🔌 Conexión / Enchufes para Laptop
+                      </label>
+                      <select
+                        value={editingItem.powerOutlets || 'unknown'}
+                        onChange={(e) => setEditingItem({ ...editingItem, powerOutlets: e.target.value })}
+                        className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-1.5 px-2 text-xs text-slate-200 focus:outline-none"
+                      >
+                        <option value="unknown">➖ Sin especificar</option>
+                        <option value="many">🔌 Sí, muchos enchufes disponibles</option>
+                        <option value="limited">🔌 Solo en ciertas mesas / barra</option>
+                        <option value="none">🔋 Sin enchufes para laptop</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                        🎧 Ambiente / Nivel de Ruido
+                      </label>
+                      <select
+                        value={editingItem.noiseOrComfort || 'unknown'}
+                        onChange={(e) => setEditingItem({ ...editingItem, noiseOrComfort: e.target.value })}
+                        className="w-full bg-[#171a24] border border-slate-700 rounded-lg py-1.5 px-2 text-xs text-slate-200 focus:outline-none"
+                      >
+                        <option value="unknown">➖ Sin especificar</option>
+                        <option value="quiet">🤫 Tranquilo / Ideal para llamadas</option>
+                        <option value="moderate">🎧 Ruido moderado (con audífonos)</option>
+                        <option value="noisy">🔊 Ruidoso / Música fuerte</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      📍 Sucursales o Mesas Recomendadas
+                    </label>
+                    <input
+                      type="text"
+                      value={editingItem.bestBranchesOrTables || ''}
+                      onChange={(e) => setEditingItem({ ...editingItem, bestBranchesOrTables: e.target.value })}
+                      placeholder="Ej. Sucursal Coyoacán en planta alta, mesas junto al enchufe del muro..."
+                      className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg py-1.5 px-2.5 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      📝 Notas Detalladas de Home Office
+                    </label>
+                    <textarea
+                      value={editingItem.homeOfficeNotes || ''}
+                      onChange={(e) => setEditingItem({ ...editingItem, homeOfficeNotes: e.target.value })}
+                      placeholder="Ej. Tienen Internet rápido pero pocos enchufes (o al revés: sí hay contacto para mi lap pero el Wi-Fi se corta, mejor llevar hotspot)..."
+                      className="w-full bg-[#171a24] border border-[#e0a96d]/20 rounded-lg p-2 text-slate-100 text-xs focus:outline-none focus:border-[#e0a96d] h-16 resize-none"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Modal actions */}
